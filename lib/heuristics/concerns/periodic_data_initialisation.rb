@@ -17,19 +17,19 @@
 #
 require 'active_support/concern'
 
-# Second end of the algorithm after scheduling heuristic
-module SchedulingDataInitialization
+module PeriodicDataInitialization
   extend ActiveSupport::Concern
 
   def generate_route_structure(vrp)
     vrp.vehicles.each{ |vehicle|
       capacity = compute_capacities(vehicle[:capacities], true)
-      vrp.units.reject{ |unit| capacity.has_key?(unit[:id]) }.each{ |unit| capacity[unit[:id]] = 0.0 }
+      vrp.units.reject{ |unit| capacity.key?(unit[:id]) }.each{ |unit| capacity[unit[:id]] = 0.0 }
       @candidate_routes[vehicle.original_id][vehicle.global_day_index] = {
-        vehicle_id: vehicle.id,
-        global_day_index: vehicle.global_day_index,
-        tw_start: (vehicle.timewindow.start < 84600) ? vehicle.timewindow.start : vehicle.timewindow.start - vehicle.global_day_index * 86400,
-        tw_end: (vehicle.timewindow.end < 84600) ? vehicle.timewindow.end : vehicle.timewindow.end - vehicle.global_day_index * 86400,
+        # vehicle: vehicle # it is costly to use this
+        vehicle_original_id: vehicle.original_id,
+        day: vehicle.global_day_index,
+        tw_start: vehicle.timewindow.start % 86400,
+        tw_end: vehicle.timewindow.end % 86400,
         start_point_id: vehicle.start_point&.id,
         end_point_id: vehicle.end_point&.id,
         duration: vehicle.duration || (vehicle.timewindow.end - vehicle.timewindow.start),
@@ -37,6 +37,7 @@ module SchedulingDataInitialization
         stops: [],
         capacity: capacity,
         capacity_left: Marshal.load(Marshal.dump(capacity)),
+        skills: vehicle.skills,
         maximum_ride_time: vehicle.maximum_ride_time,
         maximum_ride_distance: vehicle.maximum_ride_distance,
         router_dimension: vehicle.router_dimension.to_sym,
@@ -56,7 +57,7 @@ module SchedulingDataInitialization
       defined_route.mission_ids.each{ |id|
         next if !@services_data.has_key?(id) # id has been removed when detecting unfeasible services in wrapper
 
-        best_index = find_best_index(id, associated_route) if associated_route
+        best_index = find_best_index(id, associated_route, false) if associated_route
         considered_ids << id
         if best_index
           insert_point_in_route(associated_route, best_index, false)
@@ -248,8 +249,8 @@ module SchedulingDataInitialization
         group_tw.delete_if{ |tw1|
           data[:tws_sets].first.none?{ |tw2|
             (tw1[:day_index].nil? || tw2[:day_index].nil? || tw1[:day_index] == tw2[:day_index]) &&
-              (tw1[:start].nil? || tw2[:end].nil? || tw1[:start] <= tw2[:end]) &&
-              (tw1[:end].nil? || tw2[:start].nil? || tw1[:end] >= tw2[:start])
+              (tw2[:end].nil? || tw1[:start] <= tw2[:end]) &&
+              (tw1[:end].nil? || tw1[:end] >= tw2[:start])
           }
         }
 
@@ -259,8 +260,8 @@ module SchedulingDataInitialization
         data[:tws_sets].first.each{ |tw1|
           intersecting_tws = group_tw.select{ |tw2|
             (tw1[:day_index].nil? || tw2[:day_index].nil? || tw1[:day_index] == tw2[:day_index]) &&
-              (tw2[:start].nil? || tw2[:start].between?(tw1[:start], tw1[:end]) || tw2[:start] <= tw1[:start]) &&
-              (tw2[:end].nil? || tw2[:end].between?(tw1[:start], tw1[:end]) || tw2[:end] >= tw1[:end])
+              (tw2[:start] <= tw1[:start] || tw1[:end].nil? || tw2[:start].between?(tw1[:start], tw1[:end])) &&
+              (tw2[:end].nil? || tw1[:end].nil? || tw2[:end].between?(tw1[:start], tw1[:end]) || tw2[:end] >= tw1[:end])
           }
           next if intersecting_tws.empty?
 
@@ -271,7 +272,7 @@ module SchedulingDataInitialization
         }
       }
 
-      group_tw.delete_if{ |tw| tw[:start] && tw[:end] && tw[:start] == tw[:end] }
+      group_tw.delete_if{ |tw| tw[:start] == tw[:end] }
       group_tw
     else
       []
