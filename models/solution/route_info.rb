@@ -1,4 +1,4 @@
-# Copyright © Mapotempo, 2016
+# Copyright © Mapotempo, 2021
 #
 # This file is part of Mapotempo.
 #
@@ -18,20 +18,26 @@
 require './models/base'
 
 module Models
-  class Zone < Base
-    field :polygon
-    field :allocations, default: []
+  class Solution < Base
+    class Route < Base
+      class Info < Base
+        field :total_time
+        field :total_travel_time
+        field :total_waiting_time
 
-    has_many :vehicles, class_name: 'Models::Vehicle', as_json: :ids
+        field :total_distance
 
-    def decode_geom
-      @geom = RGeo::GeoJSON.decode(polygon.to_json, json_parser: :json)
-    end
+        field :total_travel_value
 
-    def inside(lat, lng)
-      if !lat.nil? && !lng.nil?
-        if (@geom || decode_geom).class == RGeo::Geos::CAPIPolygonImpl
-          @geom.contains?(RGeo::Cartesian.factory.point(lng, lat))
+        field :start_time
+        field :end_time
+
+        def +(other)
+          merged_info = Info.new({})
+          self.attributes.each_key{ |key|
+            merged_info[key] = (self[key] || 0) + (other[key] || 0)
+          }
+          merged_info
         end
       end
     end

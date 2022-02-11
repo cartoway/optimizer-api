@@ -1,4 +1,4 @@
-# Copyright © Mapotempo, 2016
+# Copyright © Mapotempo, 2021
 #
 # This file is part of Mapotempo.
 #
@@ -18,21 +18,20 @@
 require './models/base'
 
 module Models
-  class Zone < Base
-    field :polygon
-    field :allocations, default: []
+  class Solution < Base
+    class Configuration < Base
+      field :csv, default: false
+      field :geometry, default: false
+      field :deprecated_headers, default: false
+      field :schedule_start_date
 
-    has_many :vehicles, class_name: 'Models::Vehicle', as_json: :ids
-
-    def decode_geom
-      @geom = RGeo::GeoJSON.decode(polygon.to_json, json_parser: :json)
-    end
-
-    def inside(lat, lng)
-      if !lat.nil? && !lng.nil?
-        if (@geom || decode_geom).class == RGeo::Geos::CAPIPolygonImpl
-          @geom.contains?(RGeo::Cartesian.factory.point(lng, lat))
-        end
+      def +(other)
+        Configuration.create(
+          csv: csv || other.csv,
+          geometry: (geometry + other.geometry).uniq,
+          deprecated_headers: deprecated_headers || other.deprecated_headers,
+          schedule_start_date: schedule_start_date
+        )
       end
     end
   end
