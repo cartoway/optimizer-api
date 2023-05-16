@@ -413,7 +413,7 @@ module Wrappers
       )
       (0..size_matrix - 1).each{ |i|
         (0..size_matrix - 1).each{ |j|
-          agglomerate_matrix[i][j] = [agglomerate_matrix[i][j].round, 2**28].min
+          agglomerate_matrix[i][j] = [agglomerate_matrix[i][j].round, 2**22].min
         }
       }
       if vrp.vehicles.first.start_point_id.nil? && vrp.vehicles.first.end_point_id.nil?
