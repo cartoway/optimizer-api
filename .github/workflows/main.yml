@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v2
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: 2.5.7
+          ruby-version: 3.2
           bundler-cache: true
       - name: Run RuboCop Error
         run: bundle exec rubocop --parallel -f c --config .rubocop.yml --fail-level E --display-only-fail-level-offenses
