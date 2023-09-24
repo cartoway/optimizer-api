@@ -45,7 +45,7 @@ class CacheManager
     end
   end
 
-  def write(name, value, mode = 'w', gz = true)
+  def write(name, value, mode: 'w', gz: true)
     raise CacheError.new('Stored value is not a String') if !value.is_a? String
 
     if gz
