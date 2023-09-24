@@ -66,7 +66,8 @@ module DistanceMatrix
 
         Api::V01::APIBase.dump_vrp_dir.write(
           "#{job_id}_requests.curl", router.send('params', mode, dimensions.join('_'), options)
-          .merge({ src: matrix_points.flatten.join(',') }.compact).to_json + "\n", { mode: 'a', gz: false }
+          .merge({ src: matrix_points.flatten.join(',') }.compact).to_json + "\n",
+          mode: 'a', gz: false
         )
 
         tic = Time.now
