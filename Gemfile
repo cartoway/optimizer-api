@@ -1,20 +1,18 @@
 source 'https://rubygems.org'
-ruby '~> 2.5'
+ruby '>= 3'
 
 gem 'require_all'
 
 gem 'puma'
-# remove the following custom github definition after the following PR commit is merged to the stable branch
-# https://github.com/rack/rack/commit/1970771c7e01d54cb631dae0bc7618e2561ad1c7
-gem 'rack', github: 'senhalil/rack', branch: 'improved-asserts'
+gem 'rack'
 gem 'rack-contrib', require: 'rack/contrib'
 gem 'rack-cors', require: 'rack/cors'
-gem 'rack-server-pages', '~> 0.1.0'
+gem 'rack-server-pages'
 gem 'rake'
 gem 'thin'
 
 # API
-gem 'grape', '>=1.5.3' # Important fix introduced v1.5.3 (see PR #PR2164)
+gem 'grape'
 gem 'grape-entity'
 gem 'grape-swagger'
 gem 'grape-swagger-entity'
@@ -24,7 +22,7 @@ gem 'grape_logging'
 gem 'actionpack', require: 'action_dispatch'
 # waiting for the following PRs to get merged and "released!"
 # https://github.com/zilkey/active_hash/pull/231 and https://github.com/zilkey/active_hash/pull/233
-gem 'active_hash', github: 'senhalil/active_hash', branch: 'dev'
+gem 'active_hash', github: 'tartifleet/active_hash', branch: 'mapo'
 gem 'activemodel'
 gem 'activesupport', require: 'active_support'
 gem 'google-protobuf', '>=3', require: 'google/protobuf'
