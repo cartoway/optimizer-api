@@ -1,10 +1,8 @@
 version: '3.7'
 
 x-default-service: &default-service
-  build:
-    context: ..
-    dockerfile: docker/Dockerfile
-  image: optimizer-api:${OPTIMIZER_VERSION:-latest}
+  build: .
+  image: optimizer-api:${CARTOROUTE_VERSION:-latest}
   environment: &default-environment
     LOG_LEVEL: ${LOG_LEVEL:-info}
     OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
@@ -21,9 +19,9 @@ x-default-service: &default-service
     # - redis-cache
     - redis-count
   volumes:
-    - ..:/srv/app
-    - ./production.rb:/srv/app/config/environments/production.rb
-    - ./production.rb:/srv/app/config/environments/development.rb
+    - .:/srv/app
+    - ./docker/production.rb:/srv/app/config/environments/production.rb
+    - ./docker/production.rb:/srv/app/config/environments/development.rb
 
 services:
   redis-resque:

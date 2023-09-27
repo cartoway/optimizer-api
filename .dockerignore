@@ -1,4 +1,4 @@
 .git
-docker
-!docker/snippets
-!docker/webapp.conf
+docker/redis*
+docker/production.rb
+.env
