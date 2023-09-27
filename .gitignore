@@ -45,3 +45,7 @@ archives/
 *.code-workspace
 TAGS
 *.pyc
+
+docker/redis*
+docker/production.rb
+.env
