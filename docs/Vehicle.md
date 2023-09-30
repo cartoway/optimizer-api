@@ -43,7 +43,7 @@ Costs can also be added in order to fit more precisely the real operating cost
 ```
 ## Routing profile
 
-The fields related to the routing profile are a direct tranposition of the fields define within [Router-API](http://swagger.mapotempo.com/?url=https://router.mapotempo.com/0.1/swagger_doc) project
+The fields related to the routing profile are a direct tranposition of the fields define within [Router-API](http://localhost:1791/0.1/swagger_doc?url=http://localhost:4899/0.1/swagger_doc) project
 * router_mode
 * router_dimension
 * speed_multiplier

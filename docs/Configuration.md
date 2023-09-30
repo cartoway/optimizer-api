@@ -263,5 +263,5 @@ It indicates that once the resolution is finished, the solution should be return
 
 ### use_deprecated_csv_headers
 
-The csv headers have evolved through time, the current ones are closer to the format expected by Mapotempo Web. The parameter allows to retrieve the "legacy" headers.
+The csv headers have evolved through time, the current ones are closer to the format expected by Web Planner. The parameter allows to retrieve the "legacy" headers.
 

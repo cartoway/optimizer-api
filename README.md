@@ -1,5 +1,4 @@
-# Mapotempo Optimizer API ![Build Status](https://github.com/Mapotempo/optimizer-api/actions/workflows/main.yml/badge.svg?branch=master)
-
+# Optimizer API
 
 Run an optimizer REST API depending of many contraints for a Vehicle Routing Problem (VRP).
 
@@ -100,7 +99,7 @@ APP_ENV=production COUNT=5 QUEUE=* bundle exec rake resque:workers
 The API is defined in Swagger format at
 http://localhost:1791/0.1/swagger_doc
 and can be tested with Swagger-UI
-http://swagger.mapotempo.com/?url=http://optimizer.mapotempo.com/0.1/swagger_doc
+https://petstore.swagger.io/?url=http://localhost:1791/0.1/swagger_doc
 
 ```
 curl -X POST --header "Content-Type:application/json" --data '{"vrp":{"vehicles":[]}}' http://localhost:1791/0.1/vrp/submit.json?api_key=demo
