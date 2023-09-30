@@ -179,3 +179,15 @@ To test on Github Actions with a optimizer-ortools different than the latest ver
 Optimizer requires the two following images that must be manually built.
 
 see https://github.com/mapotempo/optimizer-ortools.git
+
+## Run
+
+Copy and adjust config
+```
+cp .env.template .env
+cp config/environments/production.rb docker/
+```
+
+```
+docker-compose up -d
+```

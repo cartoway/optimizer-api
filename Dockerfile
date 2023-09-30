@@ -1,11 +1,24 @@
-ARG VROOM_VERSION
+ARG VROOM_RELEASE=v1.13.0
+
+FROM optimizer-ortools:latest
 
 # Install Vroom
-FROM vroomvrp/vroom-docker:${VROOM_VERSION:-v1.12.0} as vroom
-
-FROM optimizer-ortools:w1.10.0
-
-COPY --from=vroom /usr/local/bin /srv/vroom/bin
+RUN apt update -y && \
+    apt install -y \
+        git-core \
+        build-essential \
+        g++ \
+        libssl-dev \
+        libasio-dev \
+        libglpk-dev \
+        pkg-config
+RUN git clone --recurse-submodules https://github.com/VROOM-Project/vroom.git && \
+    cd vroom/src && \
+    git fetch --tags && \
+    git checkout -q $VROOM_RELEASE && \
+    make -j$(nproc) && \
+    cp ../bin/vroom /usr/local/bin && \
+    cd /
 
 ENV LANG C.UTF-8
 
