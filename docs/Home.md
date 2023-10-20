@@ -66,7 +66,7 @@ The others entities are optional but may be mandatory regarding the problem to b
 ### [OR-Tools](https://github.com/google/or-tools)
 Google Optimization Tools (a.k.a., OR-Tools) is an open-source, fast and portable software suite for solving combinatorial optimization problems.
 
-A wrapper has been developed to allow the call of the expected model and constraints : [Optimizer-Ortools](https://github.com/Mapotempo/optimizer-ortools)
+A wrapper has been developed to allow the call of the expected model and constraints : [Optimizer-Ortools](https://github.com/cartoroute/optimizer-ortools)
 
 ### [VROOM](https://github.com/VROOM-Project/vroom)
 VROOM is an open-source optimization engine written in C++14 that aim at providing good solutions to various real-life vehicle routing problems within a small computing time.
@@ -131,7 +131,7 @@ java -jar modules/swagger-codegen-cli/target/swagger-codegen-cli.jar generate -i
 This gives the following project:
 [Optimizer-Client](https://github.com/braktar/optimizer-client)
 
-Languages also available with swagger-codegen: 
+Languages also available with swagger-codegen:
 
 ActionScript, Ada, Apex, Bash, C# (.net 2.0, 3.5 or later), C++ (cpprest, Qt5, Tizen), Clojure, Dart, Elixir, Elm, Eiffel, Erlang, Go, Groovy, Haskell (http-client, Servant), Java (Jersey1.x, Jersey2.x, OkHttp, Retrofit1.x, Retrofit2.x, Feign, RestTemplate, RESTEasy, Vertx, Google API Client Library for Java, Rest-assured), Kotlin, Lua, Node.js (ES5, ES6, AngularJS with Google Closure Compiler annotations) Objective-C, Perl, PHP, PowerShell, Python, R, Ruby, Rust (rust, rust-server), Scala (akka, http4s, swagger-async-httpclient), Swift (2.x, 3.x, 4.x, 5.x), Typescript (Angular1.x, Angular2.x, Fetch, jQuery, Node)
 
