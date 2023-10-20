@@ -59,13 +59,13 @@ module Api
         contact_email: ::OptimizerWrapper.config[:product_contact_email],
         contact_url: ::OptimizerWrapper.config[:product_contact_url],
         license: 'GNU Affero General Public License 3',
-        license_url: 'https://raw.githubusercontent.com/Mapotempo/optimizer-api/master/LICENSE',
+        license_url: 'https://raw.githubusercontent.com/cartoroute/optimizer-api/master/LICENSE',
         description: '
 Unified API for multiple optimizer engines dedicated to Vehicle Routing Problems
 
 Its purpose is to provide a complete chain for the resolution. From a provided VRP, it requires a distance matrix, solve the problem and prepare a self sufficient result.
 
-Please check the projet documentation for more details: [docs/Home](https://github.com/Mapotempo/optimizer-api/blob/master/docs/Home.md)
+Please check the projet documentation for more details: [docs/Home](https://github.com/cartoroute/optimizer-api/blob/master/docs/Home.md)
 '
       }
     )

@@ -59,7 +59,7 @@ bundle install
 
 This project requires some solver and interface projects in order to be fully functional!
 * [Vroom v1.12.0](https://github.com/VROOM-Project/vroom/releases/tag/v1.12.0)
-* [Optimizer-ortools v1.17.1](https://github.com/Mapotempo/optimizer-ortools) & [OR-Tools v7.8](https://github.com/google/or-tools/releases/tag/v7.8) (use the version corresponding to your system operator, not source code).
+* [Optimizer-ortools v1.17.1](https://github.com/cartoroute/optimizer-ortools) & [OR-Tools v7.8](https://github.com/google/or-tools/releases/tag/v7.8) (use the version corresponding to your system operator, not source code).
 
 Note : when updating OR-Tools you should to recompile optimizer-ortools.
 
@@ -177,7 +177,7 @@ To test on Github Actions with a optimizer-ortools different than the latest ver
 ## Required images
 Optimizer requires the two following images that must be manually built.
 
-see https://github.com/mapotempo/optimizer-ortools.git
+see https://github.com/cartoroute/optimizer-ortools.git
 
 ## Run
 
