@@ -775,9 +775,9 @@ module OptimizerWrapper
                   tsp = TSPHelper.create_tsp(original_vrp,
                                              vehicle: route.vehicle,
                                              services: cluster_services,
-                                             start_point: previous_stop.activity.point,
+                                             start_point: previous_stop&.activity&.point,
                                              end_point: next_stop&.activity&.point,
-                                             begin_time: previous_stop.info.end_time)
+                                             begin_time: previous_stop&.info&.end_time)
                   tsp_solution = TSPHelper.solve(tsp)
                   previous_stop = tsp_solution.routes[0].stops.reverse.find(&:service_id)
                   service_stops = tsp_solution.routes[0].stops.select{ |a| a.type == :service }
