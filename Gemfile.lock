@@ -1,8 +1,16 @@
 GIT
-  remote: https://github.com/Mapotempo/mapotempo_rubocop.git
-  revision: 36b2b38bee1bc8d0c840abc320243188e4080417
+  remote: https://github.com/cartoway/active_hash.git
+  revision: 10a84f020aada46febc91cf2f0fddcbd3a5485eb
+  branch: dev
   specs:
-    mapotempo_rubocop (0.1.0)
+    active_hash (3.1.0)
+      activesupport (>= 5.0.0)
+
+GIT
+  remote: https://github.com/cartoway/rubocop-policy.git
+  revision: 7fa7db517786c9f38449041c4d0e979731ebde09
+  specs:
+    rubocop-policy (0.1.0)
       rubocop (~> 1.56.1)
       rubocop-minitest (~> 0.31.0)
       rubocop-performance (~> 1.19.0)
@@ -16,14 +24,6 @@ GIT
       awesome_print
       color-generator
       geojson2image
-
-GIT
-  remote: https://github.com/tartifleet/active_hash.git
-  revision: e2b18fedb32aec0cc03f0c747dbc682cbb8fc488
-  branch: mapo
-  specs:
-    active_hash (3.1.0)
-      activesupport (>= 5.0.0)
 
 GEM
   remote: https://rubygems.org/
@@ -318,7 +318,6 @@ DEPENDENCIES
   grape_logging
   http_accept_language
   i18n
-  mapotempo_rubocop!
   minitest
   minitest-around
   minitest-bisect
@@ -345,6 +344,7 @@ DEPENDENCIES
   rgeo-geojson
   ripper-tags
   rubocop
+  rubocop-policy!
   sentry-raven
   simplecov
   solargraph
@@ -352,7 +352,7 @@ DEPENDENCIES
   webmock
 
 RUBY VERSION
-   ruby 3.0.6p216
+   ruby 3.2.2p53
 
 BUNDLED WITH
    2.4.19

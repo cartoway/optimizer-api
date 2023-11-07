@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-ruby '>= 3'
+ruby '>= 3.2'
 
 gem 'require_all'
 
@@ -22,7 +22,7 @@ gem 'grape_logging'
 gem 'actionpack', require: 'action_dispatch'
 # waiting for the following PRs to get merged and "released!"
 # https://github.com/zilkey/active_hash/pull/231 and https://github.com/zilkey/active_hash/pull/233
-gem 'active_hash', github: 'tartifleet/active_hash', branch: 'mapo'
+gem 'active_hash', github: 'cartoway/active_hash', branch: 'dev'
 gem 'activemodel'
 gem 'activesupport', require: 'active_support'
 gem 'google-protobuf', '>=3', require: 'google/protobuf'
@@ -77,7 +77,7 @@ end
 
 group :rubocop do
   # Linting
-  gem 'mapotempo_rubocop', github: 'Mapotempo/mapotempo_rubocop'
+  gem 'rubocop-policy', github: 'cartoway/rubocop-policy'
   gem 'rubocop'
 end
 
