@@ -11,7 +11,7 @@ x-default-service: &default-service
     # REDIS_CACHE_HOST: redis-cache
     REDIS_RESQUE_HOST: redis-resque
     REDIS_RESULT_TTL_DAYS: ${REDIS_RESULT_TTL_DAYS:-1}
-    ROUTER_URL: ${ROUTER_URL:-http://localhost:4899/0.1}
+    ROUTER_URL: ${ROUTER_URL:-http://localhost:8082/0.1}
     ROUTER_API_KEY: ${ROUTER_API_KEY:-demo}
     SENTRY_DSN: ${SENTRY_DSN:-}
   links:
