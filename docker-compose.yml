@@ -7,7 +7,6 @@ x-default-service: &default-service
     LOG_LEVEL: ${LOG_LEVEL:-info}
     OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
     OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
-    REDIS_COUNT_HOST: redis-count
     # REDIS_CACHE_HOST: redis-cache
     REDIS_RESQUE_HOST: redis-resque
     REDIS_RESULT_TTL_DAYS: ${REDIS_RESULT_TTL_DAYS:-1}
@@ -17,27 +16,12 @@ x-default-service: &default-service
   links:
     - redis-resque
     # - redis-cache
-    - redis-count
   volumes:
     - .:/srv/app
     - ./docker/production.rb:/srv/app/config/environments/production.rb
     - ./docker/production.rb:/srv/app/config/environments/development.rb
 
 services:
-  redis-resque:
-    image: redis:${REDIS_VERSION:-7-alpine}
-    command: redis-server --appendonly yes
-
-  # redis-cache:
-  #   image: redis:${REDIS_VERSION:-7-alpine}
-  #   command: redis-server --save ""
-
-  redis-count:
-    image: redis:${REDIS_VERSION:-7-alpine}
-    volumes:
-      - ./docker/redis-count:/data
-    command: redis-server --appendonly yes
-
   api:
     <<: *default-service
     ports:
@@ -51,3 +35,11 @@ services:
       COUNT: 5
       QUEUES: DEFAULT
     command: bundle exec rake resque:workers --trace
+
+  redis-resque:
+    image: redis:${REDIS_VERSION:-7-alpine}
+    command: redis-server --appendonly yes
+
+  # redis-cache:
+  #   image: redis:${REDIS_VERSION:-7-alpine}
+  #   command: redis-server --save ""
