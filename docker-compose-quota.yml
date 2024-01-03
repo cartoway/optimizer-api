@@ -6,9 +6,11 @@ services:
       REDIS_COUNT_HOST: redis-count
     links:
       - redis-count
+    restart: unless-stopped
 
   redis-count:
     image: redis:${REDIS_VERSION:-7-alpine}
     volumes:
       - ./docker/redis-count:/data
     command: redis-server --appendonly yes
+    restart: unless-stopped
