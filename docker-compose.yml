@@ -27,6 +27,7 @@ services:
     ports:
       - "8083:80" # HOST:CONTAINER, edit only HOST part
     command: bundle exec puma -v -p 80 --pidfile 'server.pid'
+    restart: unless-stopped
 
   resque-default:
     <<: *default-service
@@ -35,10 +36,12 @@ services:
       COUNT: 5
       QUEUES: DEFAULT
     command: bundle exec rake resque:workers --trace
+    restart: unless-stopped
 
   redis-resque:
     image: redis:${REDIS_VERSION:-7-alpine}
     command: redis-server --appendonly yes
+    restart: unless-stopped
 
   # redis-cache:
   #   image: redis:${REDIS_VERSION:-7-alpine}
