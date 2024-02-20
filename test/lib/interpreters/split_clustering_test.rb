@@ -17,6 +17,7 @@
 #
 require './test/test_helper'
 require './lib/interpreters/split_clustering.rb'
+require 'minitest/unit' # Required to load Minitest::Mock https://my.diffend.io/gems/minitest/5.18.1/5.19.0
 
 class SplitClusteringTest < Minitest::Test
   if !ENV['SKIP_SPLIT_CLUSTERING']
