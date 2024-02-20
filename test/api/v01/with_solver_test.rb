@@ -39,6 +39,34 @@ class Api::V01::WithSolverTest < Minitest::Test
     delete_completed_job @job_id, api_key: 'ortools' if @job_id
   end
 
+  def test_light_intemediate_solution
+    # using ORtools to make sure that optimization takes enough time to be cut before ending
+    asynchronously start_worker: true do
+      vrp = VRP.lat_lon.deep_merge!({ configuration: { restitution: { intermediate_solutions: 'light' }}})
+
+      @job_id = submit_vrp api_key: 'ortools', vrp: vrp
+      response = wait_avancement_match @job_id, /run optimization, iterations [0-9]+/, api_key: 'ortools'
+      refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
+
+      response['solutions'].to_a.each{ |solution|
+        solution['routes'].each{ |route|
+          route['activities'].each{ |activity|
+            refute_nil activity['point_id']
+            refute_nil activity['type']
+            refute_nil activity['service_id'] if activity['type'] == 'service'
+            assert_nil activity['travel_time']
+            assert_nil activity['travel_distance']
+            assert_nil activity['detail']
+          }
+        }
+      }
+
+      response = delete_job @job_id, api_key: 'ortools'
+      refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
+    end
+    delete_completed_job @job_id, api_key: 'ortools' if @job_id
+  end
+
   def test_using_two_solver
     asynchronously start_worker: true do
       problem = VRP.lat_lon

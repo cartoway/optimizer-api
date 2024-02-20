@@ -24,13 +24,15 @@ module Models
       field :geometry, default: false
       field :deprecated_headers, default: false
       field :schedule_start_date
+      field :detailed_solutions, default: true
 
       def +(other)
         Configuration.create(
           csv: csv || other.csv,
           geometry: (geometry + other.geometry).uniq,
           deprecated_headers: deprecated_headers || other.deprecated_headers,
-          schedule_start_date: schedule_start_date
+          schedule_start_date: schedule_start_date,
+          detailed_solutions: detailed_solutions
         )
       end
     end

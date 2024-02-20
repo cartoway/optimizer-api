@@ -34,6 +34,7 @@ module Parsers
       compute_result_total_dimensions_and_round_route_stats(solution)
       solution.configuration.geometry = vrp.configuration.restitution.geometry
       solution.configuration.schedule_start_date = vrp.configuration.schedule&.start_date
+      solution.configuration.detailed_solutions = vrp.configuration.restitution.intermediate_solutions
 
       log "solution - unassigned rate: #{solution.unassigned_stops.size} of (ser: #{vrp.visits} " \
           "(#{(solution.unassigned_stops.size.to_f / vrp.visits * 100).round(1)}%)"
