@@ -235,7 +235,7 @@ module Api
                   graph: result_object[:graph]
                 },
                 geojsons: OutputHelper::Result.generate_geometry(result_object)
-              }, with: VrpResult)
+              }, with: VrpResult, detailed_solutions: job&.status&.to_sym == :completed || result_object.dig(:configuration, :intermediate_solutions))
             end
             # set nil to release memory because puma keeps the grape api endpoint object alive
             stored_result = nil # rubocop:disable Lint/UselessAssignment

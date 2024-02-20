@@ -55,24 +55,24 @@ module Api
     end
 
     class VrpResultSolutionRouteActivities < Grape::Entity
-      expose :day_week_num, expose_nil: false, documentation: { type: String, desc: '' }
-      expose :day_week, expose_nil: false, documentation: { type: String, desc: '' }
+      expose :day_week_num, expose_nil: false, documentation: { type: String, desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :day_week, expose_nil: false, documentation: { type: String, desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :point_id, documentation: { type: String, desc: 'Linked spatial point' }
-      expose :travel_distance, documentation: { type: Integer, desc: 'Travel distance from previous point (in m)' }
-      expose :travel_time, documentation: { type: Integer, desc: 'Travel time from previous point (in s)' }
-      expose :travel_value, documentation: { type: Integer, desc: 'Travel value from previous point' }
-      expose :waiting_time, documentation: { type: Integer, desc: 'Idle time (in s)' }
-      expose :setup_time, documentation: { type: Integer, desc: 'Effective setup duration (in s)'}
-      expose :begin_time, documentation: { type: Integer, desc: 'Time visit starts' }
-      expose :end_time, documentation: { type: Integer, desc: 'Time visit ends' }
-      expose :departure_time, documentation: { type: Integer, desc: '' }
+      expose :travel_distance, documentation: { type: Integer, desc: 'Travel distance from previous point (in m)' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :travel_time, documentation: { type: Integer, desc: 'Travel time from previous point (in s)' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :travel_value, documentation: { type: Integer, desc: 'Travel value from previous point' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :waiting_time, documentation: { type: Integer, desc: 'Idle time (in s)' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :setup_time, documentation: { type: Integer, desc: 'Effective setup duration (in s)'}, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :begin_time, documentation: { type: Integer, desc: 'Time visit starts' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :end_time, documentation: { type: Integer, desc: 'Time visit ends' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :departure_time, documentation: { type: Integer, desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :service_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the service' }
       expose :pickup_shipment_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the shipment' }
       expose :delivery_shipment_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the shipment' }
       expose :rest_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the rest' }
-      expose :detail, using: VrpResultSolutionRouteActivityDetails, documentation: { desc: '' }
+      expose :detail, using: VrpResultSolutionRouteActivityDetails, documentation: { desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :type, documentation: { type: String, desc: 'depot, rest, service, pickup or delivery' }
-      expose :current_distance, documentation: { type: Integer, desc: 'Travel distance from route start to current point (in m)' }
+      expose :current_distance, documentation: { type: Integer, desc: 'Travel distance from route start to current point (in m)' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :alternative, documentation: { type: Integer, desc: 'When one service has alternative activities, index of the chosen one' }
       expose :visit_index, documentation: { type: Integer, desc: 'Index of the visit' }
     end
@@ -89,8 +89,8 @@ module Api
       expose :total_waiting_time, documentation: { type: Integer, desc: 'Sum of every idle time within the route (in s)' }
       expose :start_time, documentation: { type: Integer, desc: 'Give the actual start time of the current route if provided by the solve' }
       expose :end_time, documentation: { type: Integer, desc: 'Give the actual end time of the current route if provided by the solver' }
-      expose :geometry, documentation: { type: String, desc: 'Contains the geometry of the route, if asked in first place' }
-      expose :initial_loads, using: VrpResultDetailQuantities, documentation: { is_array: true, desc: 'Give the actual initial loads of the route' }
+      expose :geometry, documentation: { type: String, desc: 'Contains the geometry of the route, if asked in first place' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :initial_loads, using: VrpResultDetailQuantities, documentation: { is_array: true, desc: 'Give the actual initial loads of the route' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :cost_details, using: VRPResultDetailedCosts, documentation: { desc: 'The impact of the current route within the solution cost' }
     end
 
@@ -100,7 +100,7 @@ module Api
       expose :pickup_shipment_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the shipment' }
       expose :delivery_shipment_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the shipment' }
       expose :rest_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the rest' }
-      expose :detail, using: VrpResultSolutionRouteActivityDetails, documentation: { desc: '' }
+      expose :detail, using: VrpResultSolutionRouteActivityDetails, documentation: { desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :type, documentation: { type: String, desc: 'depot, rest, service, pickup or delivery' }
       expose :reason, documentation: { type: String, desc: 'Unassigned reason. Only available when activity was rejected within preprocessing fase or periodic first_solution_strategy.' }
     end
