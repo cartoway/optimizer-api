@@ -18,14 +18,15 @@ x-default-service: &default-service
     # - redis-cache
   volumes:
     - .:/srv/app
-    - ./docker/production.rb:/srv/app/config/environments/production.rb
-    - ./docker/production.rb:/srv/app/config/environments/development.rb
 
 services:
-  api:
+  optimizer-server:
     <<: *default-service
     ports:
       - "8083:80" # HOST:CONTAINER, edit only HOST part
+    networks:
+      - private-network
+      - public-network
     command: bundle exec puma -v -p 80 --pidfile 'server.pid'
     restart: unless-stopped
 
@@ -35,13 +36,24 @@ services:
       <<: *default-environment
       COUNT: 5
       QUEUES: DEFAULT
+    networks:
+      - private-network
     command: bundle exec rake resque:workers --trace
     restart: unless-stopped
 
   redis-resque:
     image: redis:${REDIS_VERSION:-7-alpine}
+    networks:
+      - private-network
     command: redis-server --appendonly yes
     restart: unless-stopped
+
+networks:
+  private-network:
+    external: false
+
+  public-network:
+    name: public-network
 
   # redis-cache:
   #   image: redis:${REDIS_VERSION:-7-alpine}
