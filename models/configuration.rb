@@ -34,7 +34,6 @@ module Models
   end
 
   class Preprocessing < Base
-    field :unconstrained_initialization, default: false
     field :max_split_size, default: nil
     field :cluster_threshold, default: nil
     field :prefer_short_segment, default: false

@@ -60,8 +60,6 @@ module OptimizerWrapper
           }
         },
         config: {
-          unconstrained_initialization: \
-            services_vrps.first[:vrp].configuration&.preprocessing&.unconstrained_initialization,
           max_split_size: services_vrps.first[:vrp].configuration&.preprocessing&.max_split_size,
           partitions: services_vrps.first[:vrp].configuration&.preprocessing&.partitions&.size,
           schedule: !services_vrps.first[:vrp].configuration&.schedule&.range_indices.nil?,

@@ -26,6 +26,5 @@ module OptimizerWrapper
     'solvers' => { profile: :solvers },
     'vroom' => { profile: :vroom },
     'ortools' => { profile: :ortools },
-    'unconstrained_initialization' => { profile: :unconstrained_initialization },
   }
 end
