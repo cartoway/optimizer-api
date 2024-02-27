@@ -704,7 +704,7 @@ class SplitClusteringTest < Minitest::Test
 
     def test_max_split_poorly_populated_route_limit_result
       vrp = TestHelper.load_vrp(self, fixture_file: 'max_split_functionality')
-      result = JSON.parse(File.read('test/fixtures/max_split_poorly_populated_route_limit_result.json'),
+      result = JSON.parse(File.read("#{OptimizerWrapper.gist_vrp_dir}/max_split_poorly_populated_route_limit_result.json"),
                           symbolize_names: true)
 
       solution = Models::Solution.new(result)

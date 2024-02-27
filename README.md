@@ -134,8 +134,8 @@ You will find template for test in `test/real_cases_test.rb`
 
 Before creating test, you need to capture scenario, in order to have a static image of your problem, insensitive to the routers edits.
 
-Add your test JSON file into `test/fixtures/`. Now to create your test, just copy test template in `test/wrappers/real_cases_test.rb`, or any equivalent file.
-Once launched, the dump file of the problem will be created and put as well in `test/fixtures` as following:
+Add your test JSON file into the related [gist](https://gist.github.com/braktar/96dcb33063ccddd25e3bb2fd87c38f42). Now to create your test, just copy test template in `test/wrappers/real_cases_test.rb`, or any equivalent file.
+Once launched, the dump file of the problem will be created and put as well in the gist as following:
 - `new_test.dump` file corresponding to complete vrp with calculated matrices if not provided
 
 
@@ -148,7 +148,7 @@ Note: you can update a test and run the modified scenario with new vrp `.json`:
 ```
 bundle exec rackup [-p 1791]
 COUNT=5 QUEUE=* bundle exec rake resque:workers
-curl -X POST --header "Content-Type:application/json" --data @test/fixtures/my_test.json http://localhost:1791/0.1/vrp/submit.json?api_key=key
+curl -X POST --header "Content-Type:application/json" --data @<test/path/>my_test.json http://localhost:1791/0.1/vrp/submit.json?api_key=key
 ```
 
 If you don't want to run some long real cases tests you can deactivate them:

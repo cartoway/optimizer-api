@@ -8,6 +8,14 @@ GIT
       rubocop-performance (~> 1.19.0)
 
 GIT
+  remote: https://github.com/cartoway/active_hash.git
+  revision: 10a84f020aada46febc91cf2f0fddcbd3a5485eb
+  branch: dev
+  specs:
+    active_hash (3.1.0)
+      activesupport (>= 5.0.0)
+
+GIT
   remote: https://github.com/mapotempo/balanced_vrp_clustering.git
   revision: c537ae70519888438c965a7c3f966e38bd41582d
   branch: dev
@@ -16,14 +24,6 @@ GIT
       awesome_print
       color-generator
       geojson2image
-
-GIT
-  remote: https://github.com/tartifleet/active_hash.git
-  revision: e2b18fedb32aec0cc03f0c747dbc682cbb8fc488
-  branch: mapo
-  specs:
-    active_hash (3.1.0)
-      activesupport (>= 5.0.0)
 
 GEM
   remote: https://rubygems.org/

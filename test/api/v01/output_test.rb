@@ -257,7 +257,7 @@ class Api::V01::OutputTest < Minitest::Test
   end
 
   def test_clustering_generated_files
-    all_services_vrps = Marshal.load(File.binread('test/fixtures/cluster_to_output.bindump')) # rubocop: disable Security/MarshalLoad
+    all_services_vrps = Marshal.load(File.binread("#{OptimizerWrapper.gist_vrp_dir}/cluster_to_output.bindump")) # rubocop: disable Security/MarshalLoad
     file = OutputHelper::Clustering.generate_files(all_services_vrps, true)
     generated_file = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 
@@ -273,7 +273,7 @@ class Api::V01::OutputTest < Minitest::Test
   end
 
   def test_clustering_generated_files_from_dicho
-    all_services_vrps = Marshal.load(File.binread('test/fixtures/dicho_cluster_to_output.bindump')) # rubocop: disable Security/MarshalLoad
+    all_services_vrps = Marshal.load(File.binread("#{OptimizerWrapper.gist_vrp_dir}/dicho_cluster_to_output.bindump")) # rubocop: disable Security/MarshalLoad
     file = OutputHelper::Clustering.generate_files(all_services_vrps)
     generated_file = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 

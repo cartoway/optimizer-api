@@ -152,7 +152,7 @@ module Api
                             solutions: solutions,
                             geojsons: OutputHelper::Result.generate_geometry({ result: solutions }),
                             job: { status: :completed }
-                          }, with: VrpResult)
+                          }, with: VrpResult, detailed_solutions: true)
                 end
               else
                 error!('Internal Server Error', 500)
