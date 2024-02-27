@@ -234,7 +234,13 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
     return if vrps.all?{ |vrp| vrp.matrices.any? }
 
     dump_file = "test/fixtures/#{filename}.dump"
-    dumped_data = Oj.load(Zlib.inflate(File.read(dump_file))) if File.file?(dump_file)
+
+    if File.file?(dump_file)
+      dumped_data = Oj.load(Zlib.inflate(File.read(dump_file)))
+    else
+      dump_file = "#{OptimizerWrapper.gist_vrp_dir}/#{filename}.dump"
+      dumped_data = Oj.load(Zlib.inflate(File.read(dump_file))) if File.file?(dump_file)
+    end
 
     warn 'Overwriting the existing matrix dump' if dumped_data && ENV['TEST_DUMP_VRP'] == 'true'
 
@@ -297,7 +303,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
       end
     }
 
-    File.write("test/fixtures/#{filename}.dump", Zlib.deflate(Oj.dump(write_in_dump))) if write_in_dump.any?
+    File.write(dump_file, Zlib.deflate(Oj.dump(write_in_dump))) if write_in_dump.any?
   end
 
   def self.load_vrp(test, options = {})
@@ -306,7 +312,10 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
 
   def self.load_vrps(test, options = {})
     filename = options[:fixture_file] || test.name[5..-1]
-    json_file = options[:json_file_path] || "test/fixtures/#{filename}.json"
+    json_path = "test/fixtures/#{filename}.json"
+    gist_path = "#{OptimizerWrapper.gist_vrp_dir}/#{filename}.json"
+    json_file = options[:json_file_path] || File.file?(json_path) && json_path || File.file?(gist_path) && gist_path
+
     vrps =
       options[:problem] ? { vrp: options[:problem] } :
                                     JSON.parse(File.read(json_file), symbolize_names: true)

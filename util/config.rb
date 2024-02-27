@@ -34,6 +34,10 @@ module OptimizerWrapper
     @@dump_vrp_dir = dir
   end
 
+  def self.gist_vrp_dir
+    @@gist_dir
+  end
+
   def self.access(force_load = false)
     load config[:access_by_api_key][:file] || './config/access.rb' if force_load
     @access_by_api_key
