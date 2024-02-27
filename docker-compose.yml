@@ -13,7 +13,7 @@ x-default-service: &default-service
     ROUTER_URL: ${ROUTER_URL:-http://localhost:8082/0.1}
     ROUTER_API_KEY: ${ROUTER_API_KEY:-demo}
     SENTRY_DSN: ${SENTRY_DSN:-}
-  links:
+  depends_on:
     - redis-resque
     # - redis-cache
   volumes:
