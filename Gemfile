@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-ruby '>= 3'
+ruby '>= 3.2'
 
 gem 'require_all'
 
@@ -77,7 +77,7 @@ end
 
 group :rubocop do
   # Linting
-  gem 'mapotempo_rubocop', github: 'Mapotempo/mapotempo_rubocop'
+  gem 'rubocop-policy', github: 'cartoway/rubocop-policy'
   gem 'rubocop'
 end
 
