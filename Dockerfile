@@ -1,8 +1,7 @@
-ARG VROOM_RELEASE=v1.13.0
-
 FROM optimizer-ortools:latest
 
 # Install Vroom
+ARG VROOM_RELEASE=v1.14.0
 RUN apt update -y && \
     apt install -y \
         git-core \
