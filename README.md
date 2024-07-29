@@ -33,12 +33,12 @@ Create a `.env` from `.env.template`, and adapt if required.
 
 Build docker images
 ```
-docker-compose build
+docker compose build
 ```
 
 Launch containers
 ```
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Without Docker
