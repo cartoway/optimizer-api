@@ -50,7 +50,8 @@ gem 'polylines'
 gem 'rgeo'
 gem 'rgeo-geojson', require: 'rgeo/geo_json'
 
-gem 'sentry-raven'
+gem 'sentry-resque'
+gem 'sentry-ruby'
 
 group :development, :test do
   gem 'benchmark-ips' # to in-place benchmark of different implementations
