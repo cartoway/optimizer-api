@@ -43,14 +43,14 @@ module OptimizerWrapper
       job_started_at = Time.now
       key_print = options['api_key'].rpartition('-')[0]
       key_print = options['api_key'][0..3] if key_print.empty?
-      Raven.tags_context(key_print: key_print, vrp_checksum: options['checksum'])
-      Raven.user_context(api_key: options['api_key']) # Filtered in sentry if user_context
+      Sentry.set_tags(key_print: key_print, vrp_checksum: options['checksum'])
+      Sentry.set_user(api_key: options['api_key']) # Filtered in sentry if user_context
 
       # Get the vrp
       services_vrps =
         Marshal.load(Base64.decode64(self.options['services_vrps'])) # rubocop:disable Security/MarshalLoad
       log "Vrp size: #{services_vrps.size} Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv[:vrp].name }}"
-      Raven.extra_context(
+      Sentry.set_extras(
         vrps: services_vrps.map{ |sv|
           {
             name: sv[:vrp].name,
@@ -149,7 +149,7 @@ module OptimizerWrapper
 
     def on_failure(e)
       log "#{e.class.name}: #{e}\n\t#{e.backtrace.join("\n\t")}", level: :fatal
-      Raven.capture_exception(e)
+      Sentry.capture_exception(e)
       raise e
     end
 

@@ -132,7 +132,7 @@ module OptimizerLoggerMethods
 
   def log(msg, options = {})
     OptimizerLogger.log(msg, options)
-    Raven.capture_message(msg, level: options[:level]) if options[:level] == :warn
+    Sentry.capture_message(msg, level: options[:level]) if options[:level] == :warn
   end
 end
 
