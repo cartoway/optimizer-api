@@ -767,7 +767,7 @@ module OptimizerWrapper
                     stop = Models::Solution::Stop.new(original_service, info: service_stop.info)
                   }
                   shift = tsp_solution.routes[0].info.total_travel_time - stop.info.travel_time -
-                          next_stop&.info&.travel_time || 0
+                          (next_stop&.info&.travel_time || 0)
                   route.shift_route_times(shift, act_index + 1) if act_index < route.stops.size
                   service_stops
                 else
