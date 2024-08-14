@@ -4,6 +4,7 @@ x-default-service: &default-service
   build: .
   image: optimizer-api:${CARTOROUTE_VERSION:-latest}
   environment: &default-environment
+    APP_ENV: ${APP_ENV:-development}
     LOG_LEVEL: ${LOG_LEVEL:-info}
     OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
     OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
