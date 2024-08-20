@@ -52,6 +52,7 @@ module Wrappers
         :assert_homogeneous_router_definitions,
         :assert_matrices_only_one,
         :assert_no_distance_limitation,
+        :assert_no_ride_constraint,
         :assert_no_service_duration_modifiers,
         :assert_vehicles_no_capacity_initial,
         :assert_vehicles_no_duration_limit,
