@@ -267,6 +267,10 @@ module Wrappers
         )
     end
 
+    def assert_no_ride_constraint(vrp)
+      vrp.vehicles.none?(&:maximum_ride_distance) && vrp.vehicles.none?(&:maximum_ride_time)
+    end
+
     def assert_no_vehicle_free_approach_or_return_if_heuristic(vrp)
       vrp.vehicles.none?{ |vehicle| vehicle.free_approach || vehicle.free_return } || !vrp.periodic_heuristic?
     end

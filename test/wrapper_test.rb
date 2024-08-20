@@ -1620,6 +1620,31 @@ class WrapperTest < Minitest::Test
                     :assert_no_activity_with_position
   end
 
+  def test_vehicle_ride_contraint
+    problem = VRP.basic
+    vrp = TestHelper.create(problem)
+    refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+    refute_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+
+
+    problem[:vehicles].first[:maximum_ride_time] = 1
+    vrp = TestHelper.create(problem)
+    refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+    assert_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+
+    problem[:vehicles].first.delete(:maximum_ride_time)
+    problem[:vehicles].first[:maximum_ride_distance] = 1
+    vrp = TestHelper.create(problem)
+    refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+    assert_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+  end
+
   def test_unassigned_presence
     problem = {
       units: [{
