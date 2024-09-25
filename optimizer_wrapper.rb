@@ -426,16 +426,16 @@ module OptimizerWrapper
                                                                 service_ids,
                                                                 vehicle_indices)[:vrp]
       }
+    is_sticky = vrp.services.all?{ |service| service.skills.any?{ |skill| skill.to_s.include?("sticky_skill") } }
     total_size =
-      vrp.services.all?{ |service| service.sticky_vehicle_ids.any? } ? vrp.vehicles.size :
-           independent_vrps.collect{ |s_vrp| s_vrp.services.size * [1, s_vrp.vehicles.size].min }.sum
+      is_sticky ? vrp.vehicles.size :
+        independent_vrps.collect{ |s_vrp| s_vrp.services.size * [1, s_vrp.vehicles.size].min }.sum
     independent_vrps.each{ |sub_vrp|
       # If one sub vrp has no vehicle or no service, duration can be zero.
       # We only split duration among sub_service_vrps that have at least one vehicle and one service.
       this_sub_size =
-        vrp.services.all?{ |service| service.skills.any?{ |skill| skill.to_s.include?("sticky_skill") } } ?
-         sub_vrp.vehicles.size :
-               sub_vrp.services.size * [1, sub_vrp.vehicles.size].min
+        is_sticky ? sub_vrp.vehicles.size :
+          sub_vrp.services.size * [1, sub_vrp.vehicles.size].min
       Interpreters::SplitClustering.adjust_independent_duration(sub_vrp, this_sub_size, total_size)
     }
 
