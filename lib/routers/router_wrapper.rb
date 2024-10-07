@@ -84,7 +84,7 @@ module Routers
           if feature
             distance = feature['properties']['router']['total_distance'] if feature['properties'] && feature['properties']['router']
             time = feature['properties']['router']['total_time'] if feature['properties'] && feature['properties']['router']
-            trace =  if feature['geometry']
+            trace = if feature['geometry']
               if polyline
                 feature['geometry']['polylines']
               else

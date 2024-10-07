@@ -209,7 +209,7 @@ module VrpConfiguration
                         'Specifies the geometry structures to be returned. Can be a subset of `[polylines encoded_polylines partitions]` or a boolean value to output all or no geometry. Polylines and encoded_polylines are not compatible together.' :
                         'Specifies the geometry structures to be returned. Can be `partitions` to generate geometry structure for each partition or `true` for generating the geometry structure under each route.')
     optional(:geometry_polyline, type: Boolean, documentation: { hidden: true }, desc: '[DEPRECATED] Use geometry instead, with :polylines or :encoded_polylines')
-    optional(:intermediate_solutions, types: [String, Boolean], desc: 'Return intermediate solutions if available', coerce_with: ->(i) { INTERMEDIATE_SOLUTION_VALUES.include?(i)} )
+    optional(:intermediate_solutions, types: [String, Boolean], desc: 'Return intermediate solutions if available', coerce_with: ->(i) { INTERMEDIATE_SOLUTION_VALUES.include?(i) } )
     optional(:csv, type: Boolean, desc: 'The output is a CSV file if you do not specify api format')
     optional(:use_deprecated_csv_headers, type: Boolean, desc: 'Forces API to ignore provided language to return old CSV headers')
     optional(:allow_empty_result, type: Boolean, desc: 'Allow no solution from the solver used')
