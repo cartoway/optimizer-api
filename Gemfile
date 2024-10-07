@@ -14,9 +14,9 @@ gem 'thin'
 # API
 gem 'grape'
 gem 'grape-entity'
+gem 'grape_logging'
 gem 'grape-swagger'
 gem 'grape-swagger-entity'
-gem 'grape_logging'
 
 # Models
 gem 'actionpack', require: 'action_dispatch'
@@ -78,8 +78,8 @@ end
 
 group :rubocop do
   # Linting
-  gem 'mapotempo_rubocop', github: 'Mapotempo/mapotempo_rubocop'
   gem 'rubocop'
+  gem 'rubocop-policy', github: 'cartoway/rubocop-policy'
 end
 
 group :test do

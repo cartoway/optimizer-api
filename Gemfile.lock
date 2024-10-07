@@ -1,19 +1,19 @@
 GIT
-  remote: https://github.com/Mapotempo/mapotempo_rubocop.git
-  revision: 36b2b38bee1bc8d0c840abc320243188e4080417
-  specs:
-    mapotempo_rubocop (0.1.0)
-      rubocop (~> 1.56.1)
-      rubocop-minitest (~> 0.31.0)
-      rubocop-performance (~> 1.19.0)
-
-GIT
   remote: https://github.com/cartoway/active_hash.git
   revision: 10a84f020aada46febc91cf2f0fddcbd3a5485eb
   branch: dev
   specs:
     active_hash (3.1.0)
       activesupport (>= 5.0.0)
+
+GIT
+  remote: https://github.com/cartoway/rubocop-policy.git
+  revision: 209bde9a8088d4204b22829b2a9150860c16dcac
+  specs:
+    rubocop-policy (0.1.0)
+      rubocop (~> 1.56.1)
+      rubocop-minitest (~> 0.31.0)
+      rubocop-performance (~> 1.19.0)
 
 GIT
   remote: https://github.com/mapotempo/balanced_vrp_clustering.git
@@ -318,7 +318,6 @@ DEPENDENCIES
   grape_logging
   http_accept_language
   i18n
-  mapotempo_rubocop!
   minitest
   minitest-around
   minitest-bisect
@@ -345,6 +344,7 @@ DEPENDENCIES
   rgeo-geojson
   ripper-tags
   rubocop
+  rubocop-policy!
   sentry-resque
   sentry-ruby
   simplecov
