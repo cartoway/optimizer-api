@@ -86,7 +86,7 @@ class Api::V01::ApiTest < Minitest::Test
 
     assert_includes JSON.parse(last_response.body)['message'], 'Too many daily requests'
     assert_equal(
-      ["application/json; charset=UTF-8", 4, 0, Time.now.utc.to_date.next_day.to_time.to_i],
+      ['application/json; charset=UTF-8', 4, 0, Time.now.utc.to_date.next_day.to_time.to_i],
       last_response.headers.select{ |key|
         key =~ /(Content-Type|X-RateLimit-Limit|X-RateLimit-Remaining|X-RateLimit-Reset)/
       }.values
@@ -106,14 +106,14 @@ class Api::V01::ApiTest < Minitest::Test
     assert last_response.ok?, last_response.body
     json = JSON.parse(last_response.body).first
 
-    assert_equal Date.today.strftime("%Y-%m-%d"), json["count_date"]
-    assert_equal "1", json["count_hits"]
-    assert_equal "1", json["count_transactions"]
-    assert_equal "127.0.0.1", json["count_ip"]
-    assert_equal "demo", json["count_key"]
-    assert_equal "myAsset", json["count_asset"]
-    assert_equal "optimizer", json["count_service"]
-    assert_equal "optimize", json["count_endpoint"]
+    assert_equal Date.today.strftime('%Y-%m-%d'), json['count_date']
+    assert_equal '1', json['count_hits']
+    assert_equal '1', json['count_transactions']
+    assert_equal '127.0.0.1', json['count_ip']
+    assert_equal 'demo', json['count_key']
+    assert_equal 'myAsset', json['count_asset']
+    assert_equal 'optimizer', json['count_service']
+    assert_equal 'optimize', json['count_endpoint']
   end
 
   def test_use_quota_nil

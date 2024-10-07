@@ -4,8 +4,8 @@
 require 'google/protobuf'
 
 Google::Protobuf::DescriptorPool.generated_pool.build do
-  add_file("ortools_result.proto", :syntax => :proto3) do
-    add_message "ortools_result.Activity" do
+  add_file('ortools_result.proto', :syntax => :proto3) do
+    add_message 'ortools_result.Activity' do
       optional :index, :int32, 1
       repeated :quantities, :float, 2
       optional :start_time, :int32, 3
@@ -15,7 +15,7 @@ Google::Protobuf::DescriptorPool.generated_pool.build do
       optional :id, :string, 7
       optional :lateness, :int64, 8
     end
-    add_message "ortools_result.CostDetails" do
+    add_message 'ortools_result.CostDetails' do
       optional :fixed, :float, 1
       optional :distance, :float, 2
       optional :distance_balance, :float, 3
@@ -30,22 +30,22 @@ Google::Protobuf::DescriptorPool.generated_pool.build do
       optional :lateness, :float, 12
       optional :overload, :float, 13
     end
-    add_message "ortools_result.Route" do
-      repeated :activities, :message, 1, "ortools_result.Activity"
-      optional :cost_details, :message, 2, "ortools_result.CostDetails"
+    add_message 'ortools_result.Route' do
+      repeated :activities, :message, 1, 'ortools_result.Activity'
+      optional :cost_details, :message, 2, 'ortools_result.CostDetails'
     end
-    add_message "ortools_result.Result" do
+    add_message 'ortools_result.Result' do
       optional :cost, :float, 1
       optional :duration, :float, 2
       optional :iterations, :int32, 3
-      repeated :routes, :message, 4, "ortools_result.Route"
+      repeated :routes, :message, 4, 'ortools_result.Route'
     end
   end
 end
 
 module OrtoolsResult
-  Activity = ::Google::Protobuf::DescriptorPool.generated_pool.lookup("ortools_result.Activity").msgclass
-  CostDetails = ::Google::Protobuf::DescriptorPool.generated_pool.lookup("ortools_result.CostDetails").msgclass
-  Route = ::Google::Protobuf::DescriptorPool.generated_pool.lookup("ortools_result.Route").msgclass
-  Result = ::Google::Protobuf::DescriptorPool.generated_pool.lookup("ortools_result.Result").msgclass
+  Activity = ::Google::Protobuf::DescriptorPool.generated_pool.lookup('ortools_result.Activity').msgclass
+  CostDetails = ::Google::Protobuf::DescriptorPool.generated_pool.lookup('ortools_result.CostDetails').msgclass
+  Route = ::Google::Protobuf::DescriptorPool.generated_pool.lookup('ortools_result.Route').msgclass
+  Result = ::Google::Protobuf::DescriptorPool.generated_pool.lookup('ortools_result.Result').msgclass
 end

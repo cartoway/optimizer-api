@@ -92,7 +92,7 @@ module OptimizerWrapper
     log "--> define_main_process #{services_vrps.size} VRPs"
     log "activities: #{services_vrps.map{ |sv| sv[:vrp].services.size }}"
     log "vehicles: #{services_vrps.map{ |sv| sv[:vrp].vehicles.size }}"
-    log "configuration.resolution.vehicle_limit: "\
+    log 'configuration.resolution.vehicle_limit: '\
         "#{services_vrps.map{ |sv| sv[:vrp].configuration.resolution.vehicle_limit }}"
     log "min_durations: #{services_vrps.map{ |sv| sv[:vrp].configuration.resolution.minimum_duration&.round }}"
     log "max_durations: #{services_vrps.map{ |sv| sv[:vrp].configuration.resolution.duration&.round }}"
@@ -264,7 +264,7 @@ module OptimizerWrapper
         if vrp.configuration.resolution.solver && (!periodic_heuristic_flag || vrp.services.size < 200)
           if vrp.configuration.preprocessing.cluster_threshold.to_f.positive?
             block&.call(nil, nil, nil,
-                        "process clique clustering : threshold "\
+                        'process clique clustering : threshold '\
                         "(#{vrp.configuration.preprocessing.cluster_threshold.to_f}) ",
                         nil, nil, nil)
           end

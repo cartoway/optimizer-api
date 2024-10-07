@@ -172,7 +172,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
                                          :zones, :vehicles, :services, :shipments, :relations, :subtours,
                                          :routes, :configuration]
       unless unknown_model_fields.empty?
-        raise "If there is a new model class add it above. "\
+        raise 'If there is a new model class add it above. '\
               "If not, following fields should not be in vrp: #{unknown_model_fields}"
       end
     end

@@ -39,7 +39,7 @@ class OptimizerLogger
 
   @@logger.formatter =
     proc do |severity, datetime, progname, msg|
-      datetime = OptimizerLogger.with_datetime ? datetime.strftime("[%FT%T.%N%:z]") : nil # iso8601 time with 9 decimals
+      datetime = OptimizerLogger.with_datetime ? datetime.strftime('[%FT%T.%N%:z]') : nil # iso8601 time with 9 decimals
       job_id = OptimizerWrapper::Job.current_job_id ? "#{OptimizerWrapper::Job.current_job_id} -" : nil
       progname = progname&.empty? ? nil : "- #{progname}"
 
@@ -62,7 +62,7 @@ class OptimizerLogger
         else
           raise NotImplementedError.new(
             "Unknown option (#{@@caller_location}) OptimizerLogger.caller_location parameter -- "\
-            ":absolute || :relative || :filename || nil"
+            ':absolute || :relative || :filename || nil'
           )
         end
 

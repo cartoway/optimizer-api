@@ -127,7 +127,7 @@ class Api::V01::WithSolverTest < Minitest::Test
       vrp[:configuration][:restitution][:intermediate_solutions] = true
       @job_id = submit_vrp api_key: 'ortools', vrp: vrp
       result = wait_avancement_match(@job_id, /run optimization, iterations [1-9]+/, api_key: 'ortools')
-      assert_equal "Duplicate empty service.", result['solutions'].first['unassigned'].first['reason']
+      assert_equal 'Duplicate empty service.', result['solutions'].first['unassigned'].first['reason']
     end
     delete_job(@job_id, api_key: 'ortools') if @job_id
   end

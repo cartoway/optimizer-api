@@ -114,7 +114,7 @@ module Api
             Sentry.set_user(api_key: params[:api_key]) # Filtered in sentry if user_context
 
             vrp_params = d_params[:points] ? d_params : d_params[:vrp]
-            APIBase.dump_vrp_dir.write([key_print, vrp_params[:name] || "no_vrp_name", checksum].compact.join('_'), d_params.to_json) if OptimizerWrapper.config[:dump][:vrp]
+            APIBase.dump_vrp_dir.write([key_print, vrp_params[:name] || 'no_vrp_name', checksum].compact.join('_'), d_params.to_json) if OptimizerWrapper.config[:dump][:vrp]
 
             Sentry.set_extras(vrp_name: vrp_params[:name])
 

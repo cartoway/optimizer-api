@@ -104,10 +104,10 @@ module Models
       vrp[:configuration][:preprocessing] = { partitions: [{ entity: :vehicle }] }
       generated_vrp = TestHelper.create(vrp)
 
-      assert(generated_vrp.services[0].skills.any?{ |s| s.to_s.include?("sticky_skill_") })
-      assert(generated_vrp.services[2].skills.any?{ |s| s.to_s.include?("sticky_skill_") })
+      assert(generated_vrp.services[0].skills.any?{ |s| s.to_s.include?('sticky_skill_') })
+      assert(generated_vrp.services[2].skills.any?{ |s| s.to_s.include?('sticky_skill_') })
 
-      assert(generated_vrp.services[1].skills.none?{ |s| s.to_s.include?("sticky_skill_") })
+      assert(generated_vrp.services[1].skills.none?{ |s| s.to_s.include?('sticky_skill_') })
     end
 
     def test_solver_parameter_retrocompatibility

@@ -127,15 +127,15 @@ module Api
             rs = values.split(':')
 
             case rs[0]
-            when "optimizer"
+            when 'optimizer'
               json['service'] = rs[0]
               json['endpoint'] = rs[1]
               json['date'] = rs[2]
-            when "key"
+            when 'key'
               json['key'] = rs[1]
-            when "ip"
+            when 'ip'
               json['ip'] = rs[1]
-            when "asset"
+            when 'asset'
               json['asset'] = rs[1]
             end
           end

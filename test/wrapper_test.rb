@@ -1358,8 +1358,8 @@ class WrapperTest < Minitest::Test
     ]
     vrp[:services].first[:activity][:timewindows] = [{ start: 0, end: 5, day_index: 1 }]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
-    unassigned_reason = "Service cannot be performed by any compatible vehicle while "\
-                        "respecting duration, timewindow and day limits"
+    unassigned_reason = 'Service cannot be performed by any compatible vehicle while '\
+                        'respecting duration, timewindow and day limits'
     assert_equal(1, solutions[0].unassigned_stops.count{ |un|
                       un.reason&.split(' && ')&.include?(unassigned_reason)
                     })
@@ -1375,8 +1375,8 @@ class WrapperTest < Minitest::Test
     vrp[:services].first[:activity][:timewindows] = [{ start: 0, end: 5, day_index: 0 }]
     vrp[:services].first[:unavailable_visit_day_indices] = [0]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
-    unassigned_reason = "Service cannot be performed by any compatible vehicle while "\
-                        "respecting duration, timewindow and day limits"
+    unassigned_reason = 'Service cannot be performed by any compatible vehicle while '\
+                        'respecting duration, timewindow and day limits'
     assert_equal(1, solutions[0].unassigned_stops.count{ |un|
                       un.reason.split(' && ').include?(unassigned_reason)
                     })
@@ -2071,8 +2071,8 @@ class WrapperTest < Minitest::Test
     }
     vrp[:services].first[:activity][:duration] = 15
     unfeasible = OptimizerWrapper.config[:services][:demo].detect_unfeasible_services(TestHelper.create(vrp))
-    unassigned_reason = "Service cannot be performed by any compatible vehicle while respecting "\
-                        "duration, timewindow and day limits"
+    unassigned_reason = 'Service cannot be performed by any compatible vehicle while respecting '\
+                        'duration, timewindow and day limits'
     assert_equal(1, unfeasible.values.flatten.count{ |un| un.reason == unassigned_reason })
 
     vrp[:vehicles].first[:timewindow] = nil
@@ -2083,8 +2083,8 @@ class WrapperTest < Minitest::Test
     vrp[:services].first[:activity][:duration] = 15
     vrp[:configuration][:schedule] = { range_indices: { start: 0, end: 3 }}
     unfeasible = OptimizerWrapper.config[:services][:demo].detect_unfeasible_services(TestHelper.create(vrp))
-    unassigned_reason = "Service cannot be performed by any compatible vehicle while respecting "\
-                        "duration, timewindow and day limits"
+    unassigned_reason = 'Service cannot be performed by any compatible vehicle while respecting '\
+                        'duration, timewindow and day limits'
     assert_equal(1, unfeasible.values.flatten.count{ |un| un.reason == unassigned_reason })
 
     vrp[:vehicles].first[:sequence_timewindows] << {
@@ -2462,7 +2462,7 @@ class WrapperTest < Minitest::Test
     vrp[:vehicles].first[:distance] = 1
 
     assert_equal 3, demo.check_distances(TestHelper.create(vrp), {}).values.flatten.size,
-                 "all should be infeasible due to distance constraint"
+                 'all should be infeasible due to distance constraint'
   end
 
   def test_split_independent_vrp_does_not_reset_relations
@@ -2595,8 +2595,8 @@ class WrapperTest < Minitest::Test
     assert_equal 5, independent_vrps.size,
                  'split_independent_vrp function does not generate expected number of independent_vrps'
 
-    expected_vehicles = [["vehicle_0"], ["vehicle_2"], [], [], ["vehicle_1"]]
-    expected_services = [["service_2", "service_4"], ["service_1", "service_6"], ["service_3"], ["service_5"], []]
+    expected_vehicles = [['vehicle_0'], ['vehicle_2'], [], [], ['vehicle_1']]
+    expected_services = [['service_2', 'service_4'], ['service_1', 'service_6'], ['service_3'], ['service_5'], []]
     assert_equal expected_vehicles.sort, independent_vrps.map{ |i| i.vehicles.map(&:id) }.sort
     assert_equal expected_services.sort, independent_vrps.map{ |i| i.services.map(&:id).sort }.sort
 
@@ -2604,8 +2604,8 @@ class WrapperTest < Minitest::Test
     problem[:relations] = [{ type: :vehicle_trips, linked_vehicle_ids: ['vehicle_1', 'vehicle_2'] }]
     vrp = TestHelper.create(problem)
     independent_vrps = OptimizerWrapper.split_independent_vrp(vrp)
-    msg = "Waiting for split_independent_vrp forcing relation implementation. This INTERIM CHECK part can be "\
-          "deleted upto the skip and the rest of the test with vehicle_trips can be activated."
+    msg = 'Waiting for split_independent_vrp forcing relation implementation. This INTERIM CHECK part can be '\
+          'deleted upto the skip and the rest of the test with vehicle_trips can be activated.'
     assert_equal 1, independent_vrps.size,
                  'split_independent_vrp function does not generate expected number of independent_vrps' + msg
     skip msg
@@ -2622,8 +2622,8 @@ class WrapperTest < Minitest::Test
     assert_equal 4, independent_vrps.size,
                  'split_independent_vrp function does not generate expected number of independent_vrps'
 
-    expected_vehicles = [["vehicle_0"], ["vehicle_1", "vehicle_2"], [], []]
-    expected_services = [["service_2", "service_4"], ["service_1", "service_6"], ["service_3"], ["service_5"]]
+    expected_vehicles = [['vehicle_0'], ['vehicle_1', 'vehicle_2'], [], []]
+    expected_services = [['service_2', 'service_4'], ['service_1', 'service_6'], ['service_3'], ['service_5']]
     assert_equal expected_vehicles.sort, independent_vrps.map{ |i| i.vehicles.map(&:id) }.sort
     assert_equal expected_services.sort, independent_vrps.map{ |i| i.services.map(&:id).sort }.sort
   end
@@ -3225,12 +3225,12 @@ class WrapperTest < Minitest::Test
 
     vrp = TestHelper.create(problem)
     unassigned_flag = demo.no_compatible_vehicle_with_enough_capacity(vrp, vrp.services.first)
-    assert unassigned_flag, "Service quantity violate vehicle capacity, it should be eliminated"
+    assert unassigned_flag, 'Service quantity violate vehicle capacity, it should be eliminated'
 
     problem[:services].first[:quantities].first[:empty] = true
     vrp = TestHelper.create(problem)
     unassigned_flag = demo.no_compatible_vehicle_with_enough_capacity(vrp, vrp.services.first)
-    refute unassigned_flag, "Empty operation cannot violate vehicle capacity, it should not be eliminated"
+    refute unassigned_flag, 'Empty operation cannot violate vehicle capacity, it should not be eliminated'
   end
 
   def test_filter_infeasible_route

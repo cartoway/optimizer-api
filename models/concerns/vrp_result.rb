@@ -196,9 +196,9 @@ end
 class Date
   def vrp_result(_options = nil) # :nodoc:
     if ActiveSupport::JSON::Encoding.use_standard_json_time_format
-      strftime("%Y-%m-%d")
+      strftime('%Y-%m-%d')
     else
-      strftime("%Y/%m/%d")
+      strftime('%Y/%m/%d')
     end
   end
 end
@@ -208,7 +208,7 @@ class DateTime
     if ActiveSupport::JSON::Encoding.use_standard_json_time_format
       xmlschema(ActiveSupport::JSON::Encoding.time_precision)
     else
-      strftime("%Y/%m/%d %H:%M:%S %z")
+      strftime('%Y/%m/%d %H:%M:%S %z')
     end
   end
 end

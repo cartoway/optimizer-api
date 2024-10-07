@@ -393,7 +393,7 @@ module Models
         end
       expected_error_message = "There are vehicles or services with 'vehicle_partition_*', "\
                                "'work_day_partition_*' skills. These skill patterns are reserved "\
-                               "for internal use and they would lead to unexpected behaviour."
+                               'for internal use and they would lead to unexpected behaviour.'
       assert_equal expected_error_message, error.message
     end
 

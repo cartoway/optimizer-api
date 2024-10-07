@@ -231,7 +231,7 @@ module ValidateData
 
     return unless inconsistent_position_services.any?
 
-    raise OptimizerWrapper::DiscordantProblemError.new("Inconsistent positions in relations: "\
+    raise OptimizerWrapper::DiscordantProblemError.new('Inconsistent positions in relations: '\
                                                        "#{inconsistent_position_services.uniq}")
   end
 
@@ -449,7 +449,7 @@ module ValidateData
         activity[:late_multiplier]&.positive? && activity[:timewindows]&.any?{ |tw| tw[:maximum_lateness]&.positive? }
       }
     }
-      raise "Periodic heuristic does not support maximum_lateness"
+      raise 'Periodic heuristic does not support maximum_lateness'
     end
   end
 
@@ -526,7 +526,7 @@ module ValidateData
     return unless not_handled_relations.any?
 
     raise OptimizerWrapper::UnsupportedProblemError.new(
-      "The following relations are not compatible with alternative activities: ",
+      'The following relations are not compatible with alternative activities: ',
       not_handled_relations
     )
   end

@@ -3237,8 +3237,8 @@ class Wrappers::OrtoolsTest < Minitest::Test
     assert_equal :neutral, vrp.services[1].activity.position
     assert_equal :exclusive, vrp.services[2].activity.position
     solution = OptimizerWrapper.config[:services][:ortools].solve(vrp, 'test')
-    routes_with_s1 = solution.routes.find{ |r| r.stops.any?{ |s| s.service_id == "service_1" } }
-    routes_with_s3 = solution.routes.find{ |r| r.stops.any?{ |s| s.service_id == "service_3" } }
+    routes_with_s1 = solution.routes.find{ |r| r.stops.any?{ |s| s.service_id == 'service_1' } }
+    routes_with_s3 = solution.routes.find{ |r| r.stops.any?{ |s| s.service_id == 'service_3' } }
     assert_equal routes_with_s1.vehicle.id, routes_with_s3.vehicle.id
     assert_equal 2, routes_with_s1.stops.size
   end
