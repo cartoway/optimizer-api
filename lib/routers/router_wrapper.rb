@@ -199,6 +199,8 @@ module Routers
         track: options[:track],
         motorway: options[:motorway],
         toll: options[:toll],
+        low_emission_zone: options[:low_emission_zone],
+        large_light_vehicle: options[:large_light_vehicle],
         trailers: options[:trailers],
         weight: options[:weight],
         weight_per_axle: options[:weight_per_axle],
