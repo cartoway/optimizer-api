@@ -43,6 +43,8 @@ module Models
     field :motorway, default: true
     field :track, default: true
     field :toll, default: true
+    field :low_emission_zone, default: true
+    field :large_light_vehicle, default: true
     field :trailers, default: nil
     field :weight, default: nil
     field :weight_per_axle, default: nil
