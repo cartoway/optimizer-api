@@ -26,6 +26,10 @@ $(document).ready(function() {
   $('#file-customers-help .column-value').append('<td>HH:MM:SS</td>');
   $('#file-customers-help .column-name').append('<td>' + mapping.pickup_setup + '</td>');
   $('#file-customers-help .column-value').append('<td>HH:MM:SS</td>');
+  $('#file-customers-help .column-name').append('<td>' + mapping.pickup_position + '</td>');
+  $('#file-customers-help .column-value').append('<td>neutral/always_first/always_last</td>');
+  $('#file-customers-help .column-name').append('<td>' + mapping.pickup_priority + '</td>');
+  $('#file-customers-help .column-value').append('<td>4</td>');
   $('#file-customers-help .column-name').append('<td>' + mapping.delivery_lat + '</td>');
   $('#file-customers-help .column-value').append('<td>0.123</td>');
   $('#file-customers-help .column-name').append('<td>' + mapping.delivery_lon + '</td>');
@@ -38,6 +42,10 @@ $(document).ready(function() {
   $('#file-customers-help .column-value').append('<td>HH:MM:SS</td>');
   $('#file-customers-help .column-name').append('<td>' + mapping.delivery_setup + '</td>');
   $('#file-customers-help .column-value').append('<td>HH:MM:SS</td>');
+  $('#file-customers-help .column-name').append('<td>' + mapping.delivery_position + '</td>');
+  $('#file-customers-help .column-value').append('<td>neutral/always_first/always_last</td>');
+  $('#file-customers-help .column-name').append('<td>' + mapping.delivery_priority + '</td>');
+  $('#file-customers-help .column-value').append('<td>4</td>');
   $('#file-customers-help .column-name').append('<td>' + mapping.quantity + ' 1</td>');
   $('#file-customers-help .column-value').append('<td>1.234</td>');
   $('#file-customers-help .column-name').append('<td>' + mapping.quantity + ' 2</td>');
@@ -273,7 +281,9 @@ $(document).ready(function() {
                 end: customer[mapping.pickup_end || 'pickup_end'] || null
               }],
               setup_duration: customer[mapping.pickup_setup || 'pickup_setup'] || null,
-              duration: customer[mapping.pickup_duration || 'pickup_duration'] || null
+              duration: customer[mapping.pickup_duration || 'pickup_duration'] || null,
+              position: customer[mapping.pickup_position || 'pickup_position'] || 'neutral',
+              priority: customer[mapping.pickup_priority || 'pickup_priority'] || 4
             },
             delivery: {
               point_id: customer[mapping.delivery_lat || 'delivery_lat'].replace(',', '.') + ',' + customer[mapping.delivery_lon || 'delivery_lon'].replace(',', '.'),
@@ -282,7 +292,9 @@ $(document).ready(function() {
                 end: customer[mapping.delivery_end || 'delivery_end'] || null
               }],
               setup_duration: customer[mapping.delivery_setup || 'delivery_setup'] || null,
-              duration: customer[mapping.delivery_duration || 'delivery_duration'] || null
+              duration: customer[mapping.delivery_duration || 'delivery_duration'] || null,
+              position: customer[mapping.delivery_position || 'delivery_position'] || 'neutral',
+              priority: customer[mapping.delivery_priority || 'delivery_priority'] || 4
             },
             quantities: $.map(quantities.filter(function(n) {return n != undefined;}), function(val, key) {return $.extend(val, {unit_id: 'unit'+ key});}),
             skills: $.map(customer, function(val, key) {
@@ -309,7 +321,9 @@ $(document).ready(function() {
                 end: customer[mapping.pickup_end || 'pickup_end'] || null
               }],
               setup_duration: customer[mapping.pickup_setup || 'pickup_setup'] || null,
-              duration: customer[mapping.pickup_duration || 'pickup_duration'] || null
+              duration: customer[mapping.pickup_duration || 'pickup_duration'] || null,
+              position: customer[mapping.pickup_position || 'pickup_position'] || null,
+              priority: customer[mapping.pickup_priority || 'pickup_priority'] || 4
             },
             quantities: $.map(quantities.filter(function(n) {return n != undefined;}), function(val, key) {return $.extend(val, {unit_id: 'unit'+ key});}),
             skills: $.map(customer, function(val, key) {
@@ -336,7 +350,9 @@ $(document).ready(function() {
                 end: customer[mapping.delivery_end || 'delivery_end'] || null
               }],
               setup_duration: customer[mapping.delivery_setup || 'delivery_setup'] || null,
-              duration: customer[mapping.delivery_duration || 'delivery_duration'] || null
+              duration: customer[mapping.delivery_duration || 'delivery_duration'] || null,
+              position: customer[mapping.delivery_position || 'delivery_position'] || null,
+              priority: customer[mapping.delivery_priority || 'delivery_priority'] || 4
             },
             quantities: $.map(quantities.filter(function(n) {return n != undefined;}), function(val, key) {return $.extend(val, {unit_id: 'unit'+ key});}),
             skills: $.map(customer, function(val, key) {
@@ -463,7 +479,7 @@ $(document).ready(function() {
       i++;
       route.activities.forEach(function(activity) {
         var setup_duration = activity['detail']['setup_duration'];
-        var ref = activity.pickup_shipment_id ? (activity.pickup_shipment_id + ' pickup') : activity.delivery_shipment_id;
+        var ref = activity.service_id;
         var lat = activity['detail']['lat'];
         var lon = activity['detail']['lon'];
         var start = activity['detail']['timewindows'] && activity['detail']['timewindows'][0] && activity['detail']['timewindows'][0]['start'];
@@ -587,6 +603,8 @@ $(document).ready(function() {
         return element['unit'] == 'unit1';
       });
       var value1_2 = quantity1_2 && quantity1_2['value'] || 0;
+      var lat = job['detail']['lat'];
+      var lon = job['detail']['lon']
       var customer_id;
       if (job.type == 'delivery') {
         customer_id = customers.indexOf(job.delivery_shipment_id);
@@ -599,8 +617,8 @@ $(document).ready(function() {
           '', // street
           '', // postalcode
           '', // country
-          data.customers[customer_id][mapping.delivery_lat || 'delivery_lat'],
-          data.customers[customer_id][mapping.delivery_lon || 'delivery_lon'],
+          lat,
+          lon,
           data.customers[customer_id][mapping.delivery_duration || 'delivery_duration'],
           value1_1,
           value1_2,
@@ -623,8 +641,8 @@ $(document).ready(function() {
           '', // street
           '', // postalcode
           '', // country
-          data.customers[customer_id][mapping.pickup_lat || 'pickup_lat'],
-          data.customers[customer_id][mapping.pickup_lon || 'pickup_lon'],
+          lat,
+          lon,
           data.customers[customer_id][mapping.pickup_duration || 'pickup_duration'],
           value1_1,
           value1_2,
@@ -648,8 +666,8 @@ $(document).ready(function() {
             '', // street
             '', // postalcode
             '', // country
-            data.customers[customer_id][mapping.pickup_lat || 'pickup_lat'],
-            data.customers[customer_id][mapping.pickup_lon || 'pickup_lon'],
+            lat,
+            lon,
             data.customers[customer_id][mapping.pickup_duration || 'pickup_duration'],
             value1_1,
             value1_2,
@@ -671,8 +689,8 @@ $(document).ready(function() {
             '', // street
             '', // postalcode
             '', // country
-            data.customers[customer_id][mapping.delivery_lat || 'delivery_lat'],
-            data.customers[customer_id][mapping.delivery_lon || 'delivery_lon'],
+            lat,
+            lon,
             data.customers[customer_id][mapping.delivery_duration || 'delivery_duration'],
             value1_1,
             value1_2,
