@@ -52,7 +52,8 @@ module Models
           when 'Hash'
             object # Allow direct loading of json solution
           else
-            raise 'Unknown stop class'
+
+            raise "Unknown stop class: #{object.class.to_s} #{object.inspect}"
           end
         raise 'A route stop cannot be nil' unless parsed_object
 
@@ -64,6 +65,7 @@ module Models
           options[:apply] ||= []
           options[:apply] << [:setup]
         end
+        filter_fake_timewindow
         hash = super(options)
         hash['original_service_id'] = id
         hash.merge!(info.vrp_result(options))
@@ -95,6 +97,12 @@ module Models
         skills_to_output += all_skills.select{ |sk| sk.to_s.include?('cluster ') }
         skills_to_output += self.original_skills
         skills_to_output
+      end
+
+      def filter_fake_timewindow
+        return if activity.timewindows.size != 1
+
+        activity.timewindows = [] if activity.timewindows.first.start == 0 && activity.timewindows.first.end.nil?
       end
 
       def active_timewindow
