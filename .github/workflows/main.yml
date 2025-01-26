@@ -273,3 +273,20 @@ jobs:
         timeout-minutes: 25
         run: ./.github/actions/tests.sh
         shell: bash
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [build, test_basis, test_dicho, test_real, test_real_periodic, test_real_periodic]
+    if: github.ref == 'refs/heads/dev'
+
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Docker Build and Push
+        uses: cartoway/docker-compose-build-push-action@main
+        with:
+          registry_password: ${{ secrets.GITHUB_TOKEN }}

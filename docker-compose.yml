@@ -2,7 +2,7 @@ version: '3.7'
 
 x-default-service: &default-service
   build: .
-  image: optimizer-api:${CARTOROUTE_VERSION:-latest}
+  image: ghcr.io/cartoway/optimizer-api:${CARTOROUTE_VERSION:-master}
   environment: &default-environment
     APP_ENV: ${APP_ENV:-development}
     LOG_LEVEL: ${LOG_LEVEL:-info}
