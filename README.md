@@ -3,7 +3,7 @@
 Run an optimizer REST API depending of many constraints for a Vehicle Routing Problem (VRP).
 
 This project use some solver engines:
-* [Vroom v1.12.0](https://github.com/VROOM-Project/vroom/releases/tag/v1.12.0)
+* [Vroom v1.14.0](https://github.com/VROOM-Project/vroom/releases/tag/v1.14.0)
 * [Optimizer-ortools v1.17.1](https://github.com/cartoroute/optimizer-ortools) & [OR-Tools v7.8](https://github.com/google/or-tools/releases/tag/v7.8) (use the version corresponding to your system operator, not source code).
 
 ## API

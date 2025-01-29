@@ -35,8 +35,6 @@ module Wrappers
     def solver_constraints
       super + [
         # Costs
-        :assert_homogeneous_costs,
-        :assert_no_cost_fixed, # if removing this, delete prioritize_first_available_trips_and_vehicles as well
         :assert_vehicles_objective,
 
         # Problem
@@ -46,12 +44,8 @@ module Wrappers
         :assert_no_relations_except_simple_shipments,
         :assert_no_subtours,
         :assert_points_same_definition,
-        :assert_single_dimension,
 
         # Vehicle/route constraints
-        :assert_homogeneous_router_definitions,
-        :assert_matrices_only_one,
-        :assert_no_distance_limitation,
         :assert_no_ride_constraint,
         :assert_no_service_duration_modifiers,
         :assert_vehicles_no_capacity_initial,
@@ -161,7 +155,7 @@ module Wrappers
     def read_step(vrp, vehicle, step)
       case step['type']
       when 'job', 'pickup', 'delivery'
-        read_activity(vrp, step)
+        read_activity(vrp, vehicle, step)
       when 'start', 'end'
         read_depot(vrp, vehicle, step)
       when 'break'
@@ -172,7 +166,7 @@ module Wrappers
     end
 
     def read_unassigned(vrp, step)
-      read_activity(vrp, step)
+      read_activity(vrp, nil, step)
     end
 
     def read_break(step)
@@ -191,7 +185,7 @@ module Wrappers
       point = step['type'] == 'start' ? vehicle&.start_point : vehicle&.end_point
       return nil if point.nil?
 
-      route_data = step['type'] == 'end' ? compute_route_data(vrp, point, step) : {}
+      route_data = step['type'] == 'end' ? compute_route_data(vrp, vehicle, point, step) : {}
       @previous = point
 
       times = {
@@ -204,10 +198,10 @@ module Wrappers
       end
     end
 
-    def read_activity(vrp, act_step)
+    def read_activity(vrp, vehicle, act_step)
       service = @object_id_map[act_step['id']]
       point = service.activity.point
-      route_data = compute_route_data(vrp, point, act_step)
+      route_data = compute_route_data(vrp, vehicle, point, act_step)
       begin_time = act_step['arrival'] && (act_step['arrival'] + act_step['waiting_time'] + act_step['setup'])
       times = {
         begin_time: begin_time,
@@ -226,16 +220,17 @@ module Wrappers
       job_data
     end
 
-    def compute_route_data(vrp, point, step)
+    def compute_route_data(vrp, vehicle, point, step)
       return {} if step['type'].nil?
 
       return { travel_time: 0, travel_distance: 0, travel_value: 0 } unless @previous && point.matrix_index
 
-      matrix = vrp.matrices[0]
+      matrix = vrp.matrices.find{ |m| m.id == vehicle.matrix_id } if vehicle
+
       {
-        travel_time: matrix[:time] ? matrix[:time][@previous.matrix_index][point.matrix_index] : 0,
-        travel_distance: matrix[:distance] ? matrix[:distance][@previous.matrix_index][point.matrix_index] : 0,
-        travel_value: matrix[:value] ? matrix[:value][@previous.matrix_index][point.matrix_index] : 0
+        travel_time: (matrix && matrix[:time]) ? matrix[:time][@previous.matrix_index][point.matrix_index] : 0,
+        travel_distance: (matrix && matrix[:distance]) ? matrix[:distance][@previous.matrix_index][point.matrix_index] : 0,
+        travel_value: (matrix && matrix[:value]) ? matrix[:value][@previous.matrix_index][point.matrix_index] : 0
       }
     end
 
@@ -342,6 +337,7 @@ module Wrappers
       vrp.vehicles.map.with_index{ |vehicle, index|
         {
           id: index,
+          profile: vehicle.matrix_id,
           start_index: vehicle.start_point&.matrix_index,
           end_index: vehicle.end_point&.matrix_index,
           capacity: vrp_units.map{ |unit|
@@ -358,7 +354,14 @@ module Wrappers
               service: rest.duration,
               time_windows: rest.timewindows.map{ |tw| [tw&.start || 0, tw&.end || 2**30] }
             }
-          }
+          },
+          costs: {
+            fixed: vehicle.cost_fixed,
+            per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000),
+            per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600)
+          }.delete_if{ |k, v| v.nil? || v.zero? },
+          max_distance: vehicle.distance,
+          max_duration: vehicle.duration
         }.delete_if{ |k, v|
           v.nil? || v.is_a?(Array) && v.empty? ||
             k == :time_window && v.first.zero? && v.last == 2**30
@@ -367,7 +370,7 @@ module Wrappers
     end
 
     def vroom_problem(vrp, dimensions)
-      problem = { vehicles: [], jobs: [], matrix: [] }
+      problem = { vehicles: [], jobs: [], matrices: [] }
       @total_quantities = Hash.new { 0 }
       # WARNING: only first alternative set of skills is used
       vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
@@ -385,7 +388,6 @@ module Wrappers
       matrix_indices = (problem[:jobs].map{ |job| job[:location_index] } +
         problem[:shipments].flat_map{ |s| [s[:pickup][:location_index], s[:delivery][:location_index]] } +
         problem[:vehicles].flat_map{ |vec| [vec[:start_index], vec[:end_index]].uniq.compact }).uniq.sort
-      matrix = vrp.matrices.find{ |current_matrix| current_matrix.id == vrp.vehicles.first.matrix_id }
       size_matrix = matrix_indices.size
 
       # Index relabeling
@@ -405,25 +407,13 @@ module Wrappers
           vec[:start_index] = size_matrix # Add an auxialiary node if there is no start or end depot for the vehicle
         end
       }
-
-      agglomerate_matrix = vrp.vehicles.first.matrix_blend(
-        matrix, matrix_indices, dimensions,
-        cost_time_multiplier: vrp.vehicles.first.cost_time_multiplier.positive? ? 1 : 0,
-        cost_distance_multiplier: vrp.vehicles.first.cost_distance_multiplier.positive? ? 1 : 0,
-        cost_value_multiplier: vrp.vehicles.first.cost_value_multiplier.positive? ? 1 : 0
-      )
-      (0..size_matrix - 1).each{ |i|
-        (0..size_matrix - 1).each{ |j|
-          agglomerate_matrix[i][j] = [agglomerate_matrix[i][j].round, 2**22].min
-        }
+      problem[:matrices] = {}
+      vrp.matrices.each{ |m|
+        problem[:matrices][m.id] = {
+          durations: m.time,
+          distances: m.distance
+        }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       }
-      if vrp.vehicles.first.start_point_id.nil? && vrp.vehicles.first.end_point_id.nil?
-        # If there is no start or end depot for the vehicle
-        # set the distance of the auxiliary node to all other nodes as zero
-        agglomerate_matrix << Array.new(size_matrix, 0)
-        agglomerate_matrix.each{ |row| row << 0 }
-      end
-      problem[:matrix] = agglomerate_matrix
       problem.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       problem
     end

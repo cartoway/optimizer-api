@@ -18,9 +18,9 @@
 require './test/test_helper'
 
 class Wrappers::VroomTest < Minitest::Test
-  def test_minimal_problem
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
+  def setup
+    @vroom = OptimizerWrapper.config[:services][:vroom]
+    @minimal_problem = {
       matrices: [{
         id: 'matrix_0',
         time: [
@@ -52,18 +52,7 @@ class Wrappers::VroomTest < Minitest::Test
         }
       }],
     }
-    vrp = TestHelper.create(problem)
-
-    solution = vroom.solve(vrp)
-
-    assert solution
-    assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 1, solution.routes.first.stops.size
-  end
-
-  def test_loop_problem
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
+    @problem = problem = {
       matrices: [{
         id: 'matrix_0',
         time: [
@@ -118,426 +107,133 @@ class Wrappers::VroomTest < Minitest::Test
         }
       }],
     }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+  end
+
+  def test_minimal_problem
+    vrp = TestHelper.create(@minimal_problem)
+
+    solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 2, solution.routes.first.stops.size
-    assert_equal problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-2].map(&:id).sort!
+    assert_equal @minimal_problem[:services].size + 1, solution.routes.first.stops.size
+  end
+
+  def test_loop_problem
+
+    vrp = TestHelper.create(@problem)
+    solution = @vroom.solve(vrp)
+    assert solution
+    assert_equal 1, solution.routes.size
+    assert_equal @problem[:services].size + 2, solution.routes.first.stops.size
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-2].map(&:id).sort!
   end
 
   def test_no_end_problem
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
-      matrices: [{
-        id: 'matrix_0',
-        time: [
-          [0, 655, 1948, 5231, 2971],
-          [603, 0, 1692, 4977, 2715],
-          [1861, 1636, 0, 6143, 1532],
-          [5184, 4951, 6221, 0, 7244],
-          [2982, 2758, 1652, 7264, 0],
-        ]
-      }],
-      points: [{
-        id: 'point_0',
-        matrix_index: 0
-      }, {
-        id: 'point_1',
-        matrix_index: 1
-      }, {
-        id: 'point_2',
-        matrix_index: 2
-      }, {
-        id: 'point_3',
-        matrix_index: 3
-      }, {
-        id: 'point_4',
-        matrix_index: 4
-      }],
-      vehicles: [{
-        id: 'vehicle_0',
-        start_point_id: 'point_0',
-        matrix_id: 'matrix_0'
-      }],
-      services: [{
-        id: 'service_1',
-        activity: {
-          point_id: 'point_1'
-        }
-      }, {
-        id: 'service_2',
-        activity: {
-          point_id: 'point_2'
-        }
-      }, {
-        id: 'service_3',
-        activity: {
-          point_id: 'point_3'
-        }
-      }, {
-        id: 'service_4',
-        activity: {
-          point_id: 'point_4'
-        }
-      }],
-    }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+    @problem[:vehicles][0].delete(:end_point_id)
+    vrp = TestHelper.create(@problem)
+    solution = @vroom.solve(vrp)
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 1, solution.routes.first.stops.size
-    assert_equal problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-1].map(&:id).sort!
+    assert_equal @problem[:services].size + 1, solution.routes.first.stops.size
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-1].map(&:id).sort!
   end
 
   def test_start_different_end_problem
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
-      matrices: [{
-        id: 'matrix_0',
-        time: [
-          [0, 655, 1948, 5231, 2971],
-          [603, 0, 1692, 4977, 2715],
-          [1861, 1636, 0, 6143, 1532],
-          [5184, 4951, 6221, 0, 7244],
-          [2982, 2758, 1652, 7264, 0],
-        ]
-      }],
-      points: [{
-        id: 'point_0',
-        matrix_index: 0
-      }, {
-        id: 'point_1',
-        matrix_index: 1
-      }, {
-        id: 'point_2',
-        matrix_index: 2
-      }, {
-        id: 'point_3',
-        matrix_index: 3
-      }, {
-        id: 'point_4',
-        matrix_index: 4
-      }],
-      vehicles: [{
-        id: 'vehicle_0',
-        start_point_id: 'point_0',
-        end_point_id: 'point_4',
-        matrix_id: 'matrix_0'
-      }],
-      services: [{
-        id: 'service_1',
-        activity: {
-          point_id: 'point_1'
-        }
-      }, {
-        id: 'service_2',
-        activity: {
-          point_id: 'point_2'
-        }
-      }, {
-        id: 'service_3',
-        activity: {
-          point_id: 'point_3'
-        }
-      }],
-    }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+    @problem[:vehicles][0][:end_point_id] = 'point_4'
+    vrp = TestHelper.create(@problem)
+    solution = @vroom.solve(vrp)
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 2, solution.routes.first.stops.size
-    assert_equal problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-2].map(&:id).sort!
+    assert_equal @problem[:services].size + 2, solution.routes.first.stops.size
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-2].map(&:id).sort!
   end
 
   def test_vehicle_time_window
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
-      matrices: [{
-        id: 'matrix_0',
-        time: [
-          [0, 1],
-          [1, 0]
-        ]
-      }],
-      points: [{
-        id: 'point_0',
-        matrix_index: 0
-      }, {
-        id: 'point_1',
-        matrix_index: 1
-      }],
-      vehicles: [{
-        id: 'vehicle_0',
-        start_point_id: 'point_0',
-        matrix_id: 'matrix_0',
-        timewindow: {
-          start: 1,
-          end: 10
-        },
-        cost_late_multiplier: 1
-      }],
-      services: [{
-        id: 'service_0',
-        activity: {
-          point_id: 'point_0'
-        }
-      }, {
-        id: 'service_1',
-        activity: {
-          point_id: 'point_1'
-        }
-      }],
+    @minimal_problem[:vehicles][0][:timewindow] = {
+      start: 1,
+      end: 10
     }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+    vrp = TestHelper.create(@minimal_problem)
+    solution = @vroom.solve(vrp)
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 1, solution.routes.first.stops.size
+    assert_equal @minimal_problem[:services].size + 1, solution.routes.first.stops.size
   end
 
   def test_with_rest
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
-      matrices: [{
-        id: 'matrix',
-        time: [
-          [0, 655, 1948, 5231, 2971],
-          [603, 0, 1692, 4977, 2715],
-          [1861, 1636, 0, 6143, 1532],
-          [5184, 4951, 6221, 0, 7244],
-          [2982, 2758, 1652, 7264, 0],
-        ]
+    @problem[:vehicles][0][:rest_ids] = ['rest_a']
+    @problem[:rests] = [{
+      id: 'rest_a',
+      timewindows: [{
+        start: 9000,
+        end: 10000
       }],
-      points: [{
-        id: 'point_a',
-        matrix_index: 0
-      }, {
-        id: 'point_b',
-        matrix_index: 1
-      }, {
-        id: 'point_c',
-        matrix_index: 2
-      }, {
-        id: 'point_d',
-        matrix_index: 3
-      }, {
-        id: 'point_e',
-        matrix_index: 4
-      }],
-      rests: [{
-        id: 'rest_a',
-        timewindows: [{
-          start: 9000,
-          end: 10000
-        }],
-        duration: 1000
-      }],
-      vehicles: [{
-        id: 'vehicle_a',
-        start_point_id: 'point_a',
-        end_point_id: 'point_a',
-        matrix_id: 'matrix',
-        timewindow: {
-          start: 100,
-          end: 20000
-        },
-        rest_ids: ['rest_a']
-      }],
-      services: [{
-        id: 'service_b',
-        activity: {
-          point_id: 'point_e'
-        }
-      }, {
-        id: 'service_c',
-        activity: {
-          point_id: 'point_d'
-        }
-      }, {
-        id: 'service_d',
-        activity: {
-          point_id: 'point_c'
-        }
-      }, {
-        id: 'service_e',
-        activity: {
-          point_id: 'point_b'
-        }
-      }],
+      duration: 1000
+    }]
+    @problem[:vehicles][0][:timewindow] = {
+      start: 100, end: 20000
     }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+    @problem[:services].each.with_index{ |service, index|
+      service[:activity][:point_id] = "point_#{@problem[:points].size - 1 - index}"
+    }
+    vrp = TestHelper.create(@problem)
+    solution = @vroom.solve(vrp)
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 2 + problem[:vehicles][0][:rest_ids].size, solution.routes.first.stops.size
+    assert_equal @problem[:services].size + 2 + @problem[:vehicles][0][:rest_ids].size, solution.routes.first.stops.size
     stops = solution.routes.first.stops[1..-2].map(&:service_id)
     stops.compact!
-    assert_equal problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
     assert_equal(3, solution.routes[0][:stops].index{ |a| a[:rest_id] })
   end
 
   def test_with_rest_at_the_end
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
-      matrices: [{
-        id: 'matrix',
-        time: [
-          [0, 655, 1948, 5231, 2971],
-          [603, 0, 1692, 4977, 2715],
-          [1861, 1636, 0, 6143, 1532],
-          [5184, 4951, 6221, 0, 7244],
-          [2982, 2758, 1652, 7264, 0],
-        ]
+    @problem[:vehicles][0][:rest_ids] = ['rest_a']
+    @problem[:rests] = [{
+      id: 'rest_a',
+      timewindows: [{
+        start: 19000,
+        end: 20000
       }],
-      points: [{
-        id: 'point_a',
-        matrix_index: 0
-      }, {
-        id: 'point_b',
-        matrix_index: 1
-      }, {
-        id: 'point_c',
-        matrix_index: 2
-      }, {
-        id: 'point_d',
-        matrix_index: 3
-      }, {
-        id: 'point_e',
-        matrix_index: 4
-      }],
-      rests: [{
-        id: 'rest_a',
-        timewindows: [{
-          start: 19000,
-          end: 20000
-        }],
-        duration: 1000
-      }],
-      vehicles: [{
-        id: 'vehicle_a',
-        start_point_id: 'point_a',
-        end_point_id: 'point_a',
-        matrix_id: 'matrix',
-        timewindow: {
-          start: 100,
-          end: 20000
-        },
-        rest_ids: ['rest_a']
-      }],
-      services: [{
-        id: 'service_b',
-        activity: {
-          point_id: 'point_e'
-        }
-      }, {
-        id: 'service_c',
-        activity: {
-          point_id: 'point_d'
-        }
-      }, {
-        id: 'service_d',
-        activity: {
-          point_id: 'point_c'
-        }
-      }, {
-        id: 'service_e',
-        activity: {
-          point_id: 'point_b'
-        }
-      }],
+      duration: 1000
+    }]
+    @problem[:vehicles][0][:timewindow] = {
+      start: 100, end: 20000
     }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+    @problem[:services].each.with_index{ |service, index|
+      service[:activity][:point_id] = "point_#{@problem[:points].size - 1 - index}"
+    }
+    vrp = TestHelper.create(@problem)
+    solution = @vroom.solve(vrp)
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 2 + problem[:vehicles][0][:rest_ids].size, solution.routes.first.stops.size
+    assert_equal @problem[:services].size + 2 + @problem[:vehicles][0][:rest_ids].size, solution.routes.first.stops.size
     stops = solution.routes.first.stops[1..-2].map(&:service_id)
     stops.compact!
-    assert_equal problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
     assert_equal 5, solution.routes.first.stops.index(&:rest_id)
   end
 
   def test_with_rest_at_the_start
-    vroom = OptimizerWrapper.config[:services][:vroom]
-    problem = {
-      matrices: [{
-        id: 'matrix',
-        time: [
-          [0, 655, 1948, 5231, 2971],
-          [603, 0, 1692, 4977, 2715],
-          [1861, 1636, 0, 6143, 1532],
-          [5184, 4951, 6221, 0, 7244],
-          [2982, 2758, 1652, 7264, 0],
-        ]
+    @problem[:rests] = [{
+      id: 'rest_a',
+      timewindows: [{
+        start: 200,
+        end: 500
       }],
-      points: [{
-        id: 'point_a',
-        matrix_index: 0
-      }, {
-        id: 'point_b',
-        matrix_index: 1
-      }, {
-        id: 'point_c',
-        matrix_index: 2
-      }, {
-        id: 'point_d',
-        matrix_index: 3
-      }, {
-        id: 'point_e',
-        matrix_index: 4
-      }],
-      rests: [{
-        id: 'rest_a',
-        timewindows: [{
-          start: 200,
-          end: 500
-        }],
-        duration: 1000
-      }],
-      vehicles: [{
-        id: 'vehicle_a',
-        start_point_id: 'point_a',
-        end_point_id: 'point_a',
-        matrix_id: 'matrix',
-        timewindow: {
-          start: 100,
-          end: 20000
-        },
-        rest_ids: ['rest_a'],
-        cost_late_multiplier: 1
-      }],
-      services: [{
-        id: 'service_b',
-        activity: {
-          point_id: 'point_e'
-        }
-      }, {
-        id: 'service_c',
-        activity: {
-          point_id: 'point_d'
-        }
-      }, {
-        id: 'service_d',
-        activity: {
-          point_id: 'point_c'
-        }
-      }, {
-        id: 'service_e',
-        activity: {
-          point_id: 'point_b'
-        }
-      }],
-    }
-    vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp)
+      duration: 1000
+    }]
+    @problem[:vehicles][0][:rest_ids] = ['rest_a']
+    vrp = TestHelper.create(@problem)
+    solution = @vroom.solve(vrp)
     assert solution
     assert_equal 1, solution.routes.size
-    assert_equal problem[:services].size + 2 + problem[:vehicles][0][:rest_ids].size,
+    assert_equal @problem[:services].size + 2 + @problem[:vehicles][0][:rest_ids].size,
                  solution.routes.first.stops.size
     stops = solution.routes.first.stops[1..-2].map(&:service_id)
     stops.compact!
-    assert_equal problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
     assert_equal 1, solution.routes.first.stops.index(&:rest_id)
   end
 
@@ -578,9 +274,8 @@ class Wrappers::VroomTest < Minitest::Test
   end
 
   def test_shipments
-    vroom = OptimizerWrapper.config[:services][:vroom]
     vrp = TestHelper.create(VRP.pud)
-    solution = vroom.solve(vrp, 'test')
+    solution = @vroom.solve(vrp, 'test')
     assert solution
     assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_0' } <
            solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_0' }
@@ -591,7 +286,6 @@ class Wrappers::VroomTest < Minitest::Test
   end
 
   def test_shipments_timewindows
-    vroom = OptimizerWrapper.config[:services][:vroom]
     problem = VRP.pud
     problem[:shipments].map!{ |shipment|
       shipment[:pickup][:timewindows] = [{start: 5, end: 20}]
@@ -600,7 +294,7 @@ class Wrappers::VroomTest < Minitest::Test
     }
 
     vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp, 'test')
+    solution = @vroom.solve(vrp, 'test')
     assert solution
     assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_0' } <
            solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_0' }
@@ -611,7 +305,6 @@ class Wrappers::VroomTest < Minitest::Test
   end
 
   def test_shipments_quantities
-    vroom = OptimizerWrapper.config[:services][:vroom]
     problem = {
       matrices: [{
         id: 'matrix_0',
@@ -691,7 +384,7 @@ class Wrappers::VroomTest < Minitest::Test
       }
     }
     vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp, 'test')
+    solution = @vroom.solve(vrp, 'test')
     assert solution
     assert_equal(solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_0' } + 1,
                  solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_0' })
@@ -702,7 +395,6 @@ class Wrappers::VroomTest < Minitest::Test
   end
 
   def test_mixed_shipments_and_services
-    vroom = OptimizerWrapper.config[:services][:vroom]
     problem = {
       matrices: [{
         id: 'matrix_0',
@@ -772,7 +464,7 @@ class Wrappers::VroomTest < Minitest::Test
       }
     }
     vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp, 'test')
+    solution = @vroom.solve(vrp, 'test')
     assert solution
     assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_1' } <
            solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_1' }
@@ -845,12 +537,11 @@ class Wrappers::VroomTest < Minitest::Test
         nil
       }
     ) do
-      vroom.solve(TestHelper.create(problem))
+      @vroom.solve(TestHelper.create(problem))
     end
   end
 
   def test_setup_duration
-    vroom = OptimizerWrapper.config[:services][:vroom]
     problem = VRP.basic
 
     problem[:matrices].first[:time] = [
@@ -873,10 +564,43 @@ class Wrappers::VroomTest < Minitest::Test
       service[:activity][:setup_duration] = 1
     }
     vrp = TestHelper.create(problem)
-    solution = vroom.solve(vrp, 'test')
+    solution = @vroom.solve(vrp, 'test')
     act_s_one = solution.routes.first.stops.find{ |act| act.service_id == 'service_1' }
     act_s_two = solution.routes.first.stops.find{ |act| act.service_id == 'service_2' }
     assert_equal 10, act_s_one.info.begin_time
     assert_equal 1, act_s_two.info.begin_time
+  end
+
+  def test_multiple_matrices
+    problem = VRP.lat_lon_two_vehicles
+    problem[:matrices] << problem[:matrices].first.dup
+    problem[:matrices].last[:id] = 'matrix_1'
+    problem[:matrices].last[:time] = problem[:matrices].first[:time]
+
+    vrp = TestHelper.create(problem)
+    assert @vroom.solve(vrp, 'test')
+  end
+
+  def test_vehicle_heterogeneous_costs
+    problem = VRP.lat_lon_two_vehicles
+    problem[:vehicles].first[:cost_fixed] = 100
+    problem[:vehicles].first[:cost_time_multiplier] = 1
+    problem[:vehicles].first[:cost_distance_multiplier] = 1
+    problem[:vehicles].last[:cost_fixed] = 200
+    problem[:vehicles].last[:cost_time_multiplier] = 2
+    problem[:vehicles].last[:cost_distance_multiplier] = 2
+    vrp = TestHelper.create(problem)
+    assert @vroom.solve(vrp, 'test')
+  end
+
+  def test_vehicle_max_distance
+    problem = VRP.basic_max_distance
+    problem[:vehicles].first[:distance] = 0
+    vrp = TestHelper.create(problem)
+    solution = @vroom.solve(vrp, 'test')
+    assert solution
+    assert_equal problem[:services].size + 1,
+                 solution.routes.find{ |r| r[:vehicle_id] == problem[:vehicles].last[:id] }.stops.size
+    assert_equal 0, solution.unassigned_stops.size
   end
 end
