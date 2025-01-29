@@ -1,6 +1,15 @@
 # Changelog
 
-## [v1.10.0-dev] - Unreleased
+##
+
+### Added
+
+- VROOM
+  - Bump version to v1.14.0
+  - Handle heterogeneous fleet (costs and routing profiles)
+  - Handle route maximum distance contraint
+
+## [v1.10.0-dev]
 
 ### Added
 
