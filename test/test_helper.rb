@@ -1678,4 +1678,65 @@ module VRP # rubocop: disable Metrics/ModuleLength, Style/CommentedKeyword
       }
     }
   end
+
+  def self.basic_max_distance
+    {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 11, 9],
+          [11, 0, 6],
+          [9, 6, 0]
+        ],
+        distance: [
+          [0, 11, 9],
+          [11, 0, 6],
+          [9, 6, 0]
+        ]
+      }],
+      points: [{
+        id: 'point_0',
+        matrix_index: 0
+      }, {
+        id: 'point_1',
+        matrix_index: 1
+      }, {
+        id: 'point_2',
+        matrix_index: 2
+      }],
+      vehicles: [{
+        id: 'vehicle_0',
+        start_point_id: 'point_0',
+        matrix_id: 'matrix_0',
+        cost_distance_multiplier: 1,
+        cost_time_multiplier: 0,
+        distance: 10
+      }, {
+        id: 'vehicle_1',
+        start_point_id: 'point_0',
+        matrix_id: 'matrix_0',
+        cost_distance_multiplier: 1,
+        cost_time_multiplier: 0,
+      }],
+      services: [{
+        id: 'service_1',
+        activity: {
+          point_id: 'point_1',
+        }
+      }, {
+        id: 'service_2',
+        activity: {
+          point_id: 'point_2',
+        }
+      }],
+      configuration: {
+        resolution: {
+          duration: 20,
+        },
+        restitution: {
+          intermediate_solutions: false,
+        }
+      }
+    }
+  end
 end
