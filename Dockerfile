@@ -1,5 +1,6 @@
-FROM optimizer-ortools:latest
+FROM ghcr.io/cartoway/optimizer-ortools:master
 
+ARG BUNDLE_WITHOUT="test development"
 # Install Vroom
 ARG VROOM_RELEASE=v1.14.0
 RUN apt update -y && \
@@ -29,6 +30,6 @@ RUN apt update && \
 
 ADD ./Gemfile /srv/app/
 ADD ./Gemfile.lock /srv/app/
-RUN bundle install --full-index --without test development
+RUN bundle install --full-index --without ${BUNDLE_WITHOUT}
 
 ADD . /srv/app

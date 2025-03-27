@@ -4,7 +4,7 @@
 docker swarm init
 mkdir -p ./redis
 mkdir -p ./redis-count
-REGISTRY=registry.test.com docker stack deploy -c ./docker/docker-compose.yml "${PROJECT}"
+docker stack deploy -c "${COMPOSE_FILE:-./docker-compose.yml}" "${PROJECT}"
 
 # Wait until all services are up
 max_time=60 # Time in secondes
@@ -22,7 +22,7 @@ do
     exit 1
   fi
 
-  nb_services=${NB_SERVICES:-5}
+  nb_services=${NB_SERVICES:-3}
   nbps=$(docker service ls | grep 1/1 | awk '{print $4}' | wc -l)
   if [ ${nbps} -eq ${nb_services} ];
   then

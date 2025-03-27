@@ -1,0 +1,45 @@
+version: '3.7'
+
+x-default-service: &default-service
+  image: optimizer-api:latest
+  environment: &default-environment
+    APP_ENV: test
+    BUNDLE_WITH: "test development"
+    LOG_LEVEL: debug
+    OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
+    OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
+    REDIS_RESQUE_HOST: redis-resque
+    REDIS_RESULT_TTL_DAYS: 1
+  networks:
+    - resque
+  depends_on:
+    - redis-resque
+
+services:
+  api:
+    <<: *default-service
+    ports:
+      - "8083:80"
+    command: bundle exec puma -v -p 80 --pidfile 'server.pid'
+    networks:
+      - resque
+
+  resque-default:
+    <<: *default-service
+    environment:
+      <<: *default-environment
+      COUNT: 5
+      QUEUES: DEFAULT
+    command: bundle exec rake resque:workers --trace
+    networks:
+      - resque
+
+  redis-resque:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    networks:
+      - resque
+
+networks:
+  resque:
+    driver: overlay
