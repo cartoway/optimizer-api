@@ -21,8 +21,10 @@ require './wrappers/vroom'
 require './wrappers/ortools'
 require './lib/cache_manager'
 require './util/logger'
+require 'dotenv'
 
 module OptimizerWrapper
+  Dotenv.load
   TMP_DIR = File.join(Dir.tmpdir, 'optimizer-api', 'test', 'tmp')
   @@gist_dir = ENV['GIST_DIR'] || '../96dcb33063ccddd25e3bb2fd87c38f42/'
   FileUtils.mkdir_p(TMP_DIR) unless File.directory?(TMP_DIR)
@@ -32,7 +34,7 @@ module OptimizerWrapper
                   parallel_cheapest_insertion first_unbound christofides].freeze
   WEEKDAYS = %i[mon tue wed thu fri sat sun].freeze
   DEMO = Wrappers::Demo.new(tmp_dir: TMP_DIR)
-  VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: '/usr/local/bin/vroom')
+  VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: ENV['VROOM_PATH'] || '/usr/local/bin/vroom')
   # if dependencies don't exist (libprotobuf10 on debian) provide or-tools dependencies location
   ORTOOLS_EXEC =
     'LD_LIBRARY_PATH=../or-tools/dependencies/install/lib/:../or-tools/lib/ ../optimizer-ortools/tsp_simple'.freeze

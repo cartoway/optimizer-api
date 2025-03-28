@@ -27,5 +27,16 @@ module Models
     def self.dimensions
       DIMENSIONS
     end
+
+    DIMENSIONS.each do |dimension|
+      define_method "integer_#{dimension}" do
+        matrix = send(dimension)
+        return matrix if matrix.nil? || matrix.first.all? { |v| v.is_a?(Integer) }
+
+        matrix.map do |row|
+          row.map { |v| v&.round(0) }
+        end
+      end
+    end
   end
 end
