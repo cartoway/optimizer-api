@@ -34,8 +34,8 @@ module OptimizerWrapper
     @@dump_vrp_dir = dir
   end
 
-  def self.gist_vrp_dir
-    @@gist_dir
+  def self.fixture_vrp_dir
+    @@fixture_dir
   end
 
   def self.access(force_load = false)

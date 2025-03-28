@@ -29,13 +29,16 @@ module Models
     end
 
     DIMENSIONS.each do |dimension|
-      define_method "integer_#{dimension}" do
+      define_method "integer_#{dimension}" do |max_value = nil|
         matrix = send(dimension)
-        return matrix if matrix.nil? || matrix.first.all? { |v| v.is_a?(Integer) }
+        return matrix if matrix.nil? || matrix.first.all? { |v| v.is_a?(Integer) } && max_value.nil?
 
-        matrix.map do |row|
-          row.map { |v| v&.round(0) }
-        end
+        matrix.map { |row|
+          row.map { |v|
+            v = [v, max_value].min if max_value
+            v&.round(0)
+          }
+        }
       end
     end
   end

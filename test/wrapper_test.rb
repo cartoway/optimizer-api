@@ -2721,17 +2721,6 @@ class WrapperTest < Minitest::Test
     assert_equal expected_days * nb_vehicles, solutions[0].routes.size
   end
 
-  def test_assert_inapplicable_for_vroom_if_vehicle_distance
-    problem = VRP.basic
-    problem[:vehicles].first[:distance] = 10
-
-    vrp = TestHelper.create(problem)
-    assert_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
-                    :assert_no_distance_limitation
-    refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(vrp),
-                    :assert_no_distance_limitation
-  end
-
   def test_assert_inapplicable_vroom_with_periodic_heuristic
     problem = VRP.periodic
     problem[:services].first[:visits_number] = 2

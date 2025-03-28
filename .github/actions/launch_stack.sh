@@ -22,7 +22,7 @@ do
     exit 1
   fi
 
-  nb_services=${NB_SERVICES:-3}
+  nb_services=${NB_SERVICES:-4}
   nbps=$(docker service ls | grep 1/1 | awk '{print $4}' | wc -l)
   if [ ${nbps} -eq ${nb_services} ];
   then

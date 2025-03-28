@@ -238,7 +238,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
     if File.file?(dump_file)
       dumped_data = Oj.load(Zlib.inflate(File.read(dump_file)))
     else
-      dump_file = "#{OptimizerWrapper.gist_vrp_dir}/#{filename}.dump"
+      dump_file = "#{OptimizerWrapper.fixture_vrp_dir}/#{filename}.dump"
       dumped_data = Oj.load(Zlib.inflate(File.read(dump_file))) if File.file?(dump_file)
     end
 
@@ -313,7 +313,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
   def self.load_vrps(test, options = {})
     filename = options[:fixture_file] || test.name[5..-1]
     json_path = "test/fixtures/#{filename}.json"
-    gist_path = "#{OptimizerWrapper.gist_vrp_dir}/#{filename}.json"
+    gist_path = "#{OptimizerWrapper.fixture_vrp_dir}/#{filename}.json"
     json_file = options[:json_file_path] || File.file?(json_path) && json_path || File.file?(gist_path) && gist_path
 
     vrps =

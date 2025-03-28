@@ -58,9 +58,8 @@ jobs:
         run: |
           git clone https://gist.github.com/96dcb33063ccddd25e3bb2fd87c38f42.git /tmp/gist
           rm -f /tmp/gist/README.md
-          mv /tmp/gist/ test/fixtures
+          mv /tmp/gist/* test/fixtures
           rm -rf /tmp/gist
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Build
