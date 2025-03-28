@@ -11,7 +11,8 @@ RUN apt update -y && \
         libssl-dev \
         libasio-dev \
         libglpk-dev \
-        pkg-config
+        pkg-config \
+        netcat-traditional
 RUN git clone --recurse-submodules https://github.com/VROOM-Project/vroom.git && \
     cd vroom/src && \
     git fetch --tags && \

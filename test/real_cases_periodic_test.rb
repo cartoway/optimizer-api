@@ -178,12 +178,12 @@ class HeuristicTest < Minitest::Test
         :compute_initial_solution,
         lambda { |vrp_in|
           @starting_time = Time.now
-          file = "#{OptimizerWrapper.gist_vrp_dir}/fill_days_and_post_processing_candidate_routes.bindump"
+          file = "#{OptimizerWrapper.fixture_vrp_dir}/fill_days_and_post_processing_candidate_routes.bindump"
           @candidate_routes = Marshal.load(File.binread(file)) # rubocop: disable Security/MarshalLoad
           @candidate_routes.each_value{ |vehicle_routes|
             vehicle_routes.each_value{ |day_route| day_route[:matrix_id] = vrp.vehicles.first.matrix_id }
           }
-          file = "#{OptimizerWrapper.gist_vrp_dir}/fill_days_and_post_processing_services_assignment.bindump"
+          file = "#{OptimizerWrapper.fixture_vrp_dir}/fill_days_and_post_processing_services_assignment.bindump"
           @services_assignment = Marshal.load(File.binread(file)) # rubocop: disable Security/MarshalLoad
           # We still have 1000 unassigned visits in this dumped solution
 

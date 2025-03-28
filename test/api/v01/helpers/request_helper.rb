@@ -155,7 +155,7 @@ module TestHelper
     OptimizerWrapper.config[:solve][:synchronously] = false
     old_resque_inline = Resque.inline
     Resque.inline = false
-    if options[:start_worker]
+    if options[:start_worker] && !ENV['DOCKER']
       pid_worker = Process.spawn({ 'COUNT' => '1', 'QUEUE' => 'DEFAULT' },
                                  'bundle exec rake resque:workers --trace', pgroup: true) # don't create another shell
       pgid_worker = Process.getpgid(pid_worker)
@@ -170,7 +170,7 @@ module TestHelper
   ensure
     Resque.inline = old_resque_inline
     OptimizerWrapper.config[:solve][:synchronously] = old_config_solve_synchronously
-    if options[:start_worker] && pgid_worker
+    if options[:start_worker] && !ENV['DOCKER'] && pgid_worker
       # Kill all grandchildren
       worker_pids = `ps -o pgid,pid | grep #{pgid_worker}`.split(/\n/)
       worker_pids.collect!{ |i| i.split(' ')[-1].to_i }

@@ -169,7 +169,7 @@ module Models
         assert_raises ActiveHash::RecordNotFound do
           OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:demo] }}, TestHelper.create(vrp), nil)
         end
-      assert_equal("Couldn't find Models::Point with ID=#{vrp[:services][0][:activity][:point_id]}",
+      assert_equal("Couldn't find Models::Point with ID=\"#{vrp[:services][0][:activity][:point_id]}\"",
                    exception.message)
     end
 
