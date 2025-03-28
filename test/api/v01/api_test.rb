@@ -41,8 +41,8 @@ class Api::V01::ApiTest < Minitest::Test
   def test_should_not_access_if_expired
     get '/0.1/vrp/submit', api_key: 'expired'
     assert_equal 402, last_response.status
-    assert_equal 'Subscription expired. Please contact support '\
-                 'or sales to extend your access period.',
+    assert_equal 'Subscription expired. Please contact support () '\
+                 'or sales () to extend your access period.',
                  JSON.parse(last_response.body)['error']
   end
 

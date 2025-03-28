@@ -410,8 +410,8 @@ module Wrappers
       problem[:matrices] = {}
       vrp.matrices.each{ |m|
         problem[:matrices]["m#{m.id}"] = {
-          durations: m.integer_time,
-          distances: m.integer_distance
+          durations: m.integer_time(2**22),
+          distances: m.integer_distance(2**22)
         }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       }
       problem.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
@@ -430,9 +430,11 @@ module Wrappers
       # TODO : find best value for x https://github.com/Mapotempo/optimizer-api/pull/203
       cmd = "#{@exec_vroom} -i '#{input.path}' -o '#{output.path}' -x 0"
       log cmd
-      system(cmd)
+      _stdout, stderr, status = Open3.capture3(cmd)
 
-      JSON.parse(File.read(output.path)) if $CHILD_STATUS&.exitstatus&.zero?
+      raise OptimizerWrapper::UnsupportedProblemError.new("VROOM - #{stderr[8..]}") if !status.success?
+
+      JSON.parse(File.read(output.path)) if status.exitstatus.zero?
     ensure
       input&.unlink
       output&.unlink

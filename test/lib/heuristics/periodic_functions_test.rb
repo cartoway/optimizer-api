@@ -197,7 +197,7 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.load_vrp(self, fixture_file: 'periodic_with_post_process')
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
-      file = "#{OptimizerWrapper.gist_vrp_dir}/add_missing_visits_"
+      file = "#{OptimizerWrapper.fixture_vrp_dir}/add_missing_visits_"
       add_missing_visits_candidate_routes = Marshal.load(File.binread("#{file}candidate_routes.bindump")) # rubocop: disable Security/MarshalLoad
       add_missing_visits_candidate_routes.each_value{ |vehicle|
         vehicle.each_value{ |route|
@@ -357,7 +357,7 @@ class HeuristicTest < Minitest::Test
                              { id: 'service_with_activities', point_id: 'point_1', start: 47517.6, arrival: 47517.6,
                                end: 47517.6, considered_setup_duration: 0, activity: 0, duration: 0 }],
                      tw_end: 100000, router_dimension: :time, matrix_id: 'm1' }
-      file = "#{OptimizerWrapper.gist_vrp_dir}/compute_next_insertion_cost_when_activities_"
+      file = "#{OptimizerWrapper.fixture_vrp_dir}/compute_next_insertion_cost_when_activities_"
       s.instance_variable_set(:@services_data, Marshal.load(File.binread("#{file}services_data.bindump"))) # rubocop: disable Security/MarshalLoad
       s.instance_variable_set(:@matrices, Marshal.load(File.binread("#{file}matrices.bindump"))) # rubocop: disable Security/MarshalLoad
       s.instance_variable_set(:@indices, Marshal.load(File.binread("#{file}indices.bindump"))) # rubocop: disable Security/MarshalLoad
@@ -372,7 +372,7 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.create(VRP.periodic)
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
-      file = "#{OptimizerWrapper.gist_vrp_dir}/compute_shift_"
+      file = "#{OptimizerWrapper.fixture_vrp_dir}/compute_shift_"
 
       s.instance_variable_set(:@services_data, Marshal.load(File.binread("#{file}services_data.bindump"))) # rubocop: disable Security/MarshalLoad
       s.instance_variable_set(:@matrices, Marshal.load(File.binread("#{file}matrices.bindump"))) # rubocop: disable Security/MarshalLoad
@@ -497,11 +497,11 @@ class HeuristicTest < Minitest::Test
 
       s.instance_variable_set(
         :@matrices,
-        Marshal.load(File.binread("#{OptimizerWrapper.gist_vrp_dir}/chose_best_value_matrices.bindump")) # rubocop: disable Security/MarshalLoad
+        Marshal.load(File.binread("#{OptimizerWrapper.fixture_vrp_dir}/chose_best_value_matrices.bindump")) # rubocop: disable Security/MarshalLoad
       )
       s.instance_variable_set(
         :@indices,
-        Marshal.load(File.binread("#{OptimizerWrapper.gist_vrp_dir}/chose_best_value_indices.bindump")) # rubocop: disable Security/MarshalLoad
+        Marshal.load(File.binread("#{OptimizerWrapper.fixture_vrp_dir}/chose_best_value_indices.bindump")) # rubocop: disable Security/MarshalLoad
       )
 
       timewindow = { start_time: 0, arrival_time: 3807, final_time: 3807, setup_duration: 0 }
@@ -639,7 +639,7 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(
         :@candidate_routes,
         Marshal.load( # rubocop: disable Security/MarshalLoad
-          File.binread("#{OptimizerWrapper.gist_vrp_dir}/reaffecting_without_allow_partial_assignment_routes.bindump")
+          File.binread("#{OptimizerWrapper.fixture_vrp_dir}/reaffecting_without_allow_partial_assignment_routes.bindump")
         )
       )
 

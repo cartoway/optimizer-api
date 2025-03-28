@@ -26,7 +26,7 @@ require 'dotenv'
 module OptimizerWrapper
   Dotenv.load
   TMP_DIR = File.join(Dir.tmpdir, 'optimizer-api', 'test', 'tmp')
-  @@gist_dir = ENV['GIST_DIR'] || '../96dcb33063ccddd25e3bb2fd87c38f42/'
+  @@fixture_dir = ENV['GIST_DIR'] || 'test/fixtures'
   FileUtils.mkdir_p(TMP_DIR) unless File.directory?(TMP_DIR)
   @@tmp_vrp_dir = CacheManager.new(TMP_DIR)
 
