@@ -337,7 +337,7 @@ module Wrappers
       vrp.vehicles.map.with_index{ |vehicle, index|
         {
           id: index,
-          profile: vehicle.matrix_id,
+          profile: "m#{vehicle.matrix_id}",
           start_index: vehicle.start_point&.matrix_index,
           end_index: vehicle.end_point&.matrix_index,
           capacity: vrp_units.map{ |unit|
@@ -356,9 +356,9 @@ module Wrappers
             }
           },
           costs: {
-            fixed: vehicle.cost_fixed,
-            per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000),
-            per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600)
+            fixed: vehicle.cost_fixed.to_i,
+            per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000).to_i,
+            per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600).to_i
           }.delete_if{ |k, v| v.nil? || v.zero? },
           max_distance: vehicle.distance,
           max_duration: vehicle.duration
@@ -409,9 +409,9 @@ module Wrappers
       }
       problem[:matrices] = {}
       vrp.matrices.each{ |m|
-        problem[:matrices][m.id] = {
-          durations: m.time,
-          distances: m.distance
+        problem[:matrices]["m#{m.id}"] = {
+          durations: m.integer_time,
+          distances: m.integer_distance
         }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       }
       problem.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
