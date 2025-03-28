@@ -83,6 +83,7 @@ group :rubocop do
 end
 
 group :test do
+  gem 'dotenv'
   gem 'minitest', require: 'minitest/autorun'
   gem 'minitest-around' # to create a block around unit tests for initialisation and cleanup
   gem 'minitest-bisect' # useful for identifing randomly failing order-depoendent tests
