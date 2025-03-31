@@ -385,28 +385,6 @@ module Wrappers
       problem[:jobs] = collect_jobs(vrp, vrp_skills, vrp_units)
       problem[:vehicles] = collect_vehicles(vrp, vrp_skills, vrp_units)
       problem[:shipments] = collect_shipments(vrp, vrp_skills, vrp_units)
-      matrix_indices = (problem[:jobs].map{ |job| job[:location_index] } +
-        problem[:shipments].flat_map{ |s| [s[:pickup][:location_index], s[:delivery][:location_index]] } +
-        problem[:vehicles].flat_map{ |vec| [vec[:start_index], vec[:end_index]].uniq.compact }).uniq.sort
-      size_matrix = matrix_indices.size
-
-      # Index relabeling
-      problem[:jobs].each{ |job|
-        job[:location_index] = matrix_indices.find_index{ |ind| ind == job[:location_index] }
-      }
-      problem[:shipments].each{ |shipment|
-        shipment[:pickup][:location_index] =
-          matrix_indices.find_index{ |index| index == shipment[:pickup][:location_index] }
-        shipment[:delivery][:location_index] =
-          matrix_indices.find_index{ |index| index == shipment[:delivery][:location_index] }
-      }
-      problem[:vehicles].each{ |vec|
-        vec[:start_index] = matrix_indices.find_index{ |ind| ind == vec[:start_index] } if vec[:start_index]
-        vec[:end_index] = matrix_indices.find_index{ |ind| ind == vec[:end_index] } if vec[:end_index]
-        if vec[:end_index].nil? && vec[:start_index].nil?
-          vec[:start_index] = size_matrix # Add an auxialiary node if there is no start or end depot for the vehicle
-        end
-      }
       problem[:matrices] = {}
       vrp.matrices.each{ |m|
         problem[:matrices]["m#{m.id}"] = {
