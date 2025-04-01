@@ -386,10 +386,13 @@ module Wrappers
       problem[:vehicles] = collect_vehicles(vrp, vrp_skills, vrp_units)
       problem[:shipments] = collect_shipments(vrp, vrp_skills, vrp_units)
       problem[:matrices] = {}
+
+      # Reduce the unreachable value in the matrices to avoid VROOM overflow
+      max_end = problem[:vehicles].map{ |vehicle| vehicle[:time_window]&.last || 2**20 }.max + 1
       vrp.matrices.each{ |m|
         problem[:matrices]["m#{m.id}"] = {
-          durations: m.integer_time(2**22),
-          distances: m.integer_distance(2**22)
+          durations: m.integer_time(max_end),
+          distances: m.integer_distance(max_end)
         }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       }
       problem.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
