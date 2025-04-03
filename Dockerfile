@@ -1,4 +1,4 @@
-FROM optimizer-ortools:latest
+FROM ghcr.io/cartoway/optimizer-ortools:master
 
 # Install Vroom
 ARG VROOM_RELEASE=v1.14.0
