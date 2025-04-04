@@ -91,7 +91,7 @@ module Wrappers
 
       tic = Time.now
       problem = vroom_problem(vrp, [:time, :distance])
-      result = run_vroom(problem, job)
+      result = run_vroom(problem, job, 2, vrp.configuration.resolution.duration)
       elapsed_time = (Time.now - tic) * 1000
 
       return if !result
@@ -399,7 +399,7 @@ module Wrappers
       problem
     end
 
-    def run_vroom(problem, _job)
+    def run_vroom(problem, _job, level = 0, timeout = nil)
       input = Tempfile.new('optimize-vroom-input', @tmp_dir)
 
       input.write(problem.to_json)
@@ -409,7 +409,7 @@ module Wrappers
       output.close
 
       # TODO : find best value for x https://github.com/Mapotempo/optimizer-api/pull/203
-      cmd = "#{@exec_vroom} -i '#{input.path}' -o '#{output.path}' -x 0"
+      cmd = "#{@exec_vroom} -i '#{input.path}' -o '#{output.path}' -x #{level} #{timeout ? "-l #{timeout / 1000}" : ''}"
       log cmd
       _stdout, stderr, status = Open3.capture3(cmd)
 
