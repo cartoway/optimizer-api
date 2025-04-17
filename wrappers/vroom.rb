@@ -46,7 +46,7 @@ module Wrappers
         :assert_points_same_definition,
 
         # Vehicle/route constraints
-        :assert_no_ride_constraint,
+        :assert_no_distance_limitation,
         :assert_no_service_duration_modifiers,
         :assert_vehicles_no_capacity_initial,
         :assert_vehicles_no_duration_limit,
@@ -360,8 +360,8 @@ module Wrappers
             per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000).to_i,
             per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600).to_i
           }.delete_if{ |k, v| v.nil? || v.zero? },
-          max_distance: vehicle.distance,
-          max_duration: vehicle.duration
+          max_distance: vehicle.maximum_ride_distance,
+          max_travel_time: vehicle.maximum_ride_time
         }.delete_if{ |k, v|
           v.nil? || v.is_a?(Array) && v.empty? ||
             k == :time_window && v.first.zero? && v.last == 2**30
