@@ -1632,7 +1632,7 @@ class WrapperTest < Minitest::Test
     vrp = TestHelper.create(problem)
     refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(vrp),
                     :assert_no_ride_constraint
-    assert_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+    refute_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
                     :assert_no_ride_constraint
 
     problem[:vehicles].first.delete(:maximum_ride_time)
@@ -1640,7 +1640,7 @@ class WrapperTest < Minitest::Test
     vrp = TestHelper.create(problem)
     refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(vrp),
                     :assert_no_ride_constraint
-    assert_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+    refute_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
                     :assert_no_ride_constraint
   end
 

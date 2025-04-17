@@ -593,9 +593,9 @@ class Wrappers::VroomTest < Minitest::Test
     assert @vroom.solve(vrp, 'test')
   end
 
-  def test_vehicle_max_distance
+  def test_vehicle_maximum_ride_distance
     problem = VRP.basic_max_distance
-    problem[:vehicles].first[:distance] = 0
+    problem[:vehicles].first[:maximum_ride_distance] = 0
     vrp = TestHelper.create(problem)
     solution = @vroom.solve(vrp, 'test')
     assert solution
