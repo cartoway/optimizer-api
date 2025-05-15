@@ -360,8 +360,7 @@ module Wrappers
             per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000).to_i,
             per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600).to_i
           }.delete_if{ |k, v| v.nil? || v.zero? },
-          max_distance: vehicle.distance,
-          max_duration: vehicle.duration
+          max_distance: vehicle.distance
         }.delete_if{ |k, v|
           v.nil? || v.is_a?(Array) && v.empty? ||
             k == :time_window && v.first.zero? && v.last == 2**30
