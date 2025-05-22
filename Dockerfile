@@ -21,6 +21,19 @@ RUN git clone --recurse-submodules https://github.com/VROOM-Project/vroom.git &&
     cp ../bin/vroom /usr/local/bin && \
     cd /
 
+RUN apt-get update && \
+apt-get install -y python3 python3-pip python3-venv git build-essential && \
+rm -rf /var/lib/apt/lists/*
+
+ARG PYVRP_VERSION=dev
+
+# Installer PyVRP selon la version demandée
+RUN if [ "$PYVRP_VERSION" = "dev" ]; then \
+      python3 -m pip install git+https://github.com/PyVRP/PyVRP.git ; \
+    else \
+      python3 -m pip install pyvrp=="$PYVRP_VERSION" ; \
+    fi
+
 ENV LANG C.UTF-8
 
 WORKDIR /srv/app
