@@ -53,6 +53,10 @@ module Wrappers
       vrp.vehicles.none?{ |vehicle| vehicle.skills.size > 1 }
     end
 
+    def assert_vehicles_no_skills(vrp)
+      vrp.vehicles.none?{ |vehicle| vehicle.skills.any? }
+    end
+
     def assert_services_no_priority(vrp)
       vrp.services.uniq(&:priority).size <= 1
     end
@@ -135,6 +139,10 @@ module Wrappers
           values.empty? || (values.size == 2 && values.first >= 0 && values.first == -values.last)
         }
       }
+    end
+
+    def assert_no_relations(vrp)
+      vrp.relations.empty?
     end
 
     def assert_zones_only_size_one_alternative(vrp)
