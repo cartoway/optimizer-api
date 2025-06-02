@@ -1,15 +1,37 @@
 import json
 import sys
-
-from pyvrp import Model, ProblemData
+import numpy as np
+from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup
 from pyvrp.stop import MaxRuntime
+
+def _problem_data_from_dict(cls, data: dict):
+    """
+    Creates a :class:`~pyvrp._pyvrp.ProblemData` instance from a dictionary.
+    """
+    clients = [Client(**client) for client in data["clients"]]
+    depots = [Depot(**depot) for depot in data["depots"]]
+    vehicle_types = [VehicleType(**vt) for vt in data["vehicle_types"]]
+    distance_matrices = [np.array(mat) for mat in data["distance_matrices"]]
+    duration_matrices = [np.array(mat) for mat in data["duration_matrices"]]
+    groups = [ClientGroup(**group) for group in data.get("groups", [])]
+    return ProblemData(
+        clients=clients,
+        depots=depots,
+        vehicle_types=vehicle_types,
+        distance_matrices=distance_matrices,
+        duration_matrices=duration_matrices,
+        groups=groups,
+    )
+
+# Monkey-patch
+setattr(ProblemData, "from_dict", classmethod(_problem_data_from_dict))
 
 def main(input_path, output_path, timeout=None):
     # Load problem data from JSON
     with open(input_path, "r") as f:
-        json_dict = json.load(f)
+        json_data = json.loads(f.read())
 
-    data = ProblemData.from_json(json_dict)
+    data = ProblemData.from_dict(json_data)
     m = Model.from_data(data)
     # Solve the problem
     result = m.solve(stop=MaxRuntime(int(timeout)))
@@ -18,7 +40,7 @@ def main(input_path, output_path, timeout=None):
     solution = {
         "runtime": getattr(result, "run_time", None),
         "iterations": getattr(result, "num_iterations", None),
-        "cost": result.cost(),
+        "cost": result.cost() if result.cost() != np.inf else -1,
         "feasible": best_solution.is_feasible(),
         "complete": best_solution.is_complete(),
         "routes": [

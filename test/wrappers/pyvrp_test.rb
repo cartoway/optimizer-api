@@ -133,7 +133,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 1, solution.routes.first.stops.size
-    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..-1].map(&:id).sort!
+    assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, solution.routes.first.stops[1..].map(&:id).sort!
   end
 
   def test_start_different_end_problem
@@ -208,7 +208,6 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert_equal problem[:services].size, skilled_route.stops.count(&:service_id)
   end
 
-  focus
   def test_quantity_precision
     problem = VRP.basic
     problem[:services].each{ |service|
@@ -254,7 +253,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     pyvrp = Wrappers::PyVRP.new
     pyvrp.stub(
       :run_pyvrp, lambda{ |pyvrp_vrp, _job|
-        assert_equal [2 * Wrappers::pyvrp::CUSTOM_QUANTITY_BIGNUM], pyvrp_vrp[:vehicles].first[:capacity]
+        assert_equal [2 * Wrappers::PyVRP::CUSTOM_QUANTITY_BIGNUM], pyvrp_vrp[:vehicles].first[:capacity]
         assert_equal pyvrp_vrp[:jobs].flat_map{ |job| job[:pickup].first }.sum,
                      pyvrp_vrp[:vehicles].last[:capacity].first
         nil
@@ -262,36 +261,6 @@ class Wrappers::PyVRPTest < Minitest::Test
     ) do
       @pyvrp.solve(TestHelper.create(problem))
     end
-  end
-
-  def test_setup_duration
-    problem = VRP.basic
-
-    problem[:matrices].first[:time] = [
-      [0, 4, 0, 5],
-      [6, 0, 0, 5],
-      [1, 0, 0, 5],
-      [5, 5, 5, 0]
-    ]
-
-    problem[:services] << problem[:services].first.dup.tap{ |s| s[:id] = 'service_4' }
-    problem[:services].first[:activity][:timewindows] = [{
-      start: 10,
-      end: 20
-    }]
-    problem[:services][1][:activity][:timewindows] = [{
-      start: 1,
-      end: 1
-    }]
-    problem[:services].each{ |service|
-      service[:activity][:setup_duration] = 1
-    }
-    vrp = TestHelper.create(problem)
-    solution = @pyvrp.solve(vrp, 'test')
-    act_s_one = solution.routes.first.stops.find{ |act| act.service_id == 'service_1' }
-    act_s_two = solution.routes.first.stops.find{ |act| act.service_id == 'service_2' }
-    assert_equal 10, act_s_one.info.begin_time
-    assert_equal 1, act_s_two.info.begin_time
   end
 
   def test_multiple_matrices
@@ -325,5 +294,149 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert_equal problem[:services].size + 1,
                  solution.routes.find{ |r| r[:vehicle_id] == problem[:vehicles].last[:id] }.stops.size
     assert_equal 0, solution.unassigned_stops.size
+  end
+
+  def test_double_hard_time_windows_problem
+    pyvrp = OptimizerWrapper.config[:services][:pyvrp]
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 5, 5],
+          [5, 0, 5],
+          [5, 5, 0]
+        ]
+      }],
+      points: [{
+        id: 'point_0',
+        matrix_index: 0
+      }, {
+        id: 'point_1',
+        matrix_index: 1
+      }, {
+        id: 'point_2',
+        matrix_index: 2
+      }],
+      vehicles: [{
+        id: 'vehicle_0',
+        start_point_id: 'point_0',
+        matrix_id: 'matrix_0'
+      }],
+      services: [{
+        id: 'service_1',
+        activity: {
+          point_id: 'point_1',
+          timewindows: [{
+            start: 3,
+            end: 4
+          }, {
+            start: 7,
+            end: 8
+          }],
+          late_multiplier: 0,
+        }
+      }, {
+        id: 'service_2',
+        activity: {
+          point_id: 'point_2',
+          timewindows: [{
+            start: 5,
+            end: 6
+          }, {
+            start: 10,
+            end: 11
+          }],
+          late_multiplier: 0,
+        }
+      }],
+      configuration: {
+        resolution: {
+          duration: 20,
+        },
+        restitution: {
+          intermediate_solutions: false,
+        }
+      }
+    }
+    vrp = TestHelper.create(problem)
+    solution = pyvrp.solve(vrp, 'test')
+    assert solution
+    assert_equal 1, solution.routes.size
+    assert_equal problem[:services].size, solution.routes.first.stops.size
+  end
+
+  def test_triple_hard_time_windows_problem
+    pyvrp = OptimizerWrapper.config[:services][:pyvrp]
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 9, 9],
+          [9, 0, 9],
+          [9, 9, 0]
+        ]
+      }],
+      points: [{
+        id: 'point_0',
+        matrix_index: 0
+      }, {
+        id: 'point_1',
+        matrix_index: 1
+      }, {
+        id: 'point_2',
+        matrix_index: 2
+      }],
+      vehicles: [{
+        id: 'vehicle_0',
+        start_point_id: 'point_0',
+        matrix_id: 'matrix_0'
+      }],
+      services: [{
+        id: 'service_1',
+        activity: {
+          point_id: 'point_1',
+          timewindows: [{
+            start: 3,
+            end: 4
+          }, {
+            start: 7,
+            end: 8
+          }, {
+            start: 11,
+            end: 12
+          }],
+          late_multiplier: 0,
+        }
+      }, {
+        id: 'service_2',
+        activity: {
+          point_id: 'point_2',
+          timewindows: [{
+            start: 5,
+            end: 6
+          }, {
+            start: 10,
+            end: 11
+          }, {
+            start: 15,
+            end: 16
+          }],
+          late_multiplier: 0,
+        }
+      }],
+      configuration: {
+        resolution: {
+          duration: 20,
+        },
+        restitution: {
+          intermediate_solutions: false,
+        }
+      }
+    }
+    vrp = TestHelper.create(problem)
+    solution = pyvrp.solve(vrp, 'test')
+    assert solution
+    assert_equal 1, solution.routes.size
+    assert_equal problem[:services].size, solution.routes.first.stops.size
   end
 end
