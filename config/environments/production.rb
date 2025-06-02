@@ -17,8 +17,9 @@
 #
 
 require './wrappers/demo'
-require './wrappers/vroom'
 require './wrappers/ortools'
+require './wrappers/pyvrp'
+require './wrappers/vroom'
 
 require './lib/cache_manager'
 require './util/logger'
@@ -33,11 +34,12 @@ module OptimizerWrapper
                   parallel_cheapest_insertion first_unbound christofides].freeze
   WEEKDAYS = %i[mon tue wed thu fri sat sun].freeze
   DEMO = Wrappers::Demo.new(tmp_dir: TMP_DIR, threads: 4)
-  VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: '/usr/local/bin/vroom')
   # if dependencies don't exist (libprotobuf10 on debian) provide or-tools dependencies location
   ORTOOLS_EXEC =
     'LD_LIBRARY_PATH=../or-tools/dependencies/install/lib/:../or-tools/lib/ ../optimizer-ortools/tsp_simple'.freeze
   ORTOOLS = Wrappers::Ortools.new(tmp_dir: TMP_DIR, exec_ortools: ORTOOLS_EXEC, threads: 4)
+  PYVPR = Wrappers::PyVRP.new(tmp_dir: TMP_DIR)
+  VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: '/usr/local/bin/vroom')
 
   PARAMS_LIMIT = { points: 100000, vehicles: 1000 }.freeze
   QUOTAS = [{ daily: 100000, monthly: 1000000 }].freeze # Only taken into account if REDIS_COUNT
@@ -58,14 +60,15 @@ module OptimizerWrapper
     },
     services: {
       demo: DEMO,
-      vroom: VROOM,
       ortools: ORTOOLS,
+      pyvrp: PYVPR,
+      vroom: VROOM,
     },
     profiles: {
       demo: {
         queue: 'DEFAULT',
         services: {
-          vrp: [:vroom, :ortools]
+          vrp: [:vroom, :ortools, :pyvrp]
         },
         params_limit: PARAMS_LIMIT,
         quotas: QUOTAS, # Only taken into account if REDIS_COUNT

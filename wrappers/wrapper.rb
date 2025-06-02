@@ -61,6 +61,10 @@ module Wrappers
       vrp.services.uniq(&:priority).size <= 1
     end
 
+    def assert_services_no_setup_duration(vrp)
+      vrp.services.none?{ |service| service.activity.setup_duration.to_i > 0 }
+    end
+
     def assert_vehicles_objective(vrp)
       vrp.vehicles.all?{ |vehicle|
         vehicle.cost_time_multiplier&.positive? ||
@@ -68,6 +72,10 @@ module Wrappers
           vehicle.cost_waiting_time_multiplier&.positive? ||
           vehicle.cost_value_multiplier&.positive?
       }
+    end
+
+    def assert_vehicles_no_initial_load(vrp)
+      vrp.vehicles.none?{ |vehicle| vehicle.capacities.any?{ |c| c.initial && c.initial < c.limit } }
     end
 
     def assert_vehicles_no_late_multiplier(vrp)
@@ -186,6 +194,10 @@ module Wrappers
 
     def assert_end_optimization(vrp)
       vrp.configuration.resolution.duration || vrp.configuration.resolution.iterations_without_improvment
+    end
+
+    def assert_resolution_duration(vrp)
+      vrp.configuration.resolution.duration
     end
 
     def assert_no_distance_limitation(vrp)
