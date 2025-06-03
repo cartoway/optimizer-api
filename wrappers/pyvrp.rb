@@ -23,11 +23,11 @@ module Wrappers
         # Vehicle/route constraints
         :assert_no_ride_constraint,
         :assert_no_service_duration_modifiers,
+        assert_vehicles_no_alternative_skills,
         :assert_vehicles_no_force_start,
         :assert_vehicles_no_initial_load,
         :assert_vehicles_no_late_multiplier,
         :assert_vehicles_no_overload_multiplier,
-        # :assert_vehicles_no_skills,
         :assert_vehicles_start_or_end,
         :assert_no_overall_duration,
         :assert_no_value_matrix,
@@ -211,6 +211,10 @@ module Wrappers
 
     def pyvrp_problem(vrp)
       @service_index_map = []
+
+      # Skills can be considered as capacities
+      @skills_index_hash = {}
+      vrp.vehicles.map(&:skills).flatten.uniq.each_with_index{ |skill, index| @skills_index_hash[skill] = index }
       used_matrices = vrp.vehicles.map(&:matrix_id).uniq
       matrices = used_matrices.map { |id| vrp.matrices.find { |m| m.id == id } }
       distance_matrices = matrices.map(&:distance).compact
@@ -287,9 +291,15 @@ module Wrappers
             (capacity.limit && (capacity.limit * CUSTOM_QUANTITY_BIGNUM).to_i || MAX_INT_UNITS)
           limit_hash[capacity.unit_id] = capacity.initial&.to_i || capacity.limit&.to_i || MAX_INT64
         end
+
+        capacity_skills = Array.new(@skills_index_hash.size, 0)
+        veh.skills.first.each do |skill|
+          capacity_skills[@skills_index_hash[skill]] = vrp.services.size
+        end
+
         {
           num_available: 1,
-          capacity: capacity_hash.values,
+          capacity: capacity_hash.values + capacity_skills,
           start_depot: depot_hash[veh.start_point&.id],
           end_depot: depot_hash[veh.end_point&.id],
           fixed_cost: veh.cost_fixed.to_i,
@@ -324,12 +334,24 @@ module Wrappers
         pickup_hash = all_units.map { |id, _| [id, 0] }.to_h
 
         service.quantities.each do |quantity|
+          delivery_hash[quantity.unit_id] = (quantity.delivery * CUSTOM_QUANTITY_BIGNUM).round if quantity.delivery
+          pickup_hash[quantity.unit_id] = (quantity.pickup * CUSTOM_QUANTITY_BIGNUM).round if quantity.pickup
+
+          next if quantity.value.zero?
+
           if quantity.value < 0
             delivery_hash[quantity.unit_id] = (quantity.value.abs * CUSTOM_QUANTITY_BIGNUM).round
           else
             pickup_hash[quantity.unit_id] = (quantity.value * CUSTOM_QUANTITY_BIGNUM).round
           end
         end
+
+        quantity_skills = Array.new(@skills_index_hash.size, 0)
+        service.skills.each do |skill|
+          quantity_skills[@skills_index_hash[skill]] = 1
+        end
+        null_quantity_skills = Array.new(@skills_index_hash.size, 0)
+
         timewindows =
           if activity.timewindows.empty?
             [Models::Timewindow.new(start: 0, end: MAX_INT64)]
@@ -342,8 +364,8 @@ module Wrappers
           client_list << {
             x: location&.lon || 0,
             y: location&.lat || 0,
-            delivery: delivery_hash.values,
-            pickup: pickup_hash.values,
+            delivery: delivery_hash.values + null_quantity_skills,
+            pickup: pickup_hash.values + quantity_skills,
             service_duration: activity.duration.to_i,
             tw_early: tw.start || 0,
             tw_late: tw.end || MAX_INT64,
