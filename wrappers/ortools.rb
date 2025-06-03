@@ -65,6 +65,7 @@ module Wrappers
         :assert_valid_partitions,
         :assert_route_date_or_indice_if_periodic,
         :assert_not_too_many_visits_in_route,
+        :assert_no_quantity_pickup_and_delivery,
         # :assert_no_overall_duration, # TODO: Requires a complete rework
       ]
     end
@@ -89,14 +90,14 @@ module Wrappers
         }
       end
 
-      problem_units =
+      problem_unit_hash =
         vrp.units.collect{ |unit|
-          {
+          [unit.id, {
             unit_id: unit.id,
             fill: false,
             empty: false
-          }
-        }
+          }]
+        }.to_h
       total_quantities = vrp.units.map{ |unit| [unit.id, 0] }.to_h
 
       vrp.relations.select{ |r| r.type == :shipment }.each{ |r|
@@ -125,7 +126,7 @@ module Wrappers
 
       vrp.services.each{ |service|
         service.quantities.each{ |quantity|
-          unit_status = problem_units.find{ |unit| unit[:unit_id] == quantity.unit_id }
+          unit_status = problem_unit_hash[quantity.unit_id]
           unit_status[:fill] ||= quantity.fill
           unit_status[:empty] ||= quantity.empty
         }
@@ -148,6 +149,15 @@ module Wrappers
           vehicles_indices << index
         }
 
+        quantity_hash = {}
+        service.quantities.each{ |quantity|
+          quantity_hash[quantity.unit_id] = {
+            value: quantity.value + (quantity&.pickup || 0) - (quantity&.delivery || 0),
+            empty: quantity.empty,
+            fill: quantity.fill
+          }
+        }
+
         if service.activity
           services << OrtoolsVrp::Service.new(
             time_windows: service.activity.timewindows.collect{ |tw|
@@ -155,19 +165,19 @@ module Wrappers
                                          maximum_lateness: tw.maximum_lateness)
             },
             quantities: vrp.units.collect{ |unit|
-              is_fill_unit = problem_units.find{ |unit_status| unit_status[:unit_id] == unit.id }[:fill]
+              is_fill_unit = problem_unit_hash.find{ |unit_status| unit_status[:unit_id] == unit.id }[:fill]
               is_empty_unit = problem_units.find{ |unit_status| unit_status[:unit_id] == unit.id }[:empty]
-              q = service.quantities.find{ |quantity| quantity.unit == unit }
+              q = quantity_hash[quantity.unit_id]
               # make sure that if it is
               #   - an empty unit then the amount is negative for the empty service and positive for the proper services
               #   - a fill unit then the amount is positive for the fill service and negative for the proper services
               if is_empty_unit || is_fill_unit
-                empty_fill_value = q&.value.to_f.abs
-                if q&.empty && empty_fill_value == 0
+                empty_fill_value = q && q[:value].to_f.abs || 0.0
+                if q && q[:empty] && empty_fill_value == 0
                   # The empty operation itself having nil/0 value means complete empty operation
                   empty_fill_value = total_quantities[unit.id].abs
                 end
-                empty_fill_value * ((is_empty_unit && q&.empty) || (is_fill_unit && !q&.fill) ? -1 : 1)
+                empty_fill_value * ((is_empty_unit && q && q[:empty]) || (is_fill_unit && q && !q[:fill]) ? -1 : 1)
               else
                 q&.value.to_f
               end
@@ -204,21 +214,21 @@ module Wrappers
                                            maximum_lateness: tw.maximum_lateness)
               },
               quantities: vrp.units.collect{ |unit|
-                is_fill_unit = problem_units.find{ |unit_status| unit_status[:unit_id] == unit.id }[:fill]
-                is_empty_unit = problem_units.find{ |unit_status| unit_status[:unit_id] == unit.id }[:empty]
-                q = service.quantities.find{ |quantity| quantity.unit == unit }
+                is_fill_unit = problem_unit_hash[unit.id][:fill]
+                is_empty_unit = problem_unit_hash[unit.id][:empty]
+                q = quantity_hash[quantity.unit_id]
                 # make sure that if it is
                 # - an empty unit then the amount is negative for the empty service and positive for the proper services
                 # - a fill unit then the amount is positive for the fill service and negative for the proper services
                 if is_empty_unit || is_fill_unit
-                  empty_fill_value = q&.value.to_f.abs
-                  if q&.empty && empty_fill_value == 0
+                  empty_fill_value = q && q[:value].to_f.abs || 0.0
+                  if q && q[:empty] && empty_fill_value == 0
                     # The empty operation itself having nil/0 value means complete empty operation
                     empty_fill_value = total_quantities[unit.id].abs
                   end
-                  empty_fill_value * ((is_empty_unit && q&.empty) || (is_fill_unit && !q&.fill) ? -1 : 1)
+                  empty_fill_value * ((is_empty_unit && q && q[:empty]) || (is_fill_unit && q && !q[:fill]) ? -1 : 1)
                 else
-                  q&.value.to_f
+                  q && q[:value].to_f
                 end
               },
               duration: possible_activity.duration,
@@ -260,84 +270,8 @@ module Wrappers
           )
         }
 
-      vehicles =
-        vrp.vehicles.collect{ |vehicle|
-          OrtoolsVrp::Vehicle.new(
-            id: vehicle.id.to_s,
-            cost_fixed: vehicle.cost_fixed,
-            cost_distance_multiplier: vehicle.cost_distance_multiplier,
-            cost_time_multiplier: vehicle.cost_time_multiplier,
-            cost_waiting_time_multiplier: vehicle.cost_waiting_time_multiplier || vehicle.cost_time_multiplier,
-            cost_value_multiplier: vehicle.cost_value_multiplier || 0,
-            cost_late_multiplier: vehicle.cost_late_multiplier || 0,
-            coef_service: vehicle.coef_service || 1,
-            coef_setup: vehicle.coef_setup || 1,
-            additional_service: vehicle.additional_service || 0,
-            additional_setup: vehicle.additional_setup || 0,
-            capacities: vrp.units.collect{ |unit|
-              q = vehicle.capacities.find{ |capacity| capacity.unit == unit }
-              OrtoolsVrp::Capacity.new(
-                limit: q&.limit && q.limit < 1e+22 ? q.limit : -1,
-                overload_multiplier: q&.overload_multiplier || 0,
-                counting: unit&.counting || false,
-                initial_limit: q&.initial || [total_quantities[unit.id], q&.limit].compact.max
-              )
-            },
-            time_window: OrtoolsVrp::TimeWindow.new(
-              start: vehicle.timewindow&.start || 0,
-              end: vehicle.timewindow&.end || 2147483647,
-              maximum_lateness: vehicle.timewindow&.maximum_lateness || 0,
-            ),
-            rests: vehicle.rests.collect{ |rest|
-              OrtoolsVrp::Rest.new(
-                time_window:
-                  if rest.timewindows.any?
-                    log 'optimiser-ortools supports one timewindow per rest', level: :warn if rest.timewindows.size > 1
-
-                    OrtoolsVrp::TimeWindow.new(start: rest.timewindows[0].start,
-                                               end: rest.timewindows[0].end || 2147483647)
-                  else
-                    OrtoolsVrp::TimeWindow.new(start: 0, end: 2147483647) # Rests should always have a timewindow
-                  end,
-                duration: rest.duration,
-                id: rest.id.to_s,
-                late_multiplier: rest.late_multiplier,
-                exclusion_cost: rest.exclusion_cost || -1
-              )
-            },
-            matrix_index: vrp.matrices.index{ |matrix| matrix.id == vehicle.matrix_id },
-            value_matrix_index: vrp.matrices.index{ |matrix| matrix.id == vehicle.value_matrix_id } || 0,
-            start_index: vehicle.start_point ? vehicle.start_point.matrix_index : -1,
-            end_index: vehicle.end_point ? vehicle.end_point.matrix_index : -1,
-            duration: vehicle.duration || 0,
-            distance: vehicle.distance || 0,
-            shift_preference: (vehicle.force_start ? 'force_start' : vehicle.shift_preference.to_s),
-            day_index: vehicle.global_day_index || -1,
-            max_ride_time: vehicle.maximum_ride_time || 0,
-            max_ride_distance: vehicle.maximum_ride_distance || 0,
-            free_approach: vehicle.free_approach || false,
-            free_return: vehicle.free_return || false,
-            start_point_id: vehicle.start_point_id.to_s
-          )
-        }
-
-      vrp.relations.each{ |relation|
-        relation.split_regarding_lapses.each{ |portion_linked_ids, portion_vehicle_ids, portion_lapse|
-          current_linked_ids = (portion_linked_ids.map!(&:to_s) & services.map(&:id)).uniq if portion_linked_ids
-          if portion_vehicle_ids
-            current_linked_vehicles = vrp.vehicles.select{ |v| portion_vehicle_ids.include?(v.id) }.map(&:id)
-          end
-          next if current_linked_ids.to_a.empty? && current_linked_vehicles.to_a.empty?
-
-          # NOTE: we collect lapse because optimizer-ortools expects one lapse per relation for now
-          relations << OrtoolsVrp::Relation.new(
-            type: relation.type,
-            linked_ids: current_linked_ids,
-            linked_vehicle_ids: current_linked_vehicles&.map!(&:to_s),
-            lapse: portion_lapse
-          )
-        }
-      }
+      vehicles = build_problem_vehicles(vrp, total_quantities)
+      build_problem_relations(vrp, services, relations)
 
       vrp.routes.collect{ |route|
         next if route.vehicle.nil? || route.mission_ids.empty?
@@ -381,6 +315,88 @@ module Wrappers
     end
 
     private
+
+    def build_problem_relations(vrp, services, relations)
+      vrp.relations.each{ |relation|
+        relation.split_regarding_lapses.each{ |portion_linked_ids, portion_vehicle_ids, portion_lapse|
+          current_linked_ids = (portion_linked_ids.map!(&:to_s) & services.map(&:id)).uniq if portion_linked_ids
+          if portion_vehicle_ids
+            current_linked_vehicles = vrp.vehicles.select{ |v| portion_vehicle_ids.include?(v.id) }.map(&:id)
+          end
+          next if current_linked_ids.to_a.empty? && current_linked_vehicles.to_a.empty?
+
+          # NOTE: we collect lapse because optimizer-ortools expects one lapse per relation for now
+          relations << OrtoolsVrp::Relation.new(
+            type: relation.type,
+            linked_ids: current_linked_ids,
+            linked_vehicle_ids: current_linked_vehicles&.map!(&:to_s),
+            lapse: portion_lapse
+          )
+        }
+      }
+    end
+
+    def build_problem_vehicles(vrp, total_quantities)
+      vrp.vehicles.collect{ |vehicle|
+        OrtoolsVrp::Vehicle.new(
+          id: vehicle.id.to_s,
+          cost_fixed: vehicle.cost_fixed,
+          cost_distance_multiplier: vehicle.cost_distance_multiplier,
+          cost_time_multiplier: vehicle.cost_time_multiplier,
+          cost_waiting_time_multiplier: vehicle.cost_waiting_time_multiplier || vehicle.cost_time_multiplier,
+          cost_value_multiplier: vehicle.cost_value_multiplier || 0,
+          cost_late_multiplier: vehicle.cost_late_multiplier || 0,
+          coef_service: vehicle.coef_service || 1,
+          coef_setup: vehicle.coef_setup || 1,
+          additional_service: vehicle.additional_service || 0,
+          additional_setup: vehicle.additional_setup || 0,
+          capacities: vrp.units.collect{ |unit|
+            q = vehicle.capacities.find{ |capacity| capacity.unit == unit }
+            OrtoolsVrp::Capacity.new(
+              limit: q&.limit && q.limit < 1e+22 ? q.limit : -1,
+              overload_multiplier: q&.overload_multiplier || 0,
+              counting: unit&.counting || false,
+              initial_limit: q&.initial || [total_quantities[unit.id], q&.limit].compact.max
+            )
+          },
+          time_window: OrtoolsVrp::TimeWindow.new(
+            start: vehicle.timewindow&.start || 0,
+            end: vehicle.timewindow&.end || 2147483647,
+            maximum_lateness: vehicle.timewindow&.maximum_lateness || 0,
+          ),
+          rests: vehicle.rests.collect{ |rest|
+            OrtoolsVrp::Rest.new(
+              time_window:
+                if rest.timewindows.any?
+                  log 'optimiser-ortools supports one timewindow per rest', level: :warn if rest.timewindows.size > 1
+
+                  OrtoolsVrp::TimeWindow.new(start: rest.timewindows[0].start,
+                                             end: rest.timewindows[0].end || 2147483647)
+                else
+                  OrtoolsVrp::TimeWindow.new(start: 0, end: 2147483647) # Rests should always have a timewindow
+                end,
+              duration: rest.duration,
+              id: rest.id.to_s,
+              late_multiplier: rest.late_multiplier,
+              exclusion_cost: rest.exclusion_cost || -1
+            )
+          },
+          matrix_index: vrp.matrices.index{ |matrix| matrix.id == vehicle.matrix_id },
+          value_matrix_index: vrp.matrices.index{ |matrix| matrix.id == vehicle.value_matrix_id } || 0,
+          start_index: vehicle.start_point ? vehicle.start_point.matrix_index : -1,
+          end_index: vehicle.end_point ? vehicle.end_point.matrix_index : -1,
+          duration: vehicle.duration || 0,
+          distance: vehicle.distance || 0,
+          shift_preference: (vehicle.force_start ? 'force_start' : vehicle.shift_preference.to_s),
+          day_index: vehicle.global_day_index || -1,
+          max_ride_time: vehicle.maximum_ride_time || 0,
+          max_ride_distance: vehicle.maximum_ride_distance || 0,
+          free_approach: vehicle.free_approach || false,
+          free_return: vehicle.free_return || false,
+          start_point_id: vehicle.start_point_id.to_s
+        )
+      }
+    end
 
     def build_cost_details(cost_details)
       Models::Solution::CostInfo.create(
