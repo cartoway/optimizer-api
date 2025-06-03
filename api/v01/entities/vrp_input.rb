@@ -479,8 +479,12 @@ module VrpShared
     optional(:fill, type: Boolean, desc: 'Allows to fill this quantity, increases the current load of the vehicle minimum value amount. Attention: if the value of the fill operation is greater than the capacity of the vehicle, the fill operation cannot be used by the vehicle since value signifies the minimum amount to fill.')
     optional(:empty, type: Boolean, desc: 'Allows to empty this quantity, decreases the current load of the vehicle at most value amount -- completely if no value is given')
     mutually_exclusive :fill, :empty
-    optional(:value, type: Float, desc: 'Value of current quantity')
+    optional(:value, type: Float, desc: 'Value of current quantity. I might be used by any other stop of the route.')
     optional(:setup_value, type: Integer, desc: 'If the associated unit is a counting one, defines the default value to count for this stop (additional quantities for this specific service are to define with the value tag)')
+    optional(:pickup, type: Float, desc: 'pickup quantity is assumed to be picked up during the route to be brought back at vehicle end')
+    optional(:delivery, type: Float, desc: 'delivery quantity is assumed to be loaded at the vehicle start')
+    mutually_exclusive :pickup, :value
+    mutually_exclusive :delivery, :value
   end
 
   params :vrp_request_timewindow do

@@ -100,6 +100,23 @@ module Wrappers
       vrp.vehicles.none?(&:duration)
     end
 
+    def assert_no_quantity_pickup_and_delivery(vrp)
+      has_pickup_delivery_hash = {}
+      vrp.units.each{ |unit|
+        has_pickup_delivery_hash[unit.id] = {
+          pickup: false,
+          delivery: false
+        }
+      }
+      unit.services.each{ |service|
+        service.quantities.each{ |quantity|
+          has_pickup_delivery_hash[quantity.unit.id][:pickup] ||= !(quantity.pickup.nil? || quantity.pickup == 0)
+          has_pickup_delivery_hash[quantity.unit.id][:delivery] ||= !(quantity.delivery.nil? || quantity.delivery == 0)
+        }
+      }
+      has_pickup_delivery_hash.values.none?{ |value| value[:pickup] && value[:delivery] }
+    end
+
     def assert_services_no_late_multiplier(vrp)
       vrp.services.none?{ |service|
         if service.activity
