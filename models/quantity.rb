@@ -23,6 +23,8 @@ module Models
     field :empty, default: false
     field :value, default: 0
     field :setup_value, default: 1
+    field :pickup, default: nil
+    field :delivery, default: nil
 
     # ActiveHash doesn't validate the validator of the associated objects
     # Forced to do the validation in Grape params
