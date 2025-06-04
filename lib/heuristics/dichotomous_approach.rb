@@ -70,7 +70,7 @@ module Interpreters
         elsif service_vrp[:vrp].configuration.resolution.init_duration.nil?
           service_vrp[:vrp].calculate_service_exclusion_costs(:time, true)
           update_exclusion_cost(service_vrp)
-          solution = OptimizerWrapper.solve(service_vrp, job, block)
+          solution = Core::Strategies::Orchestration.solve(service_vrp, job, block)
         else
           service_vrp[:vrp].calculate_service_exclusion_costs(:time, true)
           update_exclusion_cost(service_vrp)
@@ -96,8 +96,10 @@ module Interpreters
           solutions =
             sub_service_vrps.map.with_index{ |sub_service_vrp, index|
               solution =
-                OptimizerWrapper.define_process(sub_service_vrp,
-                                                job) { |wrapper, avancement, total, message, cost, time, sol|
+                Core::Strategies::Orchestration.define_process(
+                  sub_service_vrp,
+                  job
+                ) { |wrapper, avancement, total, message, cost, time, sol|
                   avc = service_vrp[:dicho_denominators].map.with_index{ |lvl, idx|
                     Rational(service_vrp[:dicho_sides][idx], lvl)
                   }.sum
@@ -108,7 +110,7 @@ module Interpreters
                     else
                       add = "dichotomous process #{(service_vrp[:dicho_denominators].last * avc).to_i}"\
                             "/#{service_vrp[:dicho_denominators].last}"
-                      OptimizerWrapper.concat_avancement(add, message)
+                      Core::Strategies::Orchestration.concat_avancement(add, message)
                     end
                   block&.call(wrapper, avancement, total, msg, cost, time, sol)
                 }
@@ -342,7 +344,7 @@ module Interpreters
         resolution.vehicle_limit = sub_vrp_vehicle_limit if vrp.configuration.resolution.vehicle_limit
 
         sub_vrp.configuration.restitution.allow_empty_result = true
-        solution_loop = OptimizerWrapper.solve(sub_service_vrp)
+        solution_loop = Core::Strategies::Orchestration.solve(sub_service_vrp)
 
         next unless solution_loop
 

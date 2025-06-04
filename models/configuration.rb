@@ -68,6 +68,7 @@ module Models
     field :time_out_multiplier, default: nil
     field :vehicle_limit, default: nil
     field :solver, default: true
+    field :solver_priority, default: []
     field :same_point_day, default: false
     field :minimize_days_worked, default: false
     field :allow_partial_assignment, default: true

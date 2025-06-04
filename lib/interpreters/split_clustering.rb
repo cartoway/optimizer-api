@@ -36,11 +36,11 @@ module Interpreters
           splited_service_vrps.each_with_index.map{ |split_service_vrp, i|
             cluster_ref = i + 1
             solution =
-              OptimizerWrapper.define_process(
+              Core::Strategies::Orchestration.define_process(
                 split_service_vrp, job
               ) { |wrapper, avancement, total, message, cost, time, solution_|
                 add = "split partition process #{cluster_ref}/#{splited_service_vrps.size}"
-                msg = OptimizerWrapper.concat_avancement(add, message)
+                msg = Core::Strategies::Orchestration.concat_avancement(add, message)
                 block&.call(wrapper, avancement, total, msg, cost, time, solution_)
               }
 
@@ -286,7 +286,7 @@ module Interpreters
                 else
                   add = "max split process #{(service_vrp[:split_denominators].last * avc).to_i}/"\
                         "#{service_vrp[:split_denominators].last}"
-                  OptimizerWrapper.concat_avancement(add, message)
+                  Core::Strategies::Orchestration.concat_avancement(add, message)
                 end
               block&.call(wrapper, avancement, total, msg, cost, time, solution)
             }
@@ -313,7 +313,7 @@ module Interpreters
 
       service_vrp[:vrp] = create_sub_vrp(ss_data)
 
-      solution = OptimizerWrapper.define_process(service_vrp, job, &block)
+      solution = Core::Strategies::Orchestration.define_process(service_vrp, job, &block)
       solution.parse(service_vrp[:vrp])
     ensure
       log "<-- split_solve_sub_vrp lv: #{split_level}"

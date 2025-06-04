@@ -500,7 +500,7 @@ module Wrappers
           route_vrp.services = provide_group_tws(route_vrp.services, day) if @same_point_day || @relaxed_same_point_day
 
           # TODO : call wrapper instead, in order to choose best solver according to route_vrp parameters
-          solution = OptimizerWrapper.solve(service: :ortools, vrp: route_vrp)
+          solution = Core::Strategies::Orchestration.solve(service: :ortools, vrp: route_vrp)
 
           next if solution.nil? || !solution.unassigned_stops.empty?
 
