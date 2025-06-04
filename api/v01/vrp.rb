@@ -217,7 +217,7 @@ module Api
 
             if job&.completed? # job can still be nil if we have the solution from the dump
               APIBase.dump_vrp_dir.write([id, params[:api_key], 'solution'].join('_'), Oj.dump(result_object)) if stored_result.nil? && OptimizerWrapper.config[:dump][:solution]
-              OptimizerWrapper.job_remove(params[:api_key], id)
+              Core::Services::JobService.job_remove(params[:api_key], id)
             end
 
             status 200
@@ -249,7 +249,7 @@ module Api
           }
           get do
             status 200
-            present OptimizerWrapper.job_list(params[:api_key]), with: Grape::Presenters::Presenter
+            present Core::Services::JobService.job_list(params[:api_key]), with: Grape::Presenters::Presenter
           end
 
           desc 'Delete vrp job', {
@@ -274,7 +274,7 @@ module Api
               status 404
               error!({ message: "Job with id='#{id}' not found" }, 404)
             else
-              OptimizerWrapper.job_kill(params[:api_key], id) if job.killable?
+              Core::Services::JobService.job_kill(params[:api_key], id) if job.killable?
 
               result_object = OptimizerWrapper::Result.get(id)
 
@@ -305,7 +305,7 @@ module Api
               end
               result_object = nil # rubocop:disable Lint/UselessAssignment
             end
-            OptimizerWrapper.job_remove(params[:api_key], id) if job&.dig('options', 'api_key') == params[:api_key]
+            Core::Services::JobService.job_remove(params[:api_key], id) if job&.dig('options', 'api_key') == params[:api_key]
           end
         end
       end
