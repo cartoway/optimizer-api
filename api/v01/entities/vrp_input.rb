@@ -190,6 +190,10 @@ module VrpConfiguration
     optional(:several_solutions, type: Integer, allow_blank: false, default: 1, desc: 'Return several solution computed with different matrices')
     optional(:solver, type: Boolean, desc: 'Defines if solver should be called')
     optional(:solver_parameter, type: Integer, documentation: { hidden: true }, desc: '[ DEPRECATED : use configuration.preprocessing.first_solution_strategy instead ]')
+    optional(:solver_priority, type: Array[Symbol],
+                               desc: "Prioritize the solver to use. If the first solver is compatible with the problem, it will be used. If not, the second solver will be used, etc. The solver available might depend on your api keyAvailable solvers: #{SolverType.possible_solvers.join(', ')}",
+                               default: [],
+                               coerce_with: ->(value) { SolverType.type_cast(value) })
     optional(:split_number, type: Integer, desc: 'Give the current number of process for block call')
     optional(:stable_coefficient, type: Float, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
     optional(:stable_iterations, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')

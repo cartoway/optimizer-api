@@ -108,7 +108,7 @@ module Wrappers
           delivery: false
         }
       }
-      unit.services.each{ |service|
+      vrp.services.each{ |service|
         service.quantities.each{ |quantity|
           has_pickup_delivery_hash[quantity.unit.id][:pickup] ||= !(quantity.pickup.nil? || quantity.pickup == 0)
           has_pickup_delivery_hash[quantity.unit.id][:delivery] ||= !(quantity.delivery.nil? || quantity.delivery == 0)

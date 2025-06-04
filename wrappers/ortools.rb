@@ -165,9 +165,11 @@ module Wrappers
                                          maximum_lateness: tw.maximum_lateness)
             },
             quantities: vrp.units.collect{ |unit|
-              is_fill_unit = problem_unit_hash.find{ |unit_status| unit_status[:unit_id] == unit.id }[:fill]
-              is_empty_unit = problem_units.find{ |unit_status| unit_status[:unit_id] == unit.id }[:empty]
-              q = quantity_hash[quantity.unit_id]
+              is_fill_unit = problem_unit_hash[unit.id][:fill]
+              is_empty_unit = problem_unit_hash[unit.id][:empty]
+              q = quantity_hash[unit.id]
+              next 0 if q.nil?
+
               # make sure that if it is
               #   - an empty unit then the amount is negative for the empty service and positive for the proper services
               #   - a fill unit then the amount is positive for the fill service and negative for the proper services
@@ -179,7 +181,7 @@ module Wrappers
                 end
                 empty_fill_value * ((is_empty_unit && q && q[:empty]) || (is_fill_unit && q && !q[:fill]) ? -1 : 1)
               else
-                q&.value.to_f
+                q[:value].to_f
               end
             },
             duration: service.activity.duration,

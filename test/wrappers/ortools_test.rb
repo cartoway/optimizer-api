@@ -5133,7 +5133,7 @@ class Wrappers::OrtoolsTest < Minitest::Test
           Models::Solution.new(status: :killed)
         }
       ) do
-        OptimizerWrapper.solve(service: :ortools, vrp: TestHelper.create(problem.dup))
+        Core::Strategies::Orchestration.solve(service: :ortools, vrp: TestHelper.create(problem.dup))
       end
     }
   end
