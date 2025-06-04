@@ -3,7 +3,7 @@ require './wrappers/wrapper'
 module Wrappers
   class PyVRP < Wrapper
     CUSTOM_QUANTITY_BIGNUM = 1e3
-    MAX_INT32 = 2**31 - 1
+    MAX_PENALTY = 1e5
     MAX_INT64 = 2**63 - 1
     MAX_INT_UNITS = 2**60 - 1
 
@@ -23,7 +23,7 @@ module Wrappers
         # Vehicle/route constraints
         :assert_no_ride_constraint,
         :assert_no_service_duration_modifiers,
-        assert_vehicles_no_alternative_skills,
+        :assert_vehicles_no_alternative_skills,
         :assert_vehicles_no_force_start,
         :assert_vehicles_no_initial_load,
         :assert_vehicles_no_late_multiplier,
@@ -370,7 +370,7 @@ module Wrappers
             tw_early: tw.start || 0,
             tw_late: tw.end || MAX_INT64,
             release_time: 0,
-            prize: service.exclusion_cost || (MAX_INT32 / (service.priority + 1)),
+            prize: service.exclusion_cost || (MAX_PENALTY / (service.priority + 1)).round,
             required: service.priority == 0 && activity.timewindows.size <= 1,
             name: "#{service.id}_tw#{tw_idx}"
           }
@@ -405,6 +405,8 @@ module Wrappers
 
     def run_pyvrp(problem, timeout = nil)
       input = Tempfile.new('optimize-pyvrp-input', @tmp_dir)
+
+      puts problem.as_json
       input.write(problem.to_json)
       input.close
 

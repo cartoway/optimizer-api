@@ -229,6 +229,48 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
   end
 
+  def test_quantity_precision_with_pickup
+    problem = VRP.basic
+    problem[:services].each{ |service|
+      service[:quantities] = [{ unit_id: 'kg', pickup: 1.001 }]
+    }
+    problem[:vehicles].each{ |vehicle|
+      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3 }]
+    }
+
+    solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
+    assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
+
+    assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
+                    'The vehicle cannot load more than 2 services and 3 kg'
+    solutions[0].routes.first.stops.each{ |activity|
+      next unless activity.service_id
+
+      assert_equal 1.001, activity.loads.first.quantity.pickup
+    }
+  end
+
+  def test_quantity_precision_with_delivery
+    problem = VRP.basic
+    problem[:services].each{ |service|
+      service[:quantities] = [{ unit_id: 'kg', delivery: 1.001 }]
+    }
+    problem[:vehicles].each{ |vehicle|
+      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3 }]
+    }
+
+    solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
+    assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
+
+    assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
+                    'The vehicle cannot load more than 2 services and 3 kg'
+    solutions[0].routes.first.stops.each{ |activity|
+      next unless activity.service_id
+
+      assert_equal 1.001, activity.loads.first.quantity.delivery
+    }
+  end
+
   def test_negative_quantities_should_not_raise
     problem = VRP.basic
     problem[:units] << { id: 'l' }
@@ -438,5 +480,93 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal problem[:services].size, solution.routes.first.stops.size
+  end
+
+  def test_skills
+    pyvrp = OptimizerWrapper.config[:services][:pyvrp]
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 3, 3, 3],
+          [3, 0, 3, 3],
+          [3, 3, 0, 3],
+          [3, 3, 3, 0]
+        ]
+      }],
+      points: [{
+        id: 'point_0',
+        matrix_index: 0
+      }, {
+        id: 'point_1',
+        matrix_index: 1
+      }, {
+        id: 'point_2',
+        matrix_index: 2
+      }, {
+        id: 'point_3',
+        matrix_index: 3
+      }],
+      vehicles: [{
+        id: 'vehicle_0',
+        cost_time_multiplier: 1,
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        matrix_id: 'matrix_0',
+        skills: [['frozen']]
+      }, {
+        id: 'vehicle_1',
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        matrix_id: 'matrix_0',
+        skills: [['cool']]
+      }],
+      services: [{
+        id: 'service_0',
+        activity: {
+          point_id: 'point_1',
+          late_multiplier: 0,
+        },
+        skills: ['frozen']
+      }, {
+        id: 'service_1',
+        activity: {
+          point_id: 'point_2',
+          late_multiplier: 0,
+        },
+        skills: ['cool']
+      }, {
+        id: 'service_2',
+        activity: {
+          point_id: 'point_3',
+          late_multiplier: 0,
+        },
+        skills: ['frozen']
+      }, {
+        id: 'service_3',
+        activity: {
+          point_id: 'point_3',
+          late_multiplier: 0,
+        },
+        skills: ['cool']
+      }],
+      configuration: {
+        preprocessing: {
+          prefer_short_segment: true
+        },
+        resolution: {
+          duration: 10000
+        },
+        restitution: {
+          intermediate_solutions: false,
+        }
+      }
+    }
+    vrp = TestHelper.create(problem)
+    solution = pyvrp.solve(vrp, 'test')
+    assert solution
+    assert_equal 4, solution.routes.first.stops.size
+    assert_equal 4, solution.routes[1].stops.size
+    assert_equal 0, solution.unassigned_stops.size
   end
 end

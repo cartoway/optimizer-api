@@ -481,8 +481,8 @@ module VrpShared
     mutually_exclusive :fill, :empty
     optional(:value, type: Float, desc: 'Value of current quantity. I might be used by any other stop of the route.')
     optional(:setup_value, type: Integer, desc: 'If the associated unit is a counting one, defines the default value to count for this stop (additional quantities for this specific service are to define with the value tag)')
-    optional(:pickup, type: Float, desc: 'pickup quantity is assumed to be picked up during the route to be brought back at vehicle end')
-    optional(:delivery, type: Float, desc: 'delivery quantity is assumed to be loaded at the vehicle start')
+    optional(:pickup, type: Float, values: ->(v) { v >= 0 }, desc: 'pickup quantity is assumed to be picked up during the route to be brought back at vehicle end (Backhaul)')
+    optional(:delivery, type: Float, values: ->(v) { v >= 0 }, desc: 'delivery quantity is assumed to be loaded at the vehicle start to be delivered (Linehaul)')
     mutually_exclusive :pickup, :value
     mutually_exclusive :delivery, :value
   end
