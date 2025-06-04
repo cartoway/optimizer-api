@@ -246,7 +246,7 @@ module Interpreters
           vrp: sub_vrp
         }
         log "Solve #{sub_vrp.id} sub problem"
-        result = OptimizerWrapper.solve(vrp_service)
+        result = Core::Strategies::Orchestration.solve(vrp_service)
         result[:routes].each{ |route|
           @convert_table[route[:vehicle_id]] = route[:activities]
           route[:activities].each{ |activity|
@@ -295,7 +295,7 @@ module Interpreters
         service: @selected_service,
         vrp: new_vrp
       }
-      OptimizerWrapper.solve(vrp_service)
+      Core::Strategies::Orchestration.solve(vrp_service)
     end
 
     def rebuild_entire_route(_subresults, result)
