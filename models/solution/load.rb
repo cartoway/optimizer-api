@@ -29,6 +29,8 @@ module Models
         hash['unit'] = quantity.unit_id
         hash['label'] = quantity.unit.label
         hash['value'] = quantity.value&.round(3)
+        hash['pickup'] = quantity.pickup&.round(3)
+        hash['delivery'] = quantity.delivery&.round(3)
         hash['setup_value'] = quantity.setup_value if quantity.unit.counting
         hash['current_load'] = current&.round(3)
         hash
