@@ -1,8 +1,7 @@
 import json
 import sys
 import numpy as np
-from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PopulationParams
-import pyvrp
+from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PenaltyParams
 from pyvrp.stop import MaxRuntime
 
 def _problem_data_from_dict(cls, data: dict):
@@ -35,7 +34,8 @@ def main(input_path, output_path, timeout=None):
     data = ProblemData.from_dict(json_data)
     m = Model.from_data(data)
     # Solve the problem
-    solve_params = SolveParams(population=PopulationParams(min_pop_size=200))
+    penalty_params = PenaltyParams(target_feasible=0.8)
+    solve_params = SolveParams(penalty=penalty_params)
     result = m.solve(stop=MaxRuntime(int(timeout)), params=solve_params)
 
     best_solution = result.best
