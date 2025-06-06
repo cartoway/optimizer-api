@@ -555,7 +555,7 @@ class Wrappers::PyVRPTest < Minitest::Test
           prefer_short_segment: true
         },
         resolution: {
-          duration: 10000
+          duration: 1000
         },
         restitution: {
           intermediate_solutions: false,
