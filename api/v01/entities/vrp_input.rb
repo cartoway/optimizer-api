@@ -172,31 +172,35 @@ module VrpConfiguration
   end
 
   params :vrp_request_resolution do
-    optional(:duration, type: Integer, values: ->(v) { v.positive? }, allow_blank: false, desc: 'Maximum duration of resolution')
-    optional(:iterations, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
-    optional(:iterations_without_improvment, type: Integer, allow_blank: false, desc: 'Maximum number of iterations without improvement from the best solution already found')
-    optional(:stable_iterations, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
-    optional(:stable_coefficient, type: Float, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
-    optional(:initial_time_out, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: '[ DEPRECATED : use minimum_duration instead]')
-    optional(:strict_skills, type: Boolean, allow_blank: false, documentation: { hidden: true }, desc: 'All skills must be taken into during resolution')
-    optional(:minimum_duration, type: Integer, allow_blank: false, desc: 'Minimum solve duration before the solve could stop (x10 in order to find the first solution) (ORtools only)')
-    optional(:time_out_multiplier, type: Integer, desc: 'The solve could stop itself if the solve duration without finding a new solution is greater than the time currently elapsed multiplicate by this parameter (ORtools only)')
-    optional(:vehicle_limit, type: Integer, desc: 'Limit the maximum number of vehicles within a solution. Not available with periodic heuristic.')
-    optional(:solver_parameter, type: Integer, documentation: { hidden: true }, desc: '[ DEPRECATED : use configuration.preprocessing.first_solution_strategy instead ]')
-    optional(:solver, type: Boolean, desc: 'Defines if solver should be called')
-    optional(:minimize_days_worked, type: Boolean, default: false, desc: '(Periodic heuristic only) Starts filling earlier days of the period first and minimizes the total number of days worked. Available only if first_solution_strategy is \'periodic\'. Not available with ORtools.')
-    optional(:same_point_day, type: Boolean, desc: '(Periodic heuristic only) Forces all services with the same point_id to take place on the same days. Available only if first_solution_strategy is \'periodic\'. Not available ORtools.')
     optional(:allow_partial_assignment, type: Boolean, default: true, desc: '(Periodic heuristic only) Considers a solution as valid even if only a subset of the visits of a service is performed. If disabled, a service can only appear fully assigned or fully unassigned in the solution. Not available with ORtools.')
-    optional(:split_number, type: Integer, desc: 'Give the current number of process for block call')
-    optional(:evaluate_only, type: Boolean, desc: 'Takes the solution provided through relations of type order and computes solution cost and time/distance associated values (Ortools only). Not available for periodic yet.')
-    optional(:several_solutions, type: Integer, allow_blank: false, default: 1, desc: 'Return several solution computed with different matrices')
     optional(:batch_heuristic, type: Boolean, default: OptimizerWrapper.config[:debug][:batch_heuristic], desc: 'Compute each heuristic solution')
-    optional(:variation_ratio, type: Integer, desc: 'Value of the ratio that will change the matrices')
-    optional(:repetition, type: Integer, documentation: { hidden: true }, desc: 'Number of times the optimization process is going to be repeated. Only the best solution is returned.')
     optional(:dicho_algorithm_service_limit, type: Integer, documentation: { hidden: true }, desc: 'Minimum number of services required to allow a call to heuristic dichotomous_approach -- 0: disabled')
     optional(:dicho_inclusion_rate, type: Float, values: ->(v) { v > 0 }, documentation: { hidden: true }, desc: 'Approximate minimum load rate for the solver to consider using a vehicle during an optimization via heuristic dichotomous_approach')
+    optional(:duration, type: Integer, values: ->(v) { v.positive? }, allow_blank: false, desc: 'Maximum duration of resolution')
+    optional(:evaluate_only, type: Boolean, desc: 'Takes the solution provided through relations of type order and computes solution cost and time/distance associated values (Ortools only). Not available for periodic yet.')
+    optional(:initial_time_out, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: '[ DEPRECATED : use minimum_duration instead]')
+    optional(:iterations, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
+    optional(:iterations_without_improvment, type: Integer, allow_blank: false, desc: 'Maximum number of iterations without improvement from the best solution already found')
+    optional(:minimize_days_worked, type: Boolean, default: false, desc: '(Periodic heuristic only) Starts filling earlier days of the period first and minimizes the total number of days worked. Available only if first_solution_strategy is \'periodic\'. Not available with ORtools.')
+    optional(:minimum_duration, type: Integer, allow_blank: false, desc: 'Minimum solve duration before the solve could stop (x10 in order to find the first solution) (ORtools only)')
     # :random_seed number is used to set the Random.srand globally for the worker but a more elegant way would be to generate random streams (stream1 = Random.new(seed1)) and use these streams inside the algorithms to generate random number when needed without affecting the default stream
     optional(:random_seed, type: Integer, default: Random.new_seed, values: ->(v) { v.positive? }, allow_blank: false, desc: 'The random seed used within clustering based methods (max_split_size and dicho_algorithm) and partitioning')
+    optional(:repetition, type: Integer, documentation: { hidden: true }, desc: 'Number of times the optimization process is going to be repeated. Only the best solution is returned.')
+    optional(:same_point_day, type: Boolean, desc: '(Periodic heuristic only) Forces all services with the same point_id to take place on the same days. Available only if first_solution_strategy is \'periodic\'. Not available ORtools.')
+    optional(:several_solutions, type: Integer, allow_blank: false, default: 1, desc: 'Return several solution computed with different matrices')
+    optional(:solver, type: Boolean, desc: 'Defines if solver should be called')
+    optional(:solver_parameter, type: Integer, documentation: { hidden: true }, desc: '[ DEPRECATED : use configuration.preprocessing.first_solution_strategy instead ]')
+    optional(:solver_priority, type: Array[Symbol],
+                               desc: "Prioritize the solver to use. If the first solver is compatible with the problem, it will be used. If not, the second solver will be used, etc. The solver available might depend on your api keyAvailable solvers: #{SolverType.possible_solvers.join(', ')}",
+                               default: [],
+                               coerce_with: ->(value) { SolverType.type_cast(value) })
+    optional(:split_number, type: Integer, desc: 'Give the current number of process for block call')
+    optional(:stable_coefficient, type: Float, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
+    optional(:stable_iterations, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
+    optional(:strict_skills, type: Boolean, allow_blank: false, documentation: { hidden: true }, desc: 'All skills must be taken into during resolution')
+    optional(:time_out_multiplier, type: Integer, desc: 'The solve could stop itself if the solve duration without finding a new solution is greater than the time currently elapsed multiplicate by this parameter (ORtools only)')
+    optional(:vehicle_limit, type: Integer, desc: 'Limit the maximum number of vehicles within a solution. Not available with periodic heuristic.')
+    optional(:variation_ratio, type: Integer, desc: 'Value of the ratio that will change the matrices')
     at_least_one_of :duration, :iterations, :iterations_without_improvment, :stable_iterations, :stable_coefficient, :initial_time_out, :minimum_duration
     mutually_exclusive :initial_time_out, :minimum_duration
     mutually_exclusive :solver, :solver_parameter
@@ -479,8 +483,12 @@ module VrpShared
     optional(:fill, type: Boolean, desc: 'Allows to fill this quantity, increases the current load of the vehicle minimum value amount. Attention: if the value of the fill operation is greater than the capacity of the vehicle, the fill operation cannot be used by the vehicle since value signifies the minimum amount to fill.')
     optional(:empty, type: Boolean, desc: 'Allows to empty this quantity, decreases the current load of the vehicle at most value amount -- completely if no value is given')
     mutually_exclusive :fill, :empty
-    optional(:value, type: Float, desc: 'Value of current quantity')
+    optional(:value, type: Float, desc: 'Value of current quantity. I might be used by any other stop of the route.')
     optional(:setup_value, type: Integer, desc: 'If the associated unit is a counting one, defines the default value to count for this stop (additional quantities for this specific service are to define with the value tag)')
+    optional(:pickup, type: Float, values: ->(v) { v >= 0 }, desc: 'pickup quantity is assumed to be picked up during the route to be brought back at vehicle end (Backhaul)')
+    optional(:delivery, type: Float, values: ->(v) { v >= 0 }, desc: 'delivery quantity is assumed to be loaded at the vehicle start to be delivered (Linehaul)')
+    mutually_exclusive :pickup, :value
+    mutually_exclusive :delivery, :value
   end
 
   params :vrp_request_timewindow do
