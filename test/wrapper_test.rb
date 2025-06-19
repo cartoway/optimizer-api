@@ -135,7 +135,8 @@ class WrapperTest < Minitest::Test
     [:ortools, :vroom].compact.each{ |o|
       # zip_cluster generates sub problems which register identical objects
       vrp = TestHelper.create(problem)
-      solution = Core::Strategies::Orchestration.solve(service: o, vrp: vrp)
+      solution =
+        Core::Strategies::Orchestration.solve(Models::ResolutionContext.new(service: o, vrp: vrp))
       assert_equal size + 2, solution.routes[0].stops.size, "[#{o}] " # 1 depot + 1 rest
       services = solution.routes[0].stops.map(&:service_id)
       1.upto(size - 1).each{ |i|
@@ -2145,7 +2146,9 @@ class WrapperTest < Minitest::Test
     vrp = VRP.basic
     vrp[:vehicles].first[:timewindow] = { start: 0, end: 1 }
     vrp[:vehicles].first[:end_point_id] = vrp[:vehicles].first[:start_point_id]
-    assert Core::Strategies::Orchestration.solve(service: :vroom, vrp: TestHelper.create(vrp))
+    assert Core::Strategies::Orchestration.solve(
+      Models::ResolutionContext.new(service: :vroom, vrp: TestHelper.create(vrp))
+    )
   end
 
   def test_eliminate_even_if_no_start_or_end
@@ -2330,7 +2333,7 @@ class WrapperTest < Minitest::Test
     Core::Strategies::Orchestration.stub(:define_main_process, lambda { |services_vrps, _job_id|
       assert_equal 3, services_vrps.size
       services_vrps.each{ |service_vrp|
-        assert_equal 2, service_vrp[:vrp].services.size
+        assert_equal 2, service_vrp.vrp.services.size
       }
     }) do
       OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)

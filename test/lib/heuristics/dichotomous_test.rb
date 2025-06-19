@@ -166,7 +166,7 @@ class DichotomousTest < Minitest::Test
       vrp = TestHelper.load_vrp(self, fixture_file: 'cluster_dichotomous')
       vrp.vehicles = vrp.vehicles[0..60] # no need for all vehicles
       service_vrp = { vrp: vrp, service: :demo, dicho_level: 0, dicho_denominators: [1], dicho_sides: [0] }
-      while service_vrp[:vrp].services.size > 100
+      while service_vrp.vrp.services.size > 100
         services_vrps_dicho = Interpreters::Dichotomous.split(service_vrp, nil)
         assert_equal 2, services_vrps_dicho.size
 
@@ -188,7 +188,7 @@ class DichotomousTest < Minitest::Test
         services_vrps_dicho.each{ |service_vrp_dicho|
           durations << service_vrp_dicho[:vrp].services_duration
         }
-        assert_equal service_vrp[:vrp].services_duration.to_i, durations.sum.to_i
+        assert_equal service_vrp.vrp.services_duration.to_i, durations.sum.to_i
         assert services_vrps_dicho[0][:vrp].vehicles.size >= services_vrps_dicho[1][:vrp].vehicles.size,
                'Dicho should start solving the side with more vehicles first'
 
@@ -212,7 +212,7 @@ class DichotomousTest < Minitest::Test
       problem[:vehicles] << problem[:vehicles].first.merge({ id: 'another_vehicle' })
       problem[:configuration][:resolution][:dicho_algorithm_service_limit] = 1
       vrp = TestHelper.create(problem)
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
 
       vrp.configuration.resolution.dicho_algorithm_vehicle_limit = 1
 
@@ -251,8 +251,8 @@ class DichotomousTest < Minitest::Test
 
       Interpreters::Dichotomous.stub(:dichotomous_candidate?, lambda{ |service_vrp|
         # modify limits so that the vrp will be dicho_split one and only one time
-        service_vrp[:vrp].configuration.resolution.dicho_division_service_limit = 5
-        service_vrp[:vrp].configuration.resolution.dicho_division_vehicle_limit = 1
+        service_vrp.vrp.configuration.resolution.dicho_division_service_limit = 5
+        service_vrp.vrp.configuration.resolution.dicho_division_vehicle_limit = 1
         true
       }) do
         Interpreters::Dichotomous.stub(:transfer_unused_vehicles, lambda{ |result, sub_service_vrps|
