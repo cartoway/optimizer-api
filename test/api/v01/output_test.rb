@@ -257,7 +257,8 @@ class Api::V01::OutputTest < Minitest::Test
   end
 
   def test_clustering_generated_files
-    all_services_vrps = Marshal.load(File.binread("#{OptimizerWrapper.fixture_vrp_dir}/cluster_to_output.bindump")) # rubocop: disable Security/MarshalLoad
+    raw_services_vrps = Marshal.load(File.binread("#{OptimizerWrapper.fixture_vrp_dir}/cluster_to_output.bindump")) # rubocop: disable Security/MarshalLoad
+    all_services_vrps = Models::ResolutionContext.migrate_array(raw_services_vrps)
     file = OutputHelper::Clustering.generate_files(all_services_vrps, true)
     generated_file = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 
@@ -265,7 +266,7 @@ class Api::V01::OutputTest < Minitest::Test
     assert File.exist?(generated_file + '_csv.gz'), 'Csv file not found'
     csv = CSV.parse(Api::V01::APIBase.dump_vrp_dir.read(file + '_csv'))
 
-    assert_equal all_services_vrps.sum{ |service| service[:vrp].services.size } + 1, csv.size
+    assert_equal all_services_vrps.sum{ |service| service.vrp.services.size } + 1, csv.size
     assert_equal all_services_vrps.size + 1, csv.collect{ |line| line[3] }.uniq!.size
     assert_equal all_services_vrps.size + 1, csv.collect{ |line| line[4] }.uniq!.size
     assert csv.all?{ |line| line[4].count(',').zero? }, 'There should be only one vehicle in vehicles_ids column'
@@ -273,7 +274,8 @@ class Api::V01::OutputTest < Minitest::Test
   end
 
   def test_clustering_generated_files_from_dicho
-    all_services_vrps = Marshal.load(File.binread("#{OptimizerWrapper.fixture_vrp_dir}/dicho_cluster_to_output.bindump")) # rubocop: disable Security/MarshalLoad
+    raw_services_vrps = Marshal.load(File.binread("#{OptimizerWrapper.fixture_vrp_dir}/dicho_cluster_to_output.bindump")) # rubocop: disable Security/MarshalLoad
+    all_services_vrps = Models::ResolutionContext.migrate_array(raw_services_vrps)
     file = OutputHelper::Clustering.generate_files(all_services_vrps)
     generated_file = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 
@@ -281,7 +283,7 @@ class Api::V01::OutputTest < Minitest::Test
     assert File.exist?(generated_file + '_csv.gz'), 'Csv file not found'
     csv = CSV.parse(Api::V01::APIBase.dump_vrp_dir.read(file + '_csv'))
 
-    assert_equal all_services_vrps.sum{ |service| service[:vrp].services.size } + 1, csv.size
+    assert_equal all_services_vrps.sum{ |service| service.vrp.services.size } + 1, csv.size
     assert_equal all_services_vrps.size + 1, csv.collect{ |line| line[3] }.uniq!.size
     assert_equal all_services_vrps.size + 1, csv.collect{ |line| line[4] }.uniq!.size
     assert_equal [nil], csv.collect(&:last).uniq! - ['vehicle_tw_if_only_one']

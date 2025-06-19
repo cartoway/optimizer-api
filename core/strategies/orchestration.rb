@@ -3,15 +3,15 @@ module Core
     module Orchestration
       def define_main_process(services_vrps, job = nil, &block)
         log "--> define_main_process #{services_vrps.size} VRPs"
-        log "activities: #{services_vrps.map{ |sv| sv[:vrp].services.size }}"
-        log "vehicles: #{services_vrps.map{ |sv| sv[:vrp].vehicles.size }}"
+        log "activities: #{services_vrps.map{ |sv| sv.vrp.services.size }}"
+        log "vehicles: #{services_vrps.map{ |sv| sv.vrp.vehicles.size }}"
         log 'configuration.resolution.vehicle_limit: '\
-            "#{services_vrps.map{ |sv| sv[:vrp].configuration.resolution.vehicle_limit }}"
-        log "min_durations: #{services_vrps.map{ |sv| sv[:vrp].configuration.resolution.minimum_duration&.round }}"
-        log "max_durations: #{services_vrps.map{ |sv| sv[:vrp].configuration.resolution.duration&.round }}"
+            "#{services_vrps.map{ |sv| sv.vrp.configuration.resolution.vehicle_limit }}"
+        log "min_durations: #{services_vrps.map{ |sv| sv.vrp.configuration.resolution.minimum_duration&.round }}"
+        log "max_durations: #{services_vrps.map{ |sv| sv.vrp.configuration.resolution.duration&.round }}"
         tic = Time.now
 
-        expected_activity_count = services_vrps.collect{ |sv| sv[:vrp].visits }.sum
+        expected_activity_count = services_vrps.collect{ |sv| sv.vrp.visits }.sum
 
         several_service_vrps = Interpreters::SeveralSolutions.expand_similar_resolutions(services_vrps)
         several_solutions =
@@ -53,7 +53,7 @@ module Core
           }
 
         # demo solver returns a fixed solution
-        unless services_vrps.collect{ |sv| sv[:service] }.uniq == [:demo]
+        unless services_vrps.collect(&:service).uniq == [:demo]
           Core::Components::Solution.check_solutions_consistency(expected_activity_count, several_solutions)
         end
 
@@ -62,7 +62,7 @@ module Core
         percent_unassigned = (100.0 * nb_unassigned / expected_activity_count).round(1)
 
         log "result - #{nb_unassigned} of #{expected_activity_count} (#{percent_unassigned}%) unassigned activities"
-        log "result - #{nb_routes} of #{services_vrps.sum{ |sv| sv[:vrp].vehicles.size }} vehicles used"
+        log "result - #{nb_routes} of #{services_vrps.sum{ |sv| sv.vrp.vehicles.size }} vehicles used"
 
         several_solutions
       ensure
@@ -71,9 +71,9 @@ module Core
 
       # Mutually recursive method
       def define_process(service_vrp, job = nil, &block)
-        vrp = service_vrp[:vrp]
-        dicho_level = service_vrp[:dicho_level].to_i
-        split_level = service_vrp[:split_level].to_i
+        vrp = service_vrp.vrp
+        dicho_level = service_vrp.dicho_level.to_i
+        split_level = service_vrp.split_level.to_i
         shipment_size = vrp.relations.count{ |r| r.type == :shipment }
 
         # Repopulate Objects which are referenced by others using ids but deleted by the multiple sub problem creations
@@ -98,7 +98,7 @@ module Core
         solution ||= solve(service_vrp, job, block)
 
         Cleanse.cleanse(vrp, solution)
-        if service_vrp[:service] != :demo # demo solver returns a fixed solution
+        if service_vrp.service != :demo # demo solver returns a fixed solution
           Core::Components::Solution.check_solutions_consistency(expected_activity_count, [solution])
         end
         log "<-- define_process levels (dicho: #{dicho_level}, split: #{split_level}) "\
@@ -108,14 +108,14 @@ module Core
       end
 
       def solve(service_vrp, job = nil, block = nil)
-        vrp = service_vrp[:vrp]
-        service = service_vrp[:service]
+        vrp = service_vrp.vrp
+        service = service_vrp.service
         optim_wrapper_config = OptimizerWrapper.config[:services][service]
-        dicho_level = service_vrp[:dicho_level]
+        dicho_level = service_vrp.dicho_level
         shipment_size = vrp.relations.count{ |r| r.type == :shipment }
         log "--> optim_wrap::solve VRP (service: #{vrp.services.size} including #{shipment_size} shipment relations, " \
             "vehicle: #{vrp.vehicles.size} v_limit: #{vrp.configuration.resolution.vehicle_limit}) with levels " \
-            "(dicho: #{service_vrp[:dicho_level]}, split: #{service_vrp[:split_level].to_i})", level: :debug
+            "(dicho: #{service_vrp.dicho_level}, split: #{service_vrp.split_level.to_i})", level: :debug
 
         tic = Time.now
 
@@ -276,10 +276,10 @@ module Core
             vehicle_indices.each{ |index| unused_vehicle_indices.delete(index) }
             service_ids = skills_set.flat_map{ |skills| skill_service_ids[skills] }
 
-            service_vrp = { service: nil, vrp: vrp }
+            service_vrp = Models::ResolutionContext.new(service: nil, vrp: vrp)
             Interpreters::SplitClustering.build_partial_service_vrp(service_vrp,
                                                                     service_ids,
-                                                                    vehicle_indices)[:vrp]
+                                                                    vehicle_indices).vrp
           }
         is_sticky = vrp.services.all?{ |service| service.skills.any?{ |skill| skill.to_s.include?("sticky_skill") } }
         total_size =
@@ -296,8 +296,13 @@ module Core
 
         return independent_vrps if unused_vehicle_indices.empty?
 
-        sub_service_vrp = Interpreters::SplitClustering.build_partial_service_vrp({ vrp: vrp }, [], unused_vehicle_indices)
-        independent_vrps.push(sub_service_vrp[:vrp])
+        sub_service_vrp =
+          Interpreters::SplitClustering.build_partial_service_vrp(
+            Models::ResolutionContext.new(service: nil, vrp: vrp),
+            [],
+            unused_vehicle_indices
+          )
+        independent_vrps.push(sub_service_vrp.vrp)
 
         independent_vrps
       end

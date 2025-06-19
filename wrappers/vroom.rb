@@ -76,7 +76,9 @@ module Wrappers
     def solve_synchronous?(vrp)
       compatible_routers = %i[car truck_medium]
       vrp.points.size < 200 &&
-        !Interpreters::SplitClustering.split_solve_candidate?({ vrp: vrp }) &&
+        !Interpreters::SplitClustering.split_solve_candidate?(
+          Models::ResolutionContext.new(vrp: vrp)
+        ) &&
         vrp.vehicles.all?{ |vehicle|
           compatible_routers.include?(vehicle.router_mode&.to_sym)
         } # WARNING: this should change accordingly with router evolution

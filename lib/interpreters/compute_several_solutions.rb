@@ -18,8 +18,10 @@
 module Interpreters
   class SeveralSolutions
     def self.duplicate_service_vrp(service_vrp, vrp_hash = nil)
-      vrp_hash ||= service_vrp[:vrp].as_json
-      service_vrp.dup.tap{ |hash| hash[:vrp] = Models::Vrp.create(vrp_hash, check: false) }
+      vrp_hash ||= service_vrp.vrp.as_json
+      Models::ResolutionContext.new(
+        service_vrp.as_json.merge(vrp: Models::Vrp.create(vrp_hash, check: false))
+      )
     end
 
     def self.check_triangle_inequality(matrix)
@@ -55,30 +57,30 @@ module Interpreters
     end
 
     def self.variate_service_vrp(service_vrp, i)
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       vrp.compute_matrix if vrp.matrices.empty?
 
-      if i.zero? || !service_vrp[:vrp].configuration.resolution.variation_ratio
-        service_vrp[:vrp].matrices[0][:value] = vrp.matrices[0][:time]
+      if i.zero? || !service_vrp.vrp.configuration.resolution.variation_ratio
+        service_vrp.vrp.matrices[0][:value] = vrp.matrices[0][:time]
       else
-        service_vrp[:vrp].matrices = generate_matrix(vrp)
+        service_vrp.vrp.matrices = generate_matrix(vrp)
       end
 
-      (0..service_vrp[:vrp].vehicles.size - 1).each{ |j|
-        service_vrp[:vrp].vehicles[j][:cost_time_multiplier] = 0
-        service_vrp[:vrp].vehicles[j][:cost_distance_multiplier] = 0
-        service_vrp[:vrp].vehicles[j][:cost_value_multiplier] = 1
+      (0..service_vrp.vrp.vehicles.size - 1).each{ |j|
+        service_vrp.vrp.vehicles[j][:cost_time_multiplier] = 0
+        service_vrp.vrp.vehicles[j][:cost_distance_multiplier] = 0
+        service_vrp.vrp.vehicles[j][:cost_value_multiplier] = 1
       }
-      service_vrp[:vrp][:name] << '_' << i.to_s if service_vrp[:vrp][:name]
-      service_vrp[:vrp].configuration.restitution.allow_empty_result = true
-      service_vrp[:vrp].configuration.resolution.several_solutions = 1
+      service_vrp.vrp[:name] << '_' << i.to_s if service_vrp.vrp[:name]
+      service_vrp.vrp.configuration.restitution.allow_empty_result = true
+      service_vrp.vrp.configuration.resolution.several_solutions = 1
 
       service_vrp
     end
 
     def self.edit_service_vrp(service_vrp, heuristic)
-      service_vrp[:vrp].configuration.preprocessing.first_solution_strategy = [verified(heuristic)]
-      service_vrp[:vrp].configuration.restitution.allow_empty_result = true
+      service_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified(heuristic)]
+      service_vrp.vrp.configuration.restitution.allow_empty_result = true
 
       service_vrp
     end
@@ -109,7 +111,7 @@ module Interpreters
 
     def self.expand_similar_resolutions(service_vrps)
       several_resolutions(service_vrps).flat_map{ |each_service_vrps|
-        if each_service_vrps.first[:vrp].configuration.resolution.batch_heuristic
+        if each_service_vrps.first.vrp.configuration.resolution.batch_heuristic
           batch_heuristic(each_service_vrps)
         else
           [each_service_vrps]
@@ -118,18 +120,18 @@ module Interpreters
     end
 
     def self.expand_repetitions(service_vrp)
-      return [service_vrp] if service_vrp[:vrp].configuration.resolution.repetition.nil? ||
-                              service_vrp[:vrp].configuration.resolution.repetition <= 1
+      return [service_vrp] if service_vrp.vrp.configuration.resolution.repetition.nil? ||
+                              service_vrp.vrp.configuration.resolution.repetition <= 1
 
       repeated_service_vrps = [service_vrp]
-      vrp_hash = service_vrp[:vrp].as_json
+      vrp_hash = service_vrp.vrp.as_json
 
-      (service_vrp[:vrp].configuration.resolution.repetition - 1).times{ |repeat_index|
+      (service_vrp.vrp.configuration.resolution.repetition - 1).times{ |repeat_index|
         sub_service_vrp = duplicate_service_vrp(service_vrp, vrp_hash)
-        sub_service_vrp[:vrp].configuration.resolution.repetition = 1
+        sub_service_vrp.vrp.configuration.resolution.repetition = 1
         # so that each repeatation generates a different split
-        sub_service_vrp[:vrp].configuration.resolution.random_seed += repeat_index
-        sub_service_vrp[:vrp].configuration.preprocessing.partitions.each{ |partition|
+        sub_service_vrp.vrp.configuration.resolution.random_seed += repeat_index
+        sub_service_vrp.vrp.configuration.preprocessing.partitions.each{ |partition|
           partition[:restarts] = [partition[:restarts], 5].compact.min
         } # change restarts ?
         repeated_service_vrps << sub_service_vrp
@@ -139,7 +141,7 @@ module Interpreters
     end
 
     def self.custom_heuristics(service, vrp, block = nil)
-      service_vrp = { vrp: vrp, service: service }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: service)
 
       preprocessing_fss = vrp.configuration.preprocessing.first_solution_strategy
 
@@ -154,7 +156,7 @@ module Interpreters
     end
 
     def self.batch_heuristic(service_vrps, custom_heuristics = nil)
-      vrp_hash = service_vrp[:vrp].as_json
+      vrp_hash = service_vrp.vrp.as_json
       (custom_heuristics || OptimizerWrapper::HEURISTICS).collect{ |heuristic|
         service_vrps.collect{ |service_vrp|
           edit_service_vrp(duplicate_service_vrp(service_vrp, vrp_hash), heuristic)
@@ -165,7 +167,7 @@ module Interpreters
     def self.several_resolutions(service_vrps)
       several_service_vrps = [service_vrps]
 
-      (service_vrps.first[:vrp].configuration.resolution.several_solutions - 1).times{ |i|
+      (service_vrps.first.vrp.configuration.resolution.several_solutions - 1).times{ |i|
         several_service_vrps << service_vrps.map{ |service_vrp|
           variate_service_vrp(duplicate_service_vrp(service_vrp), i)
         }
@@ -175,36 +177,36 @@ module Interpreters
     end
 
     def self.find_best_heuristic(service_vrp)
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       custom_heuristics = collect_heuristics(vrp, vrp.configuration.preprocessing.first_solution_strategy)
       if custom_heuristics.size > 1
         log '---> find_best_heuristic'
         tic = Time.now
         percent_allocated_to_heur_selection = 0.3 # spend at most 30% of the total time for heuristic selection
         total_time_allocated_for_heuristic_selection =
-          service_vrp[:vrp].configuration.resolution.duration.to_f * percent_allocated_to_heur_selection
+          service_vrp.vrp.configuration.resolution.duration.to_f * percent_allocated_to_heur_selection
         time_for_each_heuristic = (total_time_allocated_for_heuristic_selection / custom_heuristics.size).to_i
 
         custom_heuristics << 'supplied_initial_routes' if vrp.routes.any?
 
         elapsed_times = []
-        vrp_hash = service_vrp[:vrp].as_json
+        vrp_hash = service_vrp.vrp.as_json
         first_results =
           custom_heuristics.collect{ |heuristic|
             s_vrp = duplicate_service_vrp(service_vrp, vrp_hash)
             if heuristic == 'supplied_initial_routes'
               # fastest for fallback
-              s_vrp[:vrp].configuration.preprocessing.first_solution_strategy = [verified('global_cheapest_arc')]
+              s_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified('global_cheapest_arc')]
             else
-              s_vrp[:vrp].routes = []
-              s_vrp[:vrp].configuration.preprocessing.first_solution_strategy = [verified(heuristic)]
+              s_vrp.vrp.routes = []
+              s_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified(heuristic)]
             end
-            s_vrp[:vrp].configuration.restitution.allow_empty_result = true
-            s_vrp[:vrp].configuration.resolution.batch_heuristic = true
-            s_vrp[:vrp].configuration.resolution.minimum_duration = nil
+            s_vrp.vrp.configuration.restitution.allow_empty_result = true
+            s_vrp.vrp.configuration.resolution.batch_heuristic = true
+            s_vrp.vrp.configuration.resolution.minimum_duration = nil
             # no more than 5 min for single heur
-            s_vrp[:vrp].configuration.resolution.duration = [time_for_each_heuristic, 300000].min
-            heuristic_solution = OptimizerWrapper.config[:services][s_vrp[:service]].solve(s_vrp[:vrp], nil)
+            s_vrp.vrp.configuration.resolution.duration = [time_for_each_heuristic, 300000].min
+            heuristic_solution = OptimizerWrapper.config[:services][s_vrp[:service]].solve(s_vrp.vrp, nil)
             elapsed_times << (heuristic_solution && heuristic_solution[:elapsed] || 0)
             heuristic_solution
           }
