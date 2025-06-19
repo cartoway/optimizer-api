@@ -47,31 +47,29 @@ module OptimizerWrapper
 
     services_vrps =
       split_independent_vrp(vrp).map{ |vrp_element|
-        {
-          service: solver_priority.find{ |s|
-            inapplicable = config[:services][s].inapplicable_solve?(vrp_element)
-            if inapplicable.empty?
-              log "Select service #{s}"
-              true
-            else
-              inapplicable_services << inapplicable
-              log "Skip inapplicable #{s}: #{inapplicable.join(', ')}"
-              false
-            end
-          },
-          vrp: vrp_element,
-          dicho_level: 0,
-          dicho_denominators: [1],
-          dicho_sides: [0]
+        resolution_context = Models::ResolutionContext.new(vrp: vrp_element, job_id: job_id)
+        solver_priority.find{ |s|
+          inapplicable = config[:services][s].inapplicable_solve?(vrp_element)
+          if inapplicable.empty?
+            log "Select service #{s}"
+            resolution_context.service = s
+            true
+          else
+            resolution_context.skipped_services << Models::SkippedService.new(service: s, reasons: inapplicable)
+            inapplicable_services << inapplicable
+            log "Skip inapplicable #{s}: #{inapplicable.join(', ')}"
+            false
+          end
         }
+        resolution_context
       }
 
-    if services_vrps.any?{ |sv| !sv[:service] }
+    if services_vrps.any?{ |sv| !sv.service }
       raise UnsupportedProblemError.new('Cannot apply any of the solver services', inapplicable_services)
     elsif config[:solve][:synchronously] || (
             services_vrps.size == 1 &&
             !vrp.configuration.preprocessing.cluster_threshold &&
-            config[:services][services_vrps[0][:service]].solve_synchronous?(vrp)
+            config[:services][services_vrps[0].service].solve_synchronous?(vrp)
           )
       # The job seems easy enough to perform it with the server
       define_main_process(services_vrps, job_id)

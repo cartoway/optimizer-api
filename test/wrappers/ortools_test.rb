@@ -4251,7 +4251,9 @@ class Wrappers::OrtoolsTest < Minitest::Test
         end
       }
     ) do
-      best_heuristic = Interpreters::SeveralSolutions.find_best_heuristic({ service: :ortools, vrp: vrp })
+      best_heuristic = Interpreters::SeveralSolutions.find_best_heuristic(
+        Models::ResolutionContext.new(service: :ortools, vrp: vrp)
+      )
       refute_equal best_heuristic[:vrp].configuration.preprocessing.first_solution_strategy, 'supplied_initial_routes'
       assert_equal %w[service_4 service_5 service_3 service_2], best_heuristic[:vrp].routes.first.mission_ids,
                    'Initial route does not match with expected returned route'
@@ -5031,17 +5033,19 @@ class Wrappers::OrtoolsTest < Minitest::Test
         :collect_heuristics,
         ->(_, _){ %w[global_cheapest_arc parallel_cheapest_insertion local_cheapest_insertion savings] }
       ) do
-        service_vrp = Interpreters::SeveralSolutions.find_best_heuristic({ service: :ortools, vrp: vrp })
-        assert_equal vrp[:vehicles].size, service_vrp[:vrp].vehicles.collect(&:id).uniq.size,
+        service_vrp = Interpreters::SeveralSolutions.find_best_heuristic(
+          Models::ResolutionContext.new(service: :ortools, vrp: vrp)
+        )
+        assert_equal vrp[:vehicles].size, service_vrp.vrp.vehicles.collect(&:id).uniq.size,
                      'We expect same number of IDs as initial vehicles in problem'
-        assert_equal vrp[:services].size, service_vrp[:vrp].services.collect(&:id).uniq.size,
+        assert_equal vrp[:services].size, service_vrp.vrp.services.collect(&:id).uniq.size,
                      'We expect same number of IDs as initial services in problem'
-        assert_equal 4, service_vrp[:vrp].configuration.preprocessing.heuristic_synthesis.size
+        assert_equal 4, service_vrp.vrp.configuration.preprocessing.heuristic_synthesis.size
         assert_equal ['parallel_cheapest_insertion'],
-                     service_vrp[:vrp].configuration.preprocessing.first_solution_strategy
-        assert_equal 1, service_vrp[:vrp].routes.size
-        assert_equal 'vehicle_1', service_vrp[:vrp].routes.first.vehicle.id
-        assert_equal ['service_5', 'service_3', 'service_1', 'service_2'], service_vrp[:vrp].routes.first.mission_ids
+                     service_vrp.vrp.configuration.preprocessing.first_solution_strategy
+        assert_equal 1, service_vrp.vrp.routes.size
+        assert_equal 'vehicle_1', service_vrp.vrp.routes.first.vehicle.id
+        assert_equal ['service_5', 'service_3', 'service_1', 'service_2'], service_vrp.vrp.routes.first.mission_ids
       end
     end
   end
@@ -5133,7 +5137,9 @@ class Wrappers::OrtoolsTest < Minitest::Test
           Models::Solution.new(status: :killed)
         }
       ) do
-        Core::Strategies::Orchestration.solve(service: :ortools, vrp: TestHelper.create(problem.dup))
+        Core::Strategies::Orchestration.solve(
+          Models::ResolutionContext.new(service: :ortools, vrp: TestHelper.create(problem.dup))
+        )
       end
     }
   end
