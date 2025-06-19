@@ -28,25 +28,25 @@ class SplitClusteringTest < Minitest::Test
 
     def test_same_location_different_clusters
       vrp = TestHelper.load_vrp(self, fixture_file: 'cluster_dichotomous')
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
       vrp.services.each{ |s|
         s.skills = []
       } # The instance has old "Pas X" style day skills, we purposely ignore them otherwise balance is not possible
       # entity: `vehicle` setting only works if the number of clusters is equal to the number of vehicles.
       vrp.vehicles = [vrp.vehicles.first]
 
-      while service_vrp[:vrp].services.size > 100
+      while service_vrp.vrp.services.size > 100
         total = Hash.new(0)
-        service_vrp[:vrp].services.each{ |s| s.quantities.each{ |q| total[q.unit.id] += q.value } }
-        service_vrp[:vrp].vehicles.each{ |v|
+        service_vrp.vrp.services.each{ |s| s.quantities.each{ |q| total[q.unit.id] += q.value } }
+        service_vrp.vrp.vehicles.each{ |v|
           v.capacities =
-            service_vrp[:vrp].units.collect{ |u|
+            service_vrp.vrp.units.collect{ |u|
               Models::Capacity.create(unit: u, limit: total[u.id] * 0.65)
             }
         }
 
-        original = service_vrp[:vrp].vehicles.first
-        service_vrp[:vrp].vehicles << Models::Vehicle.create(
+        original = service_vrp.vrp.vehicles.first
+        service_vrp.vrp.vehicles << Models::Vehicle.create(
           duration: original.duration,
           matrix_id: original.matrix_id,
           skills: original.skills,
@@ -95,7 +95,7 @@ class SplitClusteringTest < Minitest::Test
             we expect that the clusters are balanced.
             However, currently it takes too long and the results are not balanced."
       vrp = TestHelper.load_vrp(self, fixture_file: 'cluster_two_phases')
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
       services_vrps_days =
         Interpreters::SplitClustering.split_balanced_kmeans(service_vrp, 80, cut_symbol: :duration,
                                                                              entity: :work_day,
@@ -123,7 +123,7 @@ class SplitClusteringTest < Minitest::Test
     def test_cluster_one_phase_vehicle
       vrp = TestHelper.load_vrp(self, fixture_file: 'cluster_one_phase')
 
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
 
       total_durations = vrp.services_duration
       services_vrps_vehicles =
@@ -169,7 +169,7 @@ class SplitClusteringTest < Minitest::Test
           Interpreters::SplitClustering.send(:__minitest_stub__add_duration_from_and_to_depot, vrp, data_items)
         }) do
           assert Interpreters::SplitClustering.split_balanced_kmeans(
-            { vrp: TestHelper.create(problem), service: :demo }, problem[:vehicles].size,
+            Models::ResolutionContext.new(vrp: TestHelper.create(problem), service: :demo), problem[:vehicles].size,
             cut_symbol: :duration, entity: :vehicle, restarts: 1
           )
         end
@@ -186,7 +186,7 @@ class SplitClusteringTest < Minitest::Test
     def test_cluster_two_phases
       vrp = TestHelper.load_vrp(self)
 
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
       services_vrps_vehicles =
         Interpreters::SplitClustering.split_balanced_kmeans(service_vrp, 16, cut_symbol: :duration,
                                                                              entity: :vehicle,
@@ -251,7 +251,12 @@ class SplitClusteringTest < Minitest::Test
     def test_length_centroid
       vrp = TestHelper.load_vrp(self)
 
-      services_vrps = Interpreters::SplitClustering.generate_split_vrps({ vrp: vrp, service: :demo }, nil, nil)
+      services_vrps =
+        Interpreters::SplitClustering.generate_split_vrps(
+          Models::ResolutionContext.new(vrp: vrp, service: :demo),
+          nil,
+          nil
+        )
       assert services_vrps
       assert_equal 35, services_vrps.size
     end
@@ -266,7 +271,7 @@ class SplitClusteringTest < Minitest::Test
         metric: 'duration',
         entity: :vehicle
       }]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -287,7 +292,7 @@ class SplitClusteringTest < Minitest::Test
           { start: 0, end: 20, day_index: 4 }
         ]
       }
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -299,7 +304,7 @@ class SplitClusteringTest < Minitest::Test
       vrp[:configuration][:preprocessing][:partitions] = [TestHelper.vehicle_and_days_partitions.first]
       vrp[:configuration][:preprocessing][:partitions][0][:restarts] = 1
 
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -307,15 +312,15 @@ class SplitClusteringTest < Minitest::Test
       assert_equal vrp[:vehicles].size, generated_services_vrps.size
 
       assert_in_epsilon vrp[:configuration][:resolution][:duration],
-                        generated_services_vrps.sum{ |sv| sv[:vrp].configuration.resolution.duration },
+                        generated_services_vrps.sum{ |sv| sv.vrp.configuration.resolution.duration },
                         vrp[:vehicles].size # due to rounding we might have overshoot the duration
 
       s_ratio =
-        generated_services_vrps.map{ |sv| sv[:vrp].services.size }.inject{ |ratio, service_count|
+        generated_services_vrps.map{ |sv| sv.vrp.services.size }.inject{ |ratio, service_count|
           ratio / service_count.to_f
         }
       d_ratio =
-        generated_services_vrps.map{ |sv| sv[:vrp].configuration.resolution.duration }.inject{ |ratio, duration|
+        generated_services_vrps.map{ |sv| sv.vrp.configuration.resolution.duration }.inject{ |ratio, duration|
           ratio / duration.to_f
         }
       assert_in_epsilon s_ratio, d_ratio, 0.05 # 5% diff can be expected due to rounding in extreme cases
@@ -327,7 +332,7 @@ class SplitClusteringTest < Minitest::Test
       vrp[:configuration][:preprocessing][:partitions].each{ |partition|
         partition[:metric] = :visits
       }
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -340,7 +345,7 @@ class SplitClusteringTest < Minitest::Test
         metric: :visits,
         entity: :work_day
       }]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -358,7 +363,7 @@ class SplitClusteringTest < Minitest::Test
 
       vrp[:services][0][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 0 }]
       vrp[:services][3][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 1 }]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -373,8 +378,8 @@ class SplitClusteringTest < Minitest::Test
       refute_equal only_monday_cluster, only_tuesday_cluster
 
       (vrp[:services] + vrp[:vehicles]).each{ |v| v.delete(:skills) }
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [9, 10]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [9, 10]
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -395,8 +400,8 @@ class SplitClusteringTest < Minitest::Test
 
       vrp[:services][0][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 0 }]
       vrp[:services][3][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 1 }]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [0, 2]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [0, 2]
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -412,9 +417,9 @@ class SplitClusteringTest < Minitest::Test
 
       vrp[:services][0][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 0 }]
       vrp[:services][3][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 1 }]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp].services.each{ |s| s.skills = [] }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [9, 10]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp.services.each{ |s| s.skills = [] }
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [9, 10]
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -445,13 +450,17 @@ class SplitClusteringTest < Minitest::Test
 
       assert_raises ArgumentError do # initialising centroids with incompatible services should raise an error
         vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [0, 1]
-        Interpreters::SplitClustering.generate_split_vrps(vrp: TestHelper.create(vrp), service: :demo)
+        Interpreters::SplitClustering.generate_split_vrps(
+          Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+        )
       end
 
       # initialising with other services should be okay
       vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [2, 3]
       generated_services_vrps =
-        Interpreters::SplitClustering.generate_split_vrps(vrp: TestHelper.create(vrp), service: :demo)
+        Interpreters::SplitClustering.generate_split_vrps(
+          Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+        )
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
 
@@ -476,8 +485,8 @@ class SplitClusteringTest < Minitest::Test
       }]
       vrp[:services][0][:activity][:timewindows] = [{ start: 0, end: 10, day_index: 0 }]
       vrp[:vehicles].first[:sequence_timewindows].delete_if{ |tw| tw[:day_index].zero? }
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [1, 2]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [1, 2]
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -492,8 +501,8 @@ class SplitClusteringTest < Minitest::Test
       vrp = VRP.lat_lon_periodic_two_vehicles
       vrp[:configuration][:preprocessing][:partitions] = TestHelper.vehicle_and_days_partitions
 
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [9, 10]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [9, 10]
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -512,8 +521,8 @@ class SplitClusteringTest < Minitest::Test
       }]
       vrp[:services].first[:skills] = [:skill]
       vrp[:vehicles][0][:skills] = [[:skill]]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [1, 2]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [1, 2]
       generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
@@ -527,7 +536,9 @@ class SplitClusteringTest < Minitest::Test
     def test_no_doubles_3000
       vrp = TestHelper.load_vrp(self)
 
-      generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(vrp: vrp, service: :demo)
+      generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo)
+      )
       generated_services_vrps.flatten!
       generated_services_vrps.compact!
       assert_equal 15, generated_services_vrps.size
@@ -625,7 +636,7 @@ class SplitClusteringTest < Minitest::Test
       vrp.vehicles = Interpreters::SplitClustering.list_vehicles(vrp.configuration.schedule.range_indices,
                                                                  vrp.vehicles, :work_day)
 
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
       services_vrps =
         Interpreters::SplitClustering.split_balanced_kmeans(service_vrp, 5, cut_symbol: :duration,
                                                                             entity: :work_day,
@@ -654,8 +665,8 @@ class SplitClusteringTest < Minitest::Test
       }
       vrp[:services].first[:skills] = ['skill']
       vrp[:vehicles][0][:skills] = [['skill'], ['other_skill']]
-      service_vrp = { vrp: TestHelper.create(vrp), service: :demo }
-      service_vrp[:vrp][:configuration][:preprocessing][:partitions].first[:centroids] = [1, 2]
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      service_vrp.vrp[:configuration][:preprocessing][:partitions].first[:centroids] = [1, 2]
 
       assert_raises OptimizerWrapper::UnsupportedProblemError do
         Interpreters::SplitClustering.generate_split_vrps(service_vrp)
@@ -752,14 +763,14 @@ class SplitClusteringTest < Minitest::Test
 
       called = false
       Interpreters::SplitClustering.stub(:split_solve_core, lambda{ |service_vrp, _job|
-        split = service_vrp[:split_solve_data][:service_vehicle_assignments].transform_values!{ |v| v.collect(&:id) }
+        split = service_vrp.split_solve_data[:service_vehicle_assignments].transform_values!{ |v| v.collect(&:id) }
         [1, 4].each{ |s| assert_includes split['vehicle_0'], "service_#{s}", "service_#{s} should stay on vehicle_0" }
         [2, 5].each{ |s| assert_includes split['vehicle_1'], "service_#{s}", "service_#{s} should stay on vehicle_1" }
         called = true
         return
       }) do
         vrp = TestHelper.create(problem)
-        Interpreters::SplitClustering.split_solve({ service: :ortools, vrp: vrp, dicho_level: 0 })
+        Interpreters::SplitClustering.split_solve(Models::ResolutionContext.new(service: :ortools, vrp: vrp))
       end
       assert called, 'split_solve_core should have been called'
     end
@@ -781,22 +792,22 @@ class SplitClusteringTest < Minitest::Test
 
       called = false
       Interpreters::SplitClustering.stub(:split_solve_core, lambda{ |service_vrp, _job|
-        refute_nil service_vrp[:split_level], 'split_level should have been defined before split_solve_core'
-        assert_operator service_vrp[:split_level], :<, 4,
+        refute_nil service_vrp.split_level, 'split_level should have been defined before split_solve_core'
+        assert_operator service_vrp.split_level, :<, 4,
                         'Infinite loop?: split_level should not reach 4. Grouping of vehicle points might be the reason'
-        assert service_vrp[:split_solve_data][:representative_vrp].points.none?{ |p| p.location.lat.nan? },
+        assert service_vrp.split_solve_data[:representative_vrp].points.none?{ |p| p.location.lat.nan? },
                'Empty vehicles should not reach split_solve_core'
         called = true
         Interpreters::SplitClustering.send(:__minitest_stub__split_solve_core, service_vrp) # call original function
       }) do
         Core::Strategies::Orchestration.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
-          vrp = service_vrp[:vrp]
-          service = service_vrp[:service]
+          vrp = service_vrp.vrp
+          service = service_vrp.service
           OptimizerWrapper.config[:services][service].detect_unfeasible_services(vrp)
           vrp.empty_solution(service)
         }) do
           vrp = TestHelper.create(problem)
-          Interpreters::SplitClustering.split_solve({ service: :ortools, vrp: vrp, dicho_level: 0 })
+          Interpreters::SplitClustering.split_solve(Models::ResolutionContext.new(service: :ortools, vrp: vrp))
         end
       end
       assert called, 'split_solve_core should have been called'
@@ -890,13 +901,13 @@ class SplitClusteringTest < Minitest::Test
 
       called = false
       Interpreters::SplitClustering.stub(:split_solve_core, lambda{ |service_vrp, _job|
-        assert_operator service_vrp[:split_level], :<, 3, # infinite loop
+        assert_operator service_vrp.split_level, :<, 3, # infinite loop
                         'Infinite loop?: split_level should not reach 3. Split should handle linking relations!'
         called = true
         Interpreters::SplitClustering.send(:__minitest_stub__split_solve_core, service_vrp) # call original function
       }) do
         Core::Strategies::Orchestration.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
-          vrp = service_vrp[:vrp]
+          vrp = service_vrp.vrp
           # check that only necessary relations are present with all its services
           assert_equal problem[:relations].count{ |r|
                          r[:linked_ids]&.any?{ |id| vrp.services.any?{ |s| s.id == id } } ||
@@ -912,12 +923,14 @@ class SplitClusteringTest < Minitest::Test
                    needs_to_stay_in_the_same_side.none?{ |id| vrp.services.any?{ |s| s.id == id } },
                  "#{needs_to_stay_in_the_same_side} should stay on the same subproblem due to relations"
 
-          service = service_vrp[:service]
+          service = service_vrp.service
           OptimizerWrapper.config[:services][service].detect_unfeasible_services(vrp)
           vrp.empty_solution(service)
         }) do
           vrp = TestHelper.create(problem)
-          Interpreters::SplitClustering.split_solve({ service: :ortools, vrp: vrp, dicho_level: 0 })
+          Interpreters::SplitClustering.split_solve(
+            Models::ResolutionContext.new(service: :ortools, vrp: vrp, dicho_level: 0)
+          )
         end
       end
       assert called, 'split_solve_core should have been called'
@@ -929,7 +942,9 @@ class SplitClusteringTest < Minitest::Test
       OptimizerWrapper.config[:debug][:output_clusters] = true
 
       # just checks that function does not produce an error
-      Interpreters::SplitClustering.generate_split_vrps(vrp: vrp)
+      Interpreters::SplitClustering.generate_split_vrps(
+        Models::ResolutionContext.new(vrp: vrp)
+      )
     ensure
       OptimizerWrapper.config[:debug][:output_clusters] = tmp_output_clusters
     end
@@ -978,8 +993,13 @@ class SplitClusteringTest < Minitest::Test
       vrp = TestHelper.load_vrp(self)
 
       services_vrps =
-        Interpreters::SplitClustering.split_balanced_kmeans({ vrp: vrp, service: :demo }, vrp.vehicles.size,
-                                                            cut_symbol: :duration, entity: :vehicle, restarts: 1)
+        Interpreters::SplitClustering.split_balanced_kmeans(
+          Models::ResolutionContext.new(vrp: vrp, service: :demo),
+          vrp.vehicles.size,
+          cut_symbol: :duration,
+          entity: :vehicle,
+          restarts: 1
+        )
 
       diff = (services_vrps[1][:vrp][:services].size - services_vrps[0][:vrp][:services].size).abs.to_f
       assert diff / vrp.services.size < 0.93,
@@ -1167,7 +1187,10 @@ class SplitClusteringTest < Minitest::Test
       problem[:matrices] << problem[:matrices][0].merge({ id: 'm2' })
       vrp = TestHelper.create(problem)
 
-      sub_vrp = Interpreters::SplitClustering.build_partial_service_vrp({ vrp: vrp }, vrp.services.map(&:id), [0])[:vrp]
+      sub_vrp =
+        Interpreters::SplitClustering.build_partial_service_vrp(
+          Models::ResolutionContext.new(vrp: vrp), vrp.services.map(&:id), [0]
+        )[:vrp]
 
       assert_equal %w[m1 m2], sub_vrp.matrices.map(&:id),
                    'Split should not eliminate matrices in case vehicles are moved between subproblems'
@@ -1180,7 +1203,7 @@ class SplitClusteringTest < Minitest::Test
       [[[]], [['skill']], [['skill'], []]].each{ |skill_set|
         problem[:vehicles].first[:skills] = skill_set
         Interpreters::SplitClustering.split_balanced_kmeans(
-          { vrp: TestHelper.create(problem), service: :demo }, problem[:vehicles].size,
+          Models::ResolutionContext.new(vrp: TestHelper.create(problem), service: :demo), problem[:vehicles].size,
           entity: :vehicle, restarts: 1, max_iterations: 1
         )
       }
@@ -1190,7 +1213,7 @@ class SplitClusteringTest < Minitest::Test
       error =
         assert_raises OptimizerWrapper::UnsupportedProblemError do
           Interpreters::SplitClustering.split_balanced_kmeans(
-            { vrp: TestHelper.create(problem), service: :demo }, problem[:vehicles].size,
+            Models::ResolutionContext.new(vrp: TestHelper.create(problem), service: :demo), problem[:vehicles].size,
             entity: :vehicle, restarts: 1, max_iterations: 1
           )
         end
@@ -1217,7 +1240,10 @@ class SplitClusteringTest < Minitest::Test
     def test_same_vehicle_relation
       problem = VRP.lat_lon_two_vehicles
       problem[:configuration][:preprocessing] = { partitions: [TestHelper.vehicle_and_days_partitions[0]] }
-      clusters = Interpreters::SplitClustering.generate_split_vrps({ service: :demo, vrp: TestHelper.create(problem) })
+      clusters =
+        Interpreters::SplitClustering.generate_split_vrps(
+          Models::ResolutionContext.new(service: :demo, vrp: TestHelper.create(problem))
+        )
 
       expected_linked_ids = [clusters[0][:vrp].services.last.id, clusters[1][:vrp].services.last.id]
       problem[:relations] = [{
@@ -1226,7 +1252,10 @@ class SplitClusteringTest < Minitest::Test
       }]
 
       vrp = TestHelper.create(problem)
-      clusters = Interpreters::SplitClustering.generate_split_vrps({ service: :demo, vrp: vrp })
+      clusters =
+        Interpreters::SplitClustering.generate_split_vrps(
+          Models::ResolutionContext.new(service: :demo, vrp: vrp)
+        )
       first_cluster = clusters[0][:vrp].services.collect(&:id)
       second_cluster = clusters[1][:vrp].services.collect(&:id)
       assert (expected_linked_ids - first_cluster).empty? || (expected_linked_ids - second_cluster).empty?,
@@ -1236,7 +1265,9 @@ class SplitClusteringTest < Minitest::Test
     def test_same_cluster_relation_two_partitions
       problem = VRP.lat_lon_periodic_two_vehicles
       problem[:configuration][:preprocessing] = { partitions: TestHelper.vehicle_and_days_partitions }
-      clusters = Interpreters::SplitClustering.generate_split_vrps({ service: :demo, vrp: TestHelper.create(problem) })
+      clusters = Interpreters::SplitClustering.generate_split_vrps(
+        Models::ResolutionContext.new(service: :demo, vrp: TestHelper.create(problem))
+      )
       assert_equal 2, clusters.group_by{ |c| c[:vrp].vehicles.collect(&:original_id) }.size
       expected_linked_ids =
         clusters.group_by{ |c|
@@ -1251,7 +1282,9 @@ class SplitClusteringTest < Minitest::Test
         linked_ids: expected_linked_ids
       }]
 
-      clusters = Interpreters::SplitClustering.generate_split_vrps({ service: :demo, vrp: TestHelper.create(problem) })
+      clusters = Interpreters::SplitClustering.generate_split_vrps(
+        Models::ResolutionContext.new(service: :demo, vrp: TestHelper.create(problem))
+      )
       service_clusters =
         expected_linked_ids.collect{ |id|
           clusters.find{ |c| c[:vrp].services.any?{ |s| s.id == id } }[:vrp].services.first.skills
@@ -1262,6 +1295,31 @@ class SplitClusteringTest < Minitest::Test
       assert_equal 1, vehicle_data.uniq.size
       # those services should be assigned to different days
       assert_equal 2, day_data.uniq.size
+    end
+
+    def test_resolution_context_integration
+      vrp = VRP.lat_lon_periodic_two_vehicles
+      vrp[:configuration][:preprocessing][:partitions] = [{
+        technique: 'balanced_kmeans',
+        metric: 'duration',
+        entity: :work_day
+      }]
+
+      service_vrp = Models::ResolutionContext.new(vrp: TestHelper.create(vrp), service: :demo)
+      generated_services_vrps = Interpreters::SplitClustering.generate_split_vrps(service_vrp)
+      generated_services_vrps.flatten!
+      generated_services_vrps.compact!
+
+      # Verify that all generated items are ResolutionContext instances
+      generated_services_vrps.each do |sv|
+        assert_instance_of Models::ResolutionContext, sv
+        assert_instance_of Models::Vrp, sv.vrp
+        assert_equal :demo, sv.service
+      end
+
+      # Verify that we can access vrp properties through the ResolutionContext
+      total_services = generated_services_vrps.sum { |sv| sv.vrp.services.size }
+      assert_equal vrp[:services].size, total_services
     end
   end
 end
