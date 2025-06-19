@@ -84,31 +84,43 @@ class DichotomousTest < Minitest::Test
       }
 
       vrp = TestHelper.create(limit_vrp)
-      refute Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :demo, dicho_level: 0)
+      refute Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
+      )
 
       vrp = limit_vrp.dup
       vrp[:vehicles] = limit_vrp[:vehicles].dup
       vrp[:vehicles] << { id: "v#{limits[:vehicle] + 1}", router_mode: 'car', router_dimension: 'time', skills: [[]] }
       vrp = TestHelper.create(vrp)
-      refute Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :demo, dicho_level: 0)
+      refute Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
+      )
 
       vrp = limit_vrp.dup
       vrp[:services] = limit_vrp[:services].dup
       vrp[:services] << { id: "s#{limits[:service] + 1}", activity: { point_id: 'p1' }}
       vrp = TestHelper.create(vrp)
-      refute Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :demo, dicho_level: 0)
+      refute Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
+      )
 
       vrp = limit_vrp.dup
       vrp[:services] << { id: "s#{limits[:service] + 1}", activity: { point_id: 'p1' }}
       vrp[:vehicles] << { id: "v#{limits[:vehicle] + 1}", router_mode: 'car', router_dimension: 'time', skills: [[]] }
       vrp = TestHelper.create(vrp)
-      refute Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :demo, dicho_level: 0)
+      refute Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
+      )
 
       vrp.vehicles.each{ |v| v.duration = 36000 }
-      assert Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :demo, dicho_level: 0)
+      assert Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
+      )
 
       vrp.configuration.resolution.dicho_algorithm_service_limit = 0
-      refute Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :demo, dicho_level: 0)
+      refute Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
+      )
     end
 
     def test_infinite_loop_due_to_impossible_to_cluster
@@ -165,17 +177,24 @@ class DichotomousTest < Minitest::Test
       # Moreover, it would increase the performance of clustering.
       vrp = TestHelper.load_vrp(self, fixture_file: 'cluster_dichotomous')
       vrp.vehicles = vrp.vehicles[0..60] # no need for all vehicles
-      service_vrp = { vrp: vrp, service: :demo, dicho_level: 0, dicho_denominators: [1], dicho_sides: [0] }
-      while service_vrp[:vrp].services.size > 100
+      service_vrp =
+        Models::ResolutionContext.new(
+          vrp: vrp,
+          service: :demo,
+          dicho_level: 0,
+          dicho_denominators: [1],
+          dicho_sides: [0]
+        )
+      while service_vrp.vrp.services.size > 100
         services_vrps_dicho = Interpreters::Dichotomous.split(service_vrp, nil)
         assert_equal 2, services_vrps_dicho.size
 
         locations_one =
-          services_vrps_dicho.first[:vrp].services.map{ |s|
+          services_vrps_dicho.first.vrp.services.map{ |s|
             [s.activity.point.location.lat, s.activity.point.location.lon]
           }                         # clusters.first.data_items.map{ |d| [d[0], d[1]] }
         locations_two =
-          services_vrps_dicho.second[:vrp].services.map{ |s|
+          services_vrps_dicho.second.vrp.services.map{ |s|
             [s.activity.point.location.lat, s.activity.point.location.lon]
           }                         # clusters.second.data_items.map{ |d| [d[0], d[1]] }
         # split is done by vehicle + by representative_vrp so this might lead to some points get split between sides
@@ -186,10 +205,10 @@ class DichotomousTest < Minitest::Test
 
         durations = []
         services_vrps_dicho.each{ |service_vrp_dicho|
-          durations << service_vrp_dicho[:vrp].services_duration
+          durations << service_vrp_dicho.vrp.services_duration
         }
-        assert_equal service_vrp[:vrp].services_duration.to_i, durations.sum.to_i
-        assert services_vrps_dicho[0][:vrp].vehicles.size >= services_vrps_dicho[1][:vrp].vehicles.size,
+        assert_equal service_vrp.vrp.services_duration.to_i, durations.sum.to_i
+        assert services_vrps_dicho[0].vrp.vehicles.size >= services_vrps_dicho[1].vrp.vehicles.size,
                'Dicho should start solving the side with more vehicles first'
 
         average_duration = durations.sum / durations.size
@@ -202,7 +221,7 @@ class DichotomousTest < Minitest::Test
                  "Duration ##{index} (#{duration}) should be between #{min_duration} and #{max_duration}"
         }
 
-        service_vrp = services_vrps_dicho.min_by{ |sv| sv[:vrp].services_duration }
+        service_vrp = services_vrps_dicho.min_by{ |sv| sv.vrp.services_duration }
       end
     end
 
@@ -212,7 +231,7 @@ class DichotomousTest < Minitest::Test
       problem[:vehicles] << problem[:vehicles].first.merge({ id: 'another_vehicle' })
       problem[:configuration][:resolution][:dicho_algorithm_service_limit] = 1
       vrp = TestHelper.create(problem)
-      service_vrp = { vrp: vrp, service: :demo }
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
 
       vrp.configuration.resolution.dicho_algorithm_vehicle_limit = 1
 
@@ -228,10 +247,10 @@ class DichotomousTest < Minitest::Test
       vrp = TestHelper.load_vrp(self, fixture_file: 'two_phases_clustering_sched_with_freq_and_same_point_day_5veh')
       assert vrp.services.group_by{ |s| s.activity.point_id }.any?{ |_pt_id, set| set.size > 1 },
              'This test is useless if there are not several services with same point_id'
-      split = Interpreters::Dichotomous.send(:split,
-                                             { vrp: vrp, dicho_sides: [], dicho_denominators: [], dicho_level: 0 })
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, dicho_sides: [], dicho_denominators: [], dicho_level: 0)
+      split = Interpreters::Dichotomous.send(:split, service_vrp)
       assert_equal 2, split.size
-      assert_equal vrp.services.size, split.sum{ |s| s[:vrp].services.size }, 'Wrong number of services returned'
+      assert_equal vrp.services.size, split.sum{ |s| s.vrp.services.size }, 'Wrong number of services returned'
     end
 
     def test_rest_cannot_appear_as_a_mission_in_the_initial_route
@@ -251,21 +270,21 @@ class DichotomousTest < Minitest::Test
 
       Interpreters::Dichotomous.stub(:dichotomous_candidate?, lambda{ |service_vrp|
         # modify limits so that the vrp will be dicho_split one and only one time
-        service_vrp[:vrp].configuration.resolution.dicho_division_service_limit = 5
-        service_vrp[:vrp].configuration.resolution.dicho_division_vehicle_limit = 1
+        service_vrp.vrp.configuration.resolution.dicho_division_service_limit = 5
+        service_vrp.vrp.configuration.resolution.dicho_division_vehicle_limit = 1
         true
       }) do
         Interpreters::Dichotomous.stub(:transfer_unused_vehicles, lambda{ |result, sub_service_vrps|
-          sub_service_vrps[0][:vrp].vehicles << Helper.deep_copy(
-            sub_service_vrps[0][:vrp].vehicles.last,
+          sub_service_vrps[0].vrp.vehicles << Helper.deep_copy(
+            sub_service_vrps[0].vrp.vehicles.last,
             override: { id: 'extra_unused_vehicle' },
             shallow_copy: [:start_point] # regenerate end_point to check
           )
-          sub_service_vrps[0][:vrp].points << sub_service_vrps[0][:vrp].vehicles.last.end_point
+          sub_service_vrps[0].vrp.points << sub_service_vrps[0].vrp.vehicles.last.end_point
 
           Interpreters::Dichotomous.send(:__minitest_stub__transfer_unused_vehicles, result, sub_service_vrps)
 
-          sv_one = sub_service_vrps[1][:vrp]
+          sv_one = sub_service_vrps[1].vrp
           transferred_vehicle = sv_one.vehicles.last
           assert_equal 'extra_unused_vehicle', transferred_vehicle.id,
                        'transfer_unused_vehicles should have transfer the extra vehicle'

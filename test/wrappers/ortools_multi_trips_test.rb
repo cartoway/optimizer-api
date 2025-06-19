@@ -144,7 +144,7 @@ class MultiTripsTest < Minitest::Test
     vrp = TestHelper.create(vrp)
 
     Core::Strategies::Orchestration.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
-      sub_vrp_vehicle_ids = service_vrp[:vrp].vehicles.map(&:id)
+      sub_vrp_vehicle_ids = service_vrp.vrp.vehicles.map(&:id)
 
       # check vehicle trips are not split
       vrp.relations.each{ |relation|

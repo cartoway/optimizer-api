@@ -243,17 +243,17 @@ module OutputHelper
   # To output clusters generated
   class Clustering
     def self.generate_files(all_service_vrps, two_stages = false, job = nil)
-      vrp_name = all_service_vrps.first[:vrp].name
+      vrp_name = all_service_vrps.first.vrp.name
       file_name = ('generated_clusters' + '_' + [vrp_name, job,
                                                  Time.now.strftime('%H:%M:%S')].compact.join('_')).parameterize
 
       polygons = []
       csv_lines = [['id', 'lat', 'lon', 'cluster', 'vehicles_ids', 'vehicle_tw_if_only_one']]
       all_service_vrps.each_with_index{ |service_vrp, cluster_index|
-        # unless service_vrp[:vrp].services.empty? -----> possible to get here if cluster empty ??
+        # unless service_vrp.vrp.services.empty? -----> possible to get here if cluster empty ??
         polygons << collect_hulls(service_vrp)
-        service_vrp[:vrp].services.each{ |service|
-          csv_lines << csv_line(service_vrp[:vrp], service, cluster_index, two_stages)
+        service_vrp.vrp.services.each{ |service|
+          csv_lines << csv_line(service_vrp.vrp, service, cluster_index, two_stages)
         }
       }
 
@@ -275,24 +275,24 @@ module OutputHelper
 
     def self.collect_hulls(service_vrp)
       vector =
-        service_vrp[:vrp].services.collect{ |service|
+        service_vrp.vrp.services.collect{ |service|
           [service.activity.point.location.lon, service.activity.point.location.lat]
         }
       hull = Hull.get_hull(vector)
       return nil if hull.nil?
 
       unit_objects =
-        service_vrp[:vrp].units.collect{ |unit|
+        service_vrp.vrp.units.collect{ |unit|
           {
             unit_id: unit.id,
-            value: service_vrp[:vrp].services.collect{ |service|
+            value: service_vrp.vrp.services.collect{ |service|
               service_quantity = service.quantities.find{ |quantity| quantity.unit_id == unit.id }
               service_quantity&.value || 0
             }.reduce(&:+)
           }
         }
       duration =
-        service_vrp[:vrp][:services].group_by{ |s| s.activity.point_id }.sum{ |_point_id, ss|
+        service_vrp.vrp[:services].group_by{ |s| s.activity.point_id }.sum{ |_point_id, ss|
           first = ss.min_by{ |s| -s.visits_number }
           first.activity.setup_duration * first.visits_number + ss.sum{ |s| s.activity.duration * s.visits_number }
         }
@@ -301,7 +301,7 @@ module OutputHelper
         properties: Hash[
           unit_objects.collect{ |unit_object| [unit_object[:unit_id].to_sym, unit_object[:value]] } +
           [[:duration, duration]] +
-          [[:vehicle, service_vrp[:vrp].vehicles.size == 1 ? service_vrp[:vrp].vehicles.first&.id : nil]]
+          [[:vehicle, service_vrp.vrp.vehicles.size == 1 ? service_vrp.vrp.vehicles.first&.id : nil]]
         ],
         geometry: {
           type: 'Polygon',
