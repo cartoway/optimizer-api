@@ -191,7 +191,9 @@ module Core
 
                   optim_wrapper_config.simplify_constraints(cliqued_vrp)
 
-                  block&.call(nil, 0, nil, 'run optimization', nil, nil, nil) if dicho_level.nil? || dicho_level.zero?
+                  if dicho_level.nil? || dicho_level.zero?
+                    block&.call(nil, 0, nil, "#{service.to_s.humanize} run optimization", nil, nil, nil)
+                  end
 
                   # TODO: Move select best heuristic in each solver
                   Interpreters::SeveralSolutions.custom_heuristics(service, vrp, block)
@@ -214,14 +216,17 @@ module Core
                         end
                       if dicho_level.nil? || dicho_level.zero?
                         block&.call(wrapper, avancement, total,
-                                    'run optimization, iterations', cost, (Time.now - time_start) * 1000, solution)
+                                    "#{service.to_s.humanize} run optimization, iterations", cost,
+                                    (Time.now - time_start) * 1000, solution)
                       end
                       solution
                     }
                   optim_wrapper_config.patch_and_rewind_simplified_constraints(cliqued_vrp, cliqued_solution)
 
                   if cliqued_solution.is_a?(Models::Solution)
-                    block&.call(nil, nil, nil, 'run optimization', nil, nil, nil) if dicho_level&.positive?
+                    if dicho_level&.positive?
+                      block&.call(nil, nil, nil, "#{service.to_s.humanize} run optimization", nil, nil, nil)
+                    end
                     cliqued_solution
                   elsif cliqued_solution.status == :killed
                     next

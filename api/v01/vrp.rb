@@ -138,9 +138,9 @@ module Api
               vrp.router = OptimizerWrapper.router(OptimizerWrapper.access[api_key][:router_api_key] || profile[:router_api_key]) if OptimizerWrapper.access[api_key][:router_api_key] || profile[:router_api_key]
               ret = OptimizerWrapper.wrapper_vrp(api_key, profile, vrp, checksum)
               count_incr :optimize, transactions: vrp.transactions
-              if ret.is_a?(String)
+              if ret.is_a?(Hash)
                 status 201
-                present({ job: { id: ret, status: :queued }}, with: VrpResult)
+                present({ job: { id: ret[:job_id], status: :queued, solvers: ret[:solvers], skipped_services: ret[:skipped_services] }}, with: VrpResult, context: :post)
               elsif ret.is_a?(Array)
                 status 200
                 solutions = ret.vrp_result.each(&:deep_symbolize_keys!)
