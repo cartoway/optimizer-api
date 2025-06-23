@@ -592,7 +592,7 @@ class SplitClusteringTest < Minitest::Test
 
       vrp[:relations] = [{ type: :shipment, linked_ids: ['service_1', 'service_2']}] # a LINKING_RELATIONS type
 
-      split_vrps = OptimizerWrapper.split_independent_vrp(TestHelper.create(vrp))
+      split_vrps = Core::Strategies::Orchestration.split_independent_vrp(TestHelper.create(vrp))
 
       assert_equal 2, split_vrps.size, 'Infeasible services and vehicles should be grouped in to two groups'
 
@@ -789,7 +789,7 @@ class SplitClusteringTest < Minitest::Test
         called = true
         Interpreters::SplitClustering.send(:__minitest_stub__split_solve_core, service_vrp) # call original function
       }) do
-        OptimizerWrapper.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
+        Core::Strategies::Orchestration.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
           vrp = service_vrp[:vrp]
           service = service_vrp[:service]
           OptimizerWrapper.config[:services][service].detect_unfeasible_services(vrp)
@@ -895,7 +895,7 @@ class SplitClusteringTest < Minitest::Test
         called = true
         Interpreters::SplitClustering.send(:__minitest_stub__split_solve_core, service_vrp) # call original function
       }) do
-        OptimizerWrapper.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
+        Core::Strategies::Orchestration.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
           vrp = service_vrp[:vrp]
           # check that only necessary relations are present with all its services
           assert_equal problem[:relations].count{ |r|

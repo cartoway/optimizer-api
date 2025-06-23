@@ -21,6 +21,20 @@ RUN git clone --recurse-submodules https://github.com/VROOM-Project/vroom.git &&
     cp ../bin/vroom /usr/local/bin && \
     cd /
 
+RUN apt update -y && apt install -y \
+        python3 \
+        python-is-python3 \
+        python3-pip \
+        python3-venv
+
+ARG PYVRP_VERSION=0.11.1
+
+RUN python -m venv /opt/pyenv && \
+    /opt/pyenv/bin/pip install --upgrade pip && \
+    /opt/pyenv/bin/pip install numpy && \
+    /opt/pyenv/bin/pip install pyvrp=="$PYVRP_VERSION"
+ENV PATH="/opt/pyenv/bin:$PATH"
+
 ENV LANG C.UTF-8
 
 WORKDIR /srv/app

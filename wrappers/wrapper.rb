@@ -53,8 +53,16 @@ module Wrappers
       vrp.vehicles.none?{ |vehicle| vehicle.skills.size > 1 }
     end
 
+    def assert_vehicles_no_skills(vrp)
+      vrp.vehicles.none?{ |vehicle| vehicle.skills.any? }
+    end
+
     def assert_services_no_priority(vrp)
       vrp.services.uniq(&:priority).size <= 1
+    end
+
+    def assert_services_no_setup_duration(vrp)
+      vrp.services.none?{ |service| service.activity.setup_duration.to_i > 0 }
     end
 
     def assert_vehicles_objective(vrp)
@@ -64,6 +72,10 @@ module Wrappers
           vehicle.cost_waiting_time_multiplier&.positive? ||
           vehicle.cost_value_multiplier&.positive?
       }
+    end
+
+    def assert_vehicles_no_initial_load(vrp)
+      vrp.vehicles.none?{ |vehicle| vehicle.capacities.any?{ |c| c.initial && c.initial < c.limit } }
     end
 
     def assert_vehicles_no_late_multiplier(vrp)
@@ -86,6 +98,23 @@ module Wrappers
 
     def assert_vehicles_no_duration_limit(vrp)
       vrp.vehicles.none?(&:duration)
+    end
+
+    def assert_no_quantity_pickup_and_delivery(vrp)
+      has_pickup_delivery_hash = {}
+      vrp.units.each{ |unit|
+        has_pickup_delivery_hash[unit.id] = {
+          pickup: false,
+          delivery: false
+        }
+      }
+      vrp.services.each{ |service|
+        service.quantities.each{ |quantity|
+          has_pickup_delivery_hash[quantity.unit.id][:pickup] ||= !(quantity.pickup.nil? || quantity.pickup == 0)
+          has_pickup_delivery_hash[quantity.unit.id][:delivery] ||= !(quantity.delivery.nil? || quantity.delivery == 0)
+        }
+      }
+      has_pickup_delivery_hash.values.none?{ |value| value[:pickup] && value[:delivery] }
     end
 
     def assert_services_no_late_multiplier(vrp)
@@ -137,6 +166,10 @@ module Wrappers
       }
     end
 
+    def assert_no_relations(vrp)
+      vrp.relations.empty?
+    end
+
     def assert_zones_only_size_one_alternative(vrp)
       vrp.zones.empty? || vrp.zones.all?{ |zone| zone.allocations.none?{ |alternative| alternative.size > 1 } }
     end
@@ -178,6 +211,10 @@ module Wrappers
 
     def assert_end_optimization(vrp)
       vrp.configuration.resolution.duration || vrp.configuration.resolution.iterations_without_improvment
+    end
+
+    def assert_resolution_duration(vrp)
+      vrp.configuration.resolution.duration
     end
 
     def assert_no_distance_limitation(vrp)

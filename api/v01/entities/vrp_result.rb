@@ -29,6 +29,8 @@ module Api
       expose :value, documentation: { type: Float, desc: '' }
       expose :setup_value, documentation: { type: Float, desc: '' }
       expose :current_load, documentation: { type: Float, desc: '' }
+      expose :pickup, documentation: { type: Float, desc: '' }
+      expose :delivery, documentation: { type: Float, desc: '' }
     end
 
     class VrpResultSolutionRouteActivityDetails < Grape::Entity
