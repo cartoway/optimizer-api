@@ -27,6 +27,7 @@ module Models
     field :solvers, default: []
 
     has_many :routes, class_name: 'Models::Solution::Route'
+    has_many :skipped_services, class_name: 'Models::SkippedService'
     has_many :unassigned_stops, class_name: 'Models::Solution::Stop'
 
     belongs_to :info, class_name: 'Models::Solution::Info', vrp_result: :hide
@@ -90,6 +91,7 @@ module Models
       solution.heuristic_synthesis = self.heuristic_synthesis + other.heuristic_synthesis
       solution.solvers = self.solvers + other.solvers
       solution.routes = self.routes + other.routes
+      solution.skipped_services = self.skipped_services + other.skipped_services
       solution.unassigned_stops = self.unassigned_stops + other.unassigned_stops
       solution.info = self.info + other.info
       solution.configuration = self.configuration + other.configuration
