@@ -80,7 +80,11 @@ module OptimizerWrapper
                                                     checksum: checksum,
                                                     pids: [])
       JobList.add(api_key, job_id)
-      job_id
+      {
+        job_id: job_id,
+        solvers: services_vrps.map(&:service),
+        skipped_services: services_vrps.map(&:skipped_services).flatten
+      }
     end
   end
 end
