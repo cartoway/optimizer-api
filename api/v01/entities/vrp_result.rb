@@ -107,9 +107,15 @@ module Api
       expose :reason, documentation: { type: String, desc: 'Unassigned reason. Only available when activity was rejected within preprocessing fase or periodic first_solution_strategy.' }
     end
 
+    class VrpResultSolutionSkippedSolver < Grape::Entity
+      expose :service, as: :solver, documentation: { type: String, desc: 'Solver name' }
+      expose :reasons, documentation: { type: Array[String], desc: 'Reasons why the solver was not able to solve the problem or sub problem' }
+    end
+
     class VrpResultSolution < Grape::Entity
       expose :heuristic_synthesis, documentation: { is_array: true, desc: 'When first_solution_strategies are provided, sum up of tryied heuristics and their performance.' }
       expose :solvers, documentation: { is_array: true, type: String, desc: 'Solvers used to perform the optimization' }
+      expose :skipped_services, using: VrpResultSolutionSkippedSolver, documentation: { is_array: true, desc: 'Solvers which were not able to solve the problem or sub problems' }
       expose :cost, documentation: { type: Float, desc: 'The actual cost of the solution considering all costs' }
       expose :cost_details, using: VRPResultDetailedCosts, documentation: { desc: 'The detail of the different costs which impact the solution' }
       expose :iterations, documentation: { type: Integer, desc: 'Total number of iteration performed to obtain the current result' }
@@ -133,6 +139,8 @@ module Api
       expose :status, documentation: { type: String, desc: 'One of queued, working, completed, killed or failed' }
       expose :avancement, documentation: { type: String, desc: 'Free form advancement message' }
       expose :graph, using: VrpResultJobGraphItem, documentation: { is_array: true, desc: 'Items to plot cost evolution' }
+      expose :solvers, documentation: { is_array: true, type: String, desc: 'Solvers used to perform the optimization' }, if: lambda { |instance, options| options[:context] == :post }
+      expose :skipped_services, using: VrpResultSolutionSkippedSolver, documentation: { is_array: true, desc: 'Solvers which were not able to solve the problem or sub problems' }, if: lambda { |instance, options| options[:context] == :post }
     end
 
     class VrpResultVisualClusters < Grape::Entity

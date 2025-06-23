@@ -128,7 +128,7 @@ class Api::V01::VrpTest < Minitest::Test
         assert_equal 20 * 60, vrp_in.services.first.activity.duration
         assert_equal 80, vrp_in.services.first.activity.timewindows.first.start
         assert_equal 800, vrp_in.services.first.activity.timewindows.first.end
-        'job_id'
+        { job_id: 'job_id' }
       }
     ) do
       submit_vrp api_key: 'demo', vrp: vrp
@@ -144,7 +144,7 @@ class Api::V01::VrpTest < Minitest::Test
       lambda { |_api_key, _services, vrp_in, _checksum|
         assert_nil vrp_in.vehicles.first.duration
         assert_nil vrp_in.vehicles.first.overall_duration
-        'job_id'
+        { job_id: 'job_id' }
       }
     ) do
       submit_vrp api_key: 'demo', vrp: vrp
@@ -167,7 +167,7 @@ class Api::V01::VrpTest < Minitest::Test
       :wrapper_vrp,
       lambda { |_api_key, _services, vrp_in, _checksum|
         assert_equal ['a', 'b'], vrp_in.configuration.preprocessing.first_solution_strategy
-        'job_id'
+        { job_id: 'job_id' }
       }
     ) do
       submit_vrp api_key: 'demo', vrp: vrp
