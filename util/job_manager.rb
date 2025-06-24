@@ -47,23 +47,23 @@ module OptimizerWrapper
       Sentry.set_user(api_key: options['api_key']) # Filtered in sentry if user_context
 
       # Get the vrp
-      services_vrps =
-        Marshal.load(Base64.decode64(self.options['services_vrps'])) # rubocop:disable Security/MarshalLoad
-      log "Vrp size: #{services_vrps.size} Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv[:vrp].name }}"
+      raw_services_vrps = Marshal.load(Base64.decode64(self.options['services_vrps'])) # rubocop:disable Security/MarshalLoad
+      services_vrps = Models::ResolutionContext.migrate_array(raw_services_vrps)
+      log "Vrp size: #{services_vrps.size} Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv.vrp.name }}"
       Sentry.set_extras(
         vrps: services_vrps.map{ |sv|
           {
-            name: sv[:vrp].name,
-            vehicles: sv[:vrp].vehicles.size,
-            activities: sv[:vrp].services.size,
-            relations: sv[:vrp].relations.size,
+            name: sv.vrp.name,
+            vehicles: sv.vrp.vehicles.size,
+            activities: sv.vrp.services.size,
+            relations: sv.vrp.relations.size,
           }
         },
         config: {
-          max_split_size: services_vrps.first[:vrp].configuration&.preprocessing&.max_split_size,
-          partitions: services_vrps.first[:vrp].configuration&.preprocessing&.partitions&.size,
-          schedule: !services_vrps.first[:vrp].configuration&.schedule&.range_indices.nil?,
-          random_seed: services_vrps.first[:vrp].configuration&.resolution&.random_seed,
+          max_split_size: services_vrps.first.vrp.configuration&.preprocessing&.max_split_size,
+          partitions: services_vrps.first.vrp.configuration&.preprocessing&.partitions&.size,
+          schedule: !services_vrps.first.vrp.configuration&.schedule&.range_indices.nil?,
+          random_seed: services_vrps.first.vrp.configuration&.resolution&.random_seed,
         }
       )
 
@@ -78,10 +78,10 @@ module OptimizerWrapper
       OptimizerWrapper::REDIS.set(Resque::Plugins::Status::Hash.status_key(self.uuid),
                                   Resque::Plugins::Status::Hash.encode(value))
 
-      ask_restitution_csv = services_vrps.any?{ |s_v| s_v[:vrp].configuration.restitution.csv }
-      ask_restitution_geojson = services_vrps.flat_map{ |s_v| s_v[:vrp].configuration.restitution.geometry }.uniq
+      ask_restitution_csv = services_vrps.any?{ |s_v| s_v.vrp.configuration.restitution.csv }
+      ask_restitution_geojson = services_vrps.flat_map{ |s_v| s_v.vrp.configuration.restitution.geometry }.uniq
       final_solutions =
-        OptimizerWrapper.define_main_process(
+        Core::Strategies::Orchestration.define_main_process(
           services_vrps, self.uuid
         ) { |wrapper, avancement, total, message, cost, time, solution|
           if [wrapper, avancement, total, message, cost, time, solution].compact.empty? # if all nil
@@ -106,7 +106,7 @@ module OptimizerWrapper
             }
             p[:graph] << { iteration: avancement, cost: cost, time: time }
             if solution
-              Cleanse.cleanse(services_vrps.first[:vrp], solution)
+              Cleanse.cleanse(services_vrps.first.vrp, solution)
               p[:result] = [solution.vrp_result].flatten
             end
             begin
@@ -120,9 +120,9 @@ module OptimizerWrapper
       best_solution = final_solutions.min(&:count_assigned_services)
       # WARNING: the following log is used for server performance comparison automation
       log "Elapsed time: #{(Time.now - job_started_at).round(2)}s Vrp size: #{services_vrps.size} "\
-          "Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv[:vrp].name }} "\
+          "Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv.vrp.name }} "\
           "Checksum: #{options['checksum']} "\
-          "Random seed: #{services_vrps.first[:vrp].configuration&.resolution&.random_seed} "\
+          "Random seed: #{services_vrps.first.vrp.configuration&.resolution&.random_seed} "\
           "Assigned services: #{best_solution&.count_assigned_services} "\
           "Unassigned services: #{best_solution&.count_unassigned_services} "\
           "Used routes: #{best_solution&.count_used_routes}"

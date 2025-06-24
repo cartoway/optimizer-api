@@ -24,7 +24,7 @@ module Interpreters
   class SplitClustering
     # TODO: private method
     def self.split_clusters(service_vrp, job = nil, &block)
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
 
       if vrp.configuration.preprocessing.partitions&.any?
         splited_service_vrps = generate_split_vrps(service_vrp, job, block)
@@ -36,11 +36,11 @@ module Interpreters
           splited_service_vrps.each_with_index.map{ |split_service_vrp, i|
             cluster_ref = i + 1
             solution =
-              OptimizerWrapper.define_process(
+              Core::Strategies::Orchestration.define_process(
                 split_service_vrp, job
               ) { |wrapper, avancement, total, message, cost, time, solution_|
                 add = "split partition process #{cluster_ref}/#{splited_service_vrps.size}"
-                msg = OptimizerWrapper.concat_avancement(add, message)
+                msg = Core::Strategies::Orchestration.concat_avancement(add, message)
                 block&.call(wrapper, avancement, total, msg, cost, time, solution_)
               }
 
@@ -63,22 +63,22 @@ module Interpreters
           }
 
         # merge expanded vehicles, services and relations
-        vrp.vehicles = splited_service_vrps.flat_map{ |sv| sv[:vrp].vehicles }
-        vrp.services = splited_service_vrps.flat_map{ |sv| sv[:vrp].services }
-        vrp.relations = splited_service_vrps.flat_map{ |sv| sv[:vrp].relations }
+        vrp.vehicles = splited_service_vrps.flat_map{ |sv| sv.vrp.vehicles }
+        vrp.services = splited_service_vrps.flat_map{ |sv| sv.vrp.services }
+        vrp.relations = splited_service_vrps.flat_map{ |sv| sv.vrp.relations }
 
         split_solutions.reduce(&:+) # return
       elsif split_solve_candidate?(service_vrp)
         split_solve(service_vrp, &block) # return
       else
-        service_vrp[:dicho_level] ||= 0
+        service_vrp.dicho_level ||= 0
         nil # return
       end
     end
 
     def self.generate_split_vrps(service_vrp, _job = nil, block = nil)
       log '--> generate_split_vrps (clustering by partition)'
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       return unless vrp.configuration.preprocessing.partitions&.any?
 
       allowed_metric = %i[duration visits]
@@ -98,18 +98,18 @@ module Interpreters
                           "step #{s_v_i + 1}/#{current_service_vrps.size}", nil, nil, nil)
 
               # TODO : global variable to know if work_day entity
-              s_v[:vrp].vehicles = list_vehicles(s_v[:vrp].configuration.schedule&.range_indices,
-                                                 s_v[:vrp].vehicles, partition[:entity])
+              s_v.vrp.vehicles = list_vehicles(s_v.vrp.configuration.schedule&.range_indices,
+                                               s_v.vrp.vehicles, partition[:entity])
               options = { cut_symbol: cut_symbol, entity: partition[:entity], centroids: partition[:centroids]}
               options[:restarts] = partition[:restarts] if partition[:restarts]
-              split_balanced_kmeans(s_v, s_v[:vrp].vehicles.size, options, &block)
+              split_balanced_kmeans(s_v, s_v.vrp.vehicles.size, options, &block)
             }
           current_service_vrps = generated_service_vrps.flatten
         when 'hierarchical_tree'
           generated_service_vrps =
             current_service_vrps.collect{ |s_v|
-              current_vrp = s_v[:vrp]
-              current_vrp.vehicles = list_vehicles(s_v[:vrp].configuration.schedule&.range_indices,
+              current_vrp = s_v.vrp
+              current_vrp.vehicles = list_vehicles(s_v.vrp.configuration.schedule&.range_indices,
                                                    [current_vrp.vehicles.first], partition[:entity])
               split_hierarchical(s_v, current_vrp, current_vrp.vehicles.size,
                                  cut_symbol: cut_symbol, entity: partition[:entity])
@@ -120,20 +120,20 @@ module Interpreters
         end
       }
 
-      total_size = current_service_vrps.sum{ |s_vrp| s_vrp[:vrp].services.size * [1, s_vrp[:vrp].vehicles.size].min }
+      total_size = current_service_vrps.sum{ |s_vrp| s_vrp.vrp.services.size * [1, s_vrp.vrp.vehicles.size].min }
       current_service_vrps.each{ |s_vrp|
         # If one sub vrp has no vehicle or no service, duration can be zero.
         # We only split duration among sub_service_vrps that have at least one vehicle and one service.
-        this_sub_size = s_vrp[:vrp].services.size * [1, s_vrp[:vrp].vehicles.size].min
-        adjust_independent_duration(s_vrp[:vrp], this_sub_size, total_size)
+        this_sub_size = s_vrp.vrp.services.size * [1, s_vrp.vrp.vehicles.size].min
+        adjust_independent_duration(s_vrp.vrp, this_sub_size, total_size)
       }
 
       current_service_vrps
     end
 
     def self.split_solve_candidate?(service_vrp)
-      vrp = service_vrp[:vrp]
-      if service_vrp[:split_level].nil?
+      vrp = service_vrp.vrp
+      if service_vrp.split_level.nil?
         empties_or_fills = vrp.empties_or_fills
 
         !vrp.schedule? &&
@@ -142,7 +142,7 @@ module Interpreters
           (vrp.configuration.resolution.vehicle_limit.nil? || vrp.configuration.resolution.vehicle_limit > 1) &&
           (vrp.services.size - empties_or_fills.size) > vrp.configuration.preprocessing.max_split_size
       else
-        ss_data = service_vrp[:split_solve_data]
+        ss_data = service_vrp.split_solve_data
         return false if ss_data[:cannot_split_further]
 
         # filter the vehicles that are forced to be on the same side
@@ -173,28 +173,28 @@ module Interpreters
     #          otherwise, metric can "penalize" better splits
     def self.split_solve(service_vrp, job = nil, &block)
       log '--> split_solve (clustering by max_split)'
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       log "available_vehicle_ids: #{vrp.vehicles.size} - #{vrp.vehicles.collect(&:id)}", level: :debug
 
       # ss_data
-      service_vrp[:split_level] = 0
-      service_vrp[:split_denominators] = [1]
-      service_vrp[:split_sides] = [0]
-      service_vrp[:split_solve_data], empties_or_fills = initialize_split_data(service_vrp, job)
+      service_vrp.split_level = 0
+      service_vrp.split_denominators = [1]
+      service_vrp.split_sides = [0]
+      service_vrp.split_solve_data, empties_or_fills = initialize_split_data(service_vrp, job)
 
       # Then split the services into left-and-right groups by
       # using the service_vehicle_assignments information
       # (don't generate any sub-VRP yet)
       split_solve_core(service_vrp, job, &block) # self-recursive method
     ensure
-      service_vrp[:vrp] = service_vrp[:split_solve_data][:original_vrp] if service_vrp[:split_solve_data]
-      service_vrp[:vrp]&.services&.concat empties_or_fills
+      service_vrp.vrp = service_vrp.split_solve_data[:original_vrp] if service_vrp.split_solve_data
+      service_vrp.vrp&.services&.concat empties_or_fills
       log '<-- split_solve (clustering by max_split)'
     end
 
     def self.initialize_split_data(service_vrp, _job = nil)
       # Initialize by first split_by_vehicle and keep the assignment info (don't generate the sub-VRPs yet)
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       empties_or_fills = vrp.empties_or_fills
       vrp.services -= empties_or_fills
       split_by_vehicle = split_balanced_kmeans(service_vrp, vrp.vehicles.size,
@@ -219,8 +219,8 @@ module Interpreters
 
     # self-recursive method
     def self.split_solve_core(service_vrp, job = nil, &block)
-      split_level = service_vrp[:split_level]
-      ss_data = service_vrp[:split_solve_data]
+      split_level = service_vrp.split_level
+      ss_data = service_vrp.split_solve_data
 
       if split_solve_candidate?(service_vrp) # if it still needs splitting
         enum_current_vehicles = ss_data[:current_vehicles].select # Enumerator to keep a local copy of current_vehicles
@@ -229,7 +229,7 @@ module Interpreters
         # SPLIT current_vehicles list (by-vehicle-centroids) to create two "sides"
         sides =
           split_balanced_kmeans(
-            { vrp: create_representative_sub_vrp(ss_data) }, 2,
+            Models::ResolutionContext.new(vrp: create_representative_sub_vrp(ss_data)), 2,
             cut_symbol: :duration, restarts: 3, build_sub_vrps: false, basic_split: true, group_points: false
           ).sort_by!{ |side|
             [side.size, side.sum(&:visits_number)] # [number_of_vehicles, number_of_visits]
@@ -245,8 +245,8 @@ module Interpreters
           log 'There should be exactly two clusters in split_solve_core!', level: :warn
           ss_data[:cannot_split_further] = true
         else
-          service_vrp[:split_denominators] << 2**(split_level + 1)
-          service_vrp[:split_sides] << 0
+          service_vrp.split_denominators << 2**(split_level + 1)
+          service_vrp.split_sides << 0
         end
 
         # TODO: In some case one side might be significantly smaller than the other side.
@@ -264,10 +264,10 @@ module Interpreters
         # RECURSIVELY CALL split_solve_core AND MERGE SOLUTIONS
         solutions =
           sides.collect.with_index{ |side, index|
-            # This is a recursive function and service_vrp[:split_level] needs to be corrected because
+            # This is a recursive function and service_vrp.split_level needs to be corrected because
             # it is incremented within the children of the other branch ("left-side") of this level
-            service_vrp[:split_level] = split_level + 1 # This needs to be here!
-            service_vrp[:split_sides][split_level + 1] = index
+            service_vrp.split_level = split_level + 1 # This needs to be here!
+            service_vrp.split_sides[split_level + 1] = index
 
             ss_data[:current_vehicles] = side
 
@@ -276,17 +276,17 @@ module Interpreters
             ss_data[:current_vehicle_limit] = current_vehicle_limit && (index.zero? ? v_limit.ceil : v_limit.floor)
 
             split_solve_core(service_vrp, job = nil) { |wrapper, avancement, total, message, cost, time, solution|
-              avc = service_vrp[:split_denominators].map.with_index{ |lvl, idx|
-                Rational(service_vrp[:split_sides][idx], lvl)
+              avc = service_vrp.split_denominators.map.with_index{ |lvl, idx|
+                Rational(service_vrp.split_sides[idx], lvl)
               }.sum
 
               msg =
                 if message.include?('max split process')
                   message
                 else
-                  add = "max split process #{(service_vrp[:split_denominators].last * avc).to_i}/"\
-                        "#{service_vrp[:split_denominators].last}"
-                  OptimizerWrapper.concat_avancement(add, message)
+                  add = "max split process #{(service_vrp.split_denominators.last * avc).to_i}/"\
+                        "#{service_vrp.split_denominators.last}"
+                  Core::Strategies::Orchestration.concat_avancement(add, message)
                 end
               block&.call(wrapper, avancement, total, msg, cost, time, solution)
             }
@@ -298,23 +298,23 @@ module Interpreters
       else # Stopping condition -- the problem is small enough
         # Finally generate the sub-vrp without hard-copy and solve it
         solution = split_solve_sub_vrp(service_vrp, job, &block)
-        transfer_unused_resources(ss_data, service_vrp[:vrp], solution)
+        transfer_unused_resources(ss_data, service_vrp.vrp, solution)
 
       end
       solution
     end
 
     def self.split_solve_sub_vrp(service_vrp, job = nil, &block)
-      ss_data = service_vrp[:split_solve_data]
-      split_level = service_vrp[:split_level] # local split_level var is needed to show the level value correctly
+      ss_data = service_vrp.split_solve_data
+      split_level = service_vrp.split_level # local split_level var is needed to show the level value correctly
       service_cnt = "#{ss_data[:current_vehicles].sum{ |v| ss_data[:service_vehicle_assignments][v.id].size }} services"
       vehicle_cnt = "#{ss_data[:current_vehicles].size}+#{ss_data[:transferred_vehicles].size} vehicles"
       log "--> split_solve_sub_vrp lv: #{split_level} | solving #{service_cnt} with #{vehicle_cnt}"
 
-      service_vrp[:vrp] = create_sub_vrp(ss_data)
+      service_vrp.vrp = create_sub_vrp(ss_data)
 
-      solution = OptimizerWrapper.define_process(service_vrp, job, &block)
-      solution.parse(service_vrp[:vrp])
+      solution = Core::Strategies::Orchestration.define_process(service_vrp, job, &block)
+      solution.parse(service_vrp.vrp)
     ensure
       log "<-- split_solve_sub_vrp lv: #{split_level}"
     end
@@ -600,7 +600,9 @@ module Interpreters
       return unless solution
 
       remove_empty_routes(solution)
-      if !Interpreters::Dichotomous.dichotomous_candidate?(vrp: vrp, service: :ortools)
+      if !Interpreters::Dichotomous.dichotomous_candidate?(
+        Models::ResolutionContext.new(vrp: vrp, service: :ortools)
+      )
         remove_poorly_populated_routes(vrp, solution, 0.1)
       end
     end
@@ -679,7 +681,7 @@ module Interpreters
       log '---> build_partial_service_vrp', level: :debug
       Models.delete_all
       tic = Time.now
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       # Create an empty vrp
       sub_vrp = Models::Vrp.create({ name: vrp.name, configuration: vrp.configuration.as_json }, check: false)
       if available_vehicles_indices
@@ -761,7 +763,7 @@ module Interpreters
       end
 
       log "<--- build_partial_service_vrp takes #{Time.now - tic}", level: :debug
-      service_vrp.dup.tap{ |s_v| s_v[:vrp] = sub_vrp }
+      Models::ResolutionContext.new(service_vrp.as_json.merge(vrp: sub_vrp))
     end
 
     def self.adjust_independent_duration(vrp, this_sub_size, total_size)
@@ -874,7 +876,7 @@ module Interpreters
     def self.split_balanced_kmeans(service_vrp, nb_clusters, options = {}, &block)
       log '--> split_balanced_kmeans', level: :debug
 
-      if options[:entity] && nb_clusters != service_vrp[:vrp].vehicles.size
+      if options[:entity] && nb_clusters != service_vrp.vrp.vehicles.size
         raise OptimizerWrapper::ClusteringError.new(
           'Usage of options[:entity] requires that number of clusters '\
           '(nb_clusters) is equal to number of vehicles in the vrp.'
@@ -885,7 +887,7 @@ module Interpreters
 
       defaults = { max_iterations: 300, restarts: 10, cut_symbol: :duration, build_sub_vrps: true, group_points: true }
       options = defaults.merge(options)
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       # Split using balanced kmeans
       if vrp.services.all?{ |service| service.activity&.point&.location }
         result_items =
@@ -981,7 +983,7 @@ module Interpreters
 
     def self.split_hierarchical(service_vrp, nb_clusters, options = {})
       options[:cut_symbol] = :duration if options[:cut_symbol].nil?
-      vrp = service_vrp[:vrp]
+      vrp = service_vrp.vrp
       # Split using hierarchical tree method
       if vrp.services.all?{ |service| service[:activity] }
         cumulated_metrics = Hash.new(0)

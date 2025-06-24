@@ -135,7 +135,8 @@ class WrapperTest < Minitest::Test
     [:ortools, :vroom].compact.each{ |o|
       # zip_cluster generates sub problems which register identical objects
       vrp = TestHelper.create(problem)
-      solution = OptimizerWrapper.solve(service: o, vrp: vrp)
+      solution =
+        Core::Strategies::Orchestration.solve(Models::ResolutionContext.new(service: o, vrp: vrp))
       assert_equal size + 2, solution.routes[0].stops.size, "[#{o}] " # 1 depot + 1 rest
       services = solution.routes[0].stops.map(&:service_id)
       1.upto(size - 1).each{ |i|
@@ -203,7 +204,9 @@ class WrapperTest < Minitest::Test
         }
       }
     }
-    solution = OptimizerWrapper.solve(service: :ortools, vrp: TestHelper.create(problem))
+    solution = Core::Strategies::Orchestration.solve(
+      Models::ResolutionContext.new(service: :ortools, vrp: TestHelper.create(problem))
+    )
     assert_equal size, solution.routes[0].stops.size # always return stops for start/end
     points = solution.routes[0].stops.collect{ |a| a.service_id || a.activity.point_id || a.rest_id }
     services_size = problem[:services].size
@@ -695,7 +698,9 @@ class WrapperTest < Minitest::Test
       }
     }
 
-    solution = OptimizerWrapper.solve(service: :ortools, vrp: TestHelper.create(problem))
+    solution = Core::Strategies::Orchestration.solve(
+      Models::ResolutionContext.new(service: :ortools, vrp: TestHelper.create(problem))
+    )
     assert solution.routes[0].stops[1].pickup_shipment_id
     refute solution.routes[0].stops[1].delivery_shipment_id
 
@@ -2145,7 +2150,9 @@ class WrapperTest < Minitest::Test
     vrp = VRP.basic
     vrp[:vehicles].first[:timewindow] = { start: 0, end: 1 }
     vrp[:vehicles].first[:end_point_id] = vrp[:vehicles].first[:start_point_id]
-    assert OptimizerWrapper.solve(service: :vroom, vrp: TestHelper.create(vrp))
+    assert Core::Strategies::Orchestration.solve(
+      Models::ResolutionContext.new(service: :vroom, vrp: TestHelper.create(vrp))
+    )
   end
 
   def test_eliminate_even_if_no_start_or_end
@@ -2307,11 +2314,16 @@ class WrapperTest < Minitest::Test
       solve_call = 0
       vrp = TestHelper.create(vrp)
       vrp.configuration.preprocessing.partitions = partition
-      OptimizerWrapper.stub(:solve, lambda { |_vrp, _job, _block|
+      Core::Strategies::Orchestration.stub(:solve, lambda { |_vrp, _job, _block|
         solve_call += 1
         Models::Solution.new(unassigned_stops: vrp.services.map{ |service| Models::Solution::Stop.new(service) })
       }) do
-        OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:demo] }}, vrp, nil)
+        OptimizerWrapper.stub(:solve, lambda { |_vrp, _job, _block|
+          solve_call += 1
+          Models::Solution.new(unassigned_stops: vrp.services.map{ |service| Models::Solution::Stop.new(service) })
+        }) do
+          OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:demo] }}, vrp, nil)
+        end
       end
       assert_equal expected_repetitions, solve_call,
                    "#{expected_repetitions} repetitions expected, "\
@@ -2322,10 +2334,10 @@ class WrapperTest < Minitest::Test
 
   def test_skills_independent
     vrp = TestHelper.create(VRP.independent_skills)
-    OptimizerWrapper.stub(:define_main_process, lambda { |services_vrps, _job_id|
+    Core::Strategies::Orchestration.stub(:define_main_process, lambda { |services_vrps, _job_id|
       assert_equal 3, services_vrps.size
       services_vrps.each{ |service_vrp|
-        assert_equal 2, service_vrp[:vrp].services.size
+        assert_equal 2, service_vrp.vrp.services.size
       }
     }) do
       OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
@@ -2482,7 +2494,7 @@ class WrapperTest < Minitest::Test
 
     vrp = TestHelper.create(problem)
     vrp.matrices = nil
-    split_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    split_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal 3, split_vrps.size, 'split_independent_vrp function does not generate expected number of split_vrps'
     expected_split = [
       [['vehicle_0'], ['service_2', 'service_4']],
@@ -2502,7 +2514,7 @@ class WrapperTest < Minitest::Test
   def test_split_independent_vrp_generates_correct_split_vrps
     vrp = TestHelper.create(VRP.independent_skills)
     vrp.matrices = nil
-    split_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    split_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal 3, split_vrps.size, 'split_independent_vrp function does not generate expected number of split_vrps'
     expected_split = [
       [['vehicle_0'], ['service_2', 'service_4']],
@@ -2521,7 +2533,7 @@ class WrapperTest < Minitest::Test
                                            activity: { point: vrp.points.first })
     vrp.services << Models::Service.create(id: 'fake_service_2', skills: ['fake_skill1'],
                                            activity: { point: vrp.points.first })
-    split_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    split_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal 4, split_vrps.size,
                  'split_independent_vrp function does not generate expected number of split_vrps'
     expected_split.unshift [[], ['fake_service_1', 'fake_service_2']]
@@ -2536,7 +2548,7 @@ class WrapperTest < Minitest::Test
                                            activity: { point: vrp.points.first })
     vrp.services << Models::Service.create(id: 'fake_service_3', skills: ['fake_skill2'],
                                            activity: { point: vrp.points.first })
-    split_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    split_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal 5, split_vrps.size,
                  'split_independent_vrp function does not generate expected number of split_vrps'
     expected_split.shift
@@ -2550,7 +2562,7 @@ class WrapperTest < Minitest::Test
     vrp = TestHelper.create(VRP.independent_skills)
     vrp.matrices = nil
     vrp.services[1].skills = [:D]
-    split_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    split_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal 2, split_vrps.size, 'split_independent_vrp function does not generate expected number of split_vrps'
     expected_split = [
       [['vehicle_0', 'vehicle_1'], ['service_2', 'service_3', 'service_4', 'service_5']],
@@ -2571,7 +2583,7 @@ class WrapperTest < Minitest::Test
     }]
     vrp = TestHelper.create(problem)
 
-    split_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    split_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal 1, split_vrps.size, 'split_independent_vrp function does not generate expected number of split_vrps'
     assert_equal vrp.configuration.resolution.duration,
                  (split_vrps.sum{ |s_v| s_v.configuration.resolution.duration })
@@ -2585,7 +2597,7 @@ class WrapperTest < Minitest::Test
 
     # WITHOUT vehicle_trips
     vrp = TestHelper.create(problem)
-    independent_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    independent_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     # 5 independent vrps
     # one with v0
     # one with v2
@@ -2603,7 +2615,7 @@ class WrapperTest < Minitest::Test
     # INTERIM CHECK
     problem[:relations] = [{ type: :vehicle_trips, linked_vehicle_ids: ['vehicle_1', 'vehicle_2'] }]
     vrp = TestHelper.create(problem)
-    independent_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    independent_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     msg = 'Waiting for split_independent_vrp forcing relation implementation. This INTERIM CHECK part can be '\
           'deleted upto the skip and the rest of the test with vehicle_trips can be activated.'
     assert_equal 1, independent_vrps.size,
@@ -2613,7 +2625,7 @@ class WrapperTest < Minitest::Test
     # WITH vehicle_trips
     problem[:relations] = [{ type: :vehicle_trips, linked_vehicle_ids: ['vehicle_1', 'vehicle_2'] }]
     vrp = TestHelper.create(problem)
-    independent_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    independent_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     # 4 independent vrps
     # one with v0
     # one with v1 and v2 (because of vehicle trips relation otherwise v1 would be in a separate "empty" sub-problem)
@@ -2640,7 +2652,7 @@ class WrapperTest < Minitest::Test
     vrp = TestHelper.create(VRP.independent)
     vrp.vehicles << Models::Vehicle.create(id: 'useless_vehicle')
     expected_number_of_vehicles = vrp.vehicles.size
-    services_vrps = OptimizerWrapper.split_independent_vrp(vrp)
+    services_vrps = Core::Strategies::Orchestration.split_independent_vrp(vrp)
     assert_equal expected_number_of_vehicles, services_vrps.collect{ |sub_vrp| sub_vrp.vehicles.size }.sum,
                  'some vehicles disapear because of split_independent_vrp function'
   end

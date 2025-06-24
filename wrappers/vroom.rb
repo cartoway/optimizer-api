@@ -68,7 +68,6 @@ module Wrappers
         :assert_no_first_solution_strategy,
         :assert_no_free_approach_or_return,
         :assert_no_planning_heuristic,
-        :assert_small_minimum_duration,
         :assert_solver,
       ]
     end
@@ -76,7 +75,9 @@ module Wrappers
     def solve_synchronous?(vrp)
       compatible_routers = %i[car truck_medium]
       vrp.points.size < 200 &&
-        !Interpreters::SplitClustering.split_solve_candidate?({ vrp: vrp }) &&
+        !Interpreters::SplitClustering.split_solve_candidate?(
+          Models::ResolutionContext.new(vrp: vrp)
+        ) &&
         vrp.vehicles.all?{ |vehicle|
           compatible_routers.include?(vehicle.router_mode&.to_sym)
         } # WARNING: this should change accordingly with router evolution
@@ -247,12 +248,30 @@ module Wrappers
     end
 
     def collect_jobs(vrp, vrp_skills, vrp_units)
+      all_units = vrp.units.index_by(&:id)
+
       @object_id_map ||= {}
       # ignore the services with a shipment relation
       vrp.services.select{ |s| s.relations.none?{ |r| r.type == :shipment } }.map{ |service|
         # Activity is mandatory
         index = @object_id_map.size
         @object_id_map[index] = service
+
+        delivery_hash = all_units.map { |id, _| [id, 0] }.to_h
+        pickup_hash = all_units.map { |id, _| [id, 0] }.to_h
+
+        service.quantities.each { |quantity|
+          delivery_hash[quantity.unit_id] = (quantity.delivery * CUSTOM_QUANTITY_BIGNUM).round if quantity.delivery
+          pickup_hash[quantity.unit_id] = (quantity.pickup * CUSTOM_QUANTITY_BIGNUM).round if quantity.pickup
+
+          next if quantity.value.zero?
+
+          if quantity.value < 0
+            delivery_hash[quantity.unit_id] = (quantity.value.abs * CUSTOM_QUANTITY_BIGNUM).round
+          else
+            pickup_hash[quantity.unit_id] = (quantity.value * CUSTOM_QUANTITY_BIGNUM).round
+          end
+        }
         {
           id: index,
           location_index: service.activity.point.matrix_index,
@@ -260,20 +279,12 @@ module Wrappers
           setup: service.activity.setup_duration,
           skills: collect_skills(service, vrp_skills),
           priority: (100 * (8 - service.priority).to_f / 8).to_i, # Scale from 0 to 100 (higher is more important)
-          time_windows: service.activity.timewindows.map{ |timewindow|
+          time_windows: service.activity.timewindows[0..0].map{ |timewindow|
             [timewindow.start - service.activity.setup_duration,
              (timewindow.end || 2**30) - service.activity.setup_duration]
           },
-          delivery: vrp_units.map{ |unit|
-            q = service.quantities.find{ |quantity| quantity.unit.id == unit.id && quantity.value.negative? }
-            @total_quantities[unit.id] -= q&.value || 0
-            (-(q&.value || 0) * CUSTOM_QUANTITY_BIGNUM).round
-          },
-          pickup: vrp_units.map{ |unit|
-            q = service.quantities.find{ |quantity| quantity.unit.id == unit.id && quantity.value.positive? }
-            @total_quantities[unit.id] += q&.value || 0
-            ((q&.value || 0) * CUSTOM_QUANTITY_BIGNUM).round
-          }
+          delivery: delivery_hash.values,
+          pickup: pickup_hash.values
         }.delete_if{ |_k, v|
           v.nil? || v.is_a?(Array) && v.empty?
         }
@@ -372,7 +383,7 @@ module Wrappers
       problem = { vehicles: [], jobs: [], matrices: [] }
       @total_quantities = Hash.new { 0 }
       # WARNING: only first alternative set of skills is used
-      vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
+      vrp_skills = [] # vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
       vrp_units =
         vrp.units.select{ |unit|
           vrp.vehicles.map{ |vehicle|

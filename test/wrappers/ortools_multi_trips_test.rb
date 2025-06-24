@@ -143,8 +143,8 @@ class MultiTripsTest < Minitest::Test
 
     vrp = TestHelper.create(vrp)
 
-    OptimizerWrapper.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
-      sub_vrp_vehicle_ids = service_vrp[:vrp].vehicles.map(&:id)
+    Core::Strategies::Orchestration.stub(:solve, lambda{ |service_vrp, _job, _block| # stub with empty solution
+      sub_vrp_vehicle_ids = service_vrp.vrp.vehicles.map(&:id)
 
       # check vehicle trips are not split
       vrp.relations.each{ |relation|
@@ -153,7 +153,7 @@ class MultiTripsTest < Minitest::Test
                'All trips of a vehicle should be in the same subproblem'
       }
 
-      OptimizerWrapper.send(:__minitest_stub__solve, service_vrp) # call original solve method
+      Core::Strategies::Orchestration.send(:__minitest_stub__solve, service_vrp) # call original solve method
     }) do
       OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, vrp, nil)
     end

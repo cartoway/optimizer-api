@@ -4251,7 +4251,9 @@ class Wrappers::OrtoolsTest < Minitest::Test
         end
       }
     ) do
-      best_heuristic = Interpreters::SeveralSolutions.find_best_heuristic({ service: :ortools, vrp: vrp })
+      best_heuristic = Interpreters::SeveralSolutions.find_best_heuristic(
+        Models::ResolutionContext.new(service: :ortools, vrp: vrp)
+      )
       refute_equal best_heuristic[:vrp].configuration.preprocessing.first_solution_strategy, 'supplied_initial_routes'
       assert_equal %w[service_4 service_5 service_3 service_2], best_heuristic[:vrp].routes.first.mission_ids,
                    'Initial route does not match with expected returned route'
@@ -5031,63 +5033,21 @@ class Wrappers::OrtoolsTest < Minitest::Test
         :collect_heuristics,
         ->(_, _){ %w[global_cheapest_arc parallel_cheapest_insertion local_cheapest_insertion savings] }
       ) do
-        service_vrp = Interpreters::SeveralSolutions.find_best_heuristic({ service: :ortools, vrp: vrp })
-        assert_equal vrp[:vehicles].size, service_vrp[:vrp].vehicles.collect(&:id).uniq.size,
+        service_vrp = Interpreters::SeveralSolutions.find_best_heuristic(
+          Models::ResolutionContext.new(service: :ortools, vrp: vrp)
+        )
+        assert_equal vrp[:vehicles].size, service_vrp.vrp.vehicles.collect(&:id).uniq.size,
                      'We expect same number of IDs as initial vehicles in problem'
-        assert_equal vrp[:services].size, service_vrp[:vrp].services.collect(&:id).uniq.size,
+        assert_equal vrp[:services].size, service_vrp.vrp.services.collect(&:id).uniq.size,
                      'We expect same number of IDs as initial services in problem'
-        assert_equal 4, service_vrp[:vrp].configuration.preprocessing.heuristic_synthesis.size
+        assert_equal 4, service_vrp.vrp.configuration.preprocessing.heuristic_synthesis.size
         assert_equal ['parallel_cheapest_insertion'],
-                     service_vrp[:vrp].configuration.preprocessing.first_solution_strategy
-        assert_equal 1, service_vrp[:vrp].routes.size
-        assert_equal 'vehicle_1', service_vrp[:vrp].routes.first.vehicle.id
-        assert_equal ['service_5', 'service_3', 'service_1', 'service_2'], service_vrp[:vrp].routes.first.mission_ids
+                     service_vrp.vrp.configuration.preprocessing.first_solution_strategy
+        assert_equal 1, service_vrp.vrp.routes.size
+        assert_equal 'vehicle_1', service_vrp.vrp.routes.first.vehicle.id
+        assert_equal ['service_5', 'service_3', 'service_1', 'service_2'], service_vrp.vrp.routes.first.mission_ids
       end
     end
-  end
-
-  def test_quantity_precision
-    problem = VRP.basic
-    problem[:services].each{ |service|
-      service[:quantities] = [{ unit_id: 'kg', value: 1.001 }]
-    }
-    problem[:vehicles].each{ |vehicle|
-      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3 }]
-    }
-
-    solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
-    assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
-
-    assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
-                    'The vehicle cannot load more than 2 services and 3 kg'
-    solutions[0].routes.first.stops.each{ |activity|
-      next unless activity.service_id
-
-      assert_equal 1.001, activity.loads.first.quantity.value
-    }
-  end
-
-  def test_initial_quantity
-    problem = VRP.basic
-    problem[:services].first[:quantities] = [{ unit_id: 'kg', value: -1 }]
-    problem[:services].last[:quantities] = [{ unit_id: 'kg', value: -1 }]
-    problem[:vehicles].each{ |vehicle|
-      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3, initial: 0 }]
-    }
-
-    solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
-    assert_equal 2, solutions[0].unassigned_stops.size, 'The result is expected to contain 2 unassigned'
-
-    problem = VRP.basic
-    problem[:services].first[:quantities] = [{ unit_id: 'kg', value: -1 }]
-    problem[:services].last[:quantities] = [{ unit_id: 'kg', value: 1 }]
-    problem[:vehicles].each{ |vehicle|
-      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3, initial: 0 }]
-    }
-
-    solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
-    assert solutions[0].routes.first.stops.index{ |act| act.service_id == problem[:services].last[:id] } <
-           solutions[0].routes.first.stops.index{ |act| act.service_id == problem[:services].first[:id] }
   end
 
   def test_simplify_vehicle_pause_without_timewindow_or_duration
@@ -5177,7 +5137,9 @@ class Wrappers::OrtoolsTest < Minitest::Test
           Models::Solution.new(status: :killed)
         }
       ) do
-        OptimizerWrapper.solve(service: :ortools, vrp: TestHelper.create(problem.dup))
+        Core::Strategies::Orchestration.solve(
+          Models::ResolutionContext.new(service: :ortools, vrp: TestHelper.create(problem.dup))
+        )
       end
     }
   end
