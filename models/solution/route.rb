@@ -86,7 +86,7 @@ module Models
         raise 'Cannot shift the route, there are not enough stops' if shift_start_index > self.stops.size
 
         current_shift = shift_amount
-        self.info.start_time += shift_amount if shift_start_index == 0
+        self.info.start_time += shift_amount if shift_start_index == 0 && self.stops.any?{ |s| s.type != :rest }
         self.stops.each_with_index{ |stop, index|
           next if index <= shift_start_index
 
