@@ -41,7 +41,7 @@ module OptimizerWrapper
     'LD_LIBRARY_PATH=../or-tools/dependencies/install/lib/:../or-tools/lib/ ../optimizer-ortools/tsp_simple'.freeze
   ORTOOLS = Wrappers::Ortools.new(tmp_dir: TMP_DIR, exec_ortools: ORTOOLS_EXEC)
   VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: ENV['VROOM_PATH'] || '/usr/local/bin/vroom')
-  PYVPR = Wrappers::PyVRP.new(tmp_dir: TMP_DIR)
+  PYVRP = Wrappers::PyVRP.new(tmp_dir: TMP_DIR)
 
   PARAMS_LIMIT = { points: 150, vehicles: 10 }.freeze
   QUOTAS = [{ daily: 100000, monthly: 1000000, yearly: 10000000 }].freeze # Only taken into account if REDIS_COUNT
@@ -64,7 +64,7 @@ module OptimizerWrapper
       demo: DEMO,
       ortools: ORTOOLS,
       vroom: VROOM,
-      pyvrp: PYVPR,
+      pyvrp: PYVRP,
     },
     profiles: {
       demo: {
