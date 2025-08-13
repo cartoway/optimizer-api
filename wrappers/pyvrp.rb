@@ -49,17 +49,6 @@ module Wrappers
       ]
     end
 
-    def solve_synchronous?(vrp)
-      compatible_routers = %i[car truck_medium]
-      vrp.points.size < 200 &&
-        !Interpreters::SplitClustering.split_solve_candidate?(
-          Models::ResolutionContext.new(vrp: vrp)
-        ) &&
-        vrp.vehicles.all?{ |vehicle|
-          compatible_routers.include?(vehicle.router_mode&.to_sym)
-        } # WARNING: this should change accordingly with router evolution
-    end
-
     def solve(vrp, _job = nil, _thread_proc = nil)
       if vrp.vehicles.empty? || vrp.points.empty? || vrp.services.empty?
         return vrp.empty_solution(:pyvrp)
