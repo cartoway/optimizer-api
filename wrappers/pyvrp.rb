@@ -31,6 +31,7 @@ module Wrappers
         :assert_vehicles_start_or_end,
         :assert_no_overall_duration,
         :assert_no_value_matrix,
+        :assert_no_rest,
 
         # Mission constraints
         :assert_no_activity_with_position,

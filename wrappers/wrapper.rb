@@ -475,6 +475,10 @@ module Wrappers
         )
     end
 
+    def assert_no_rest(vrp)
+      vrp.vehicles.none?{ |vehicle| vehicle.rests.any? }
+    end
+
     def solve_synchronous?(_vrp)
       false
     end
