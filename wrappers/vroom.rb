@@ -383,7 +383,7 @@ module Wrappers
       problem = { vehicles: [], jobs: [], matrices: [] }
       @total_quantities = Hash.new { 0 }
       # WARNING: only first alternative set of skills is used
-      vrp_skills = [] # vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
+      vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
       vrp_units =
         vrp.units.select{ |unit|
           vrp.vehicles.map{ |vehicle|
