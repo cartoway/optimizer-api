@@ -3,7 +3,7 @@ require './wrappers/wrapper'
 module Wrappers
   class PyVRP < Wrapper
     CUSTOM_QUANTITY_BIGNUM = 1e3
-    MAX_PENALTY = 1e5
+    MAX_PENALTY = 1e10
     MAX_INT64 = 2**63 - 1
     MAX_INT_UNITS = 2**60 - 1
 
