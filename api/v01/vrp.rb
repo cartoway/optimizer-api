@@ -139,8 +139,15 @@ module Api
               ret = OptimizerWrapper.wrapper_vrp(api_key, profile, vrp, checksum)
               count_incr :optimize, transactions: vrp.transactions
               if ret.is_a?(Hash)
-                status 201
-                present({ job: { id: ret[:job_id], status: :queued, solvers: ret[:solvers], skipped_services: ret[:skipped_services] }}, with: VrpResult, context: :post)
+                status =
+                  if ret[:solvers].any?
+                    status 201
+                    :queued
+                  else
+                    status 417
+                    :failed
+                  end
+                present({ job: { id: ret[:job_id], status: status, solvers: ret[:solvers], skipped_services: ret[:skipped_services] }}, with: VrpResult, context: :post)
               elsif ret.is_a?(Array)
                 status 200
                 solutions = ret.vrp_result.each(&:deep_symbolize_keys!)
