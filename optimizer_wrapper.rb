@@ -65,7 +65,10 @@ module OptimizerWrapper
       }
 
     if services_vrps.any?{ |sv| !sv.service }
-      raise UnsupportedProblemError.new('Cannot apply any of the solver services', inapplicable_services)
+      {
+        solvers: [],
+        skipped_services: services_vrps.map(&:skipped_services).flatten
+      }
     elsif config[:solve][:synchronously] || (
             services_vrps.size == 1 &&
             !vrp.configuration.preprocessing.cluster_threshold &&
