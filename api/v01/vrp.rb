@@ -140,7 +140,7 @@ module Api
               count_incr :optimize, transactions: vrp.transactions
               if ret.is_a?(Hash)
                 status =
-                  if ret[:solvers].any?
+                  if !ret.key?(:solvers) || ret[:solvers].any?
                     status 201
                     :queued
                   else
