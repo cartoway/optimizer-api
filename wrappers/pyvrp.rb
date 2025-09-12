@@ -38,7 +38,7 @@ module Wrappers
         :assert_no_empty_or_fill,
         :assert_no_exclusion_cost,
         :assert_services_no_late_multiplier,
-        :assert_services_no_setup_duration,
+        :assert_no_complex_setup_durations,
         :assert_only_one_visit,
 
         # Solver
@@ -233,11 +233,15 @@ module Wrappers
         vrp.vehicles.flat_map{ |veh|
           [veh.start_point, veh.end_point]
         }.uniq
+      additive_setups = Array.new(depot_points.size, 0)
       client_points =
         vrp.services.flat_map{ |service|
-          (service.activity.timewindows.empty? ? [nil] : service.activity.timewindows).map{ |_tw|
-            service.activity.point
-          }
+          points =
+            (service.activity.timewindows.empty? ? [nil] : service.activity.timewindows).map{ |_tw|
+              service.activity.point
+            }
+          points.each{ |_p| additive_setups << service.activity.setup_duration.to_i }
+          points
         }
 
       all_points = (depot_points + client_points)
@@ -252,10 +256,13 @@ module Wrappers
       end
 
       duration_matrices.map! do |matrix|
+        dist = nil
         matrix =
           Array.new(all_points.size) { |i|
             Array.new(all_points.size) { |j|
-              distance(matrix, all_points[i], all_points[j])
+              dist = distance(matrix, all_points[i], all_points[j])
+              dist += additive_setups[j] if i != j && all_points[i]&.matrix_index != all_points[j]&.matrix_index
+              dist
             }
           }
       end

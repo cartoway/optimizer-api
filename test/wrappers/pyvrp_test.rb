@@ -569,4 +569,36 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert_equal 4, solution.routes[1].stops.size
     assert_equal 0, solution.unassigned_stops.size
   end
+
+  focus
+  def test_setup_duration
+    problem = VRP.basic
+
+    problem[:matrices].first[:time] = [
+      [0, 4, 0, 5],
+      [6, 0, 0, 5],
+      [1, 0, 0, 5],
+      [5, 5, 5, 0]
+    ]
+
+    problem[:services].first[:activity][:timewindows] = [{
+      start: 10,
+      end: 20
+    }]
+
+    problem[:services].each{ |service|
+      service[:activity][:setup_duration] = 1
+    }
+
+    problem[:services][1][:activity][:timewindows] = [{
+      start: 1,
+      end: 1
+    }]
+
+    problem[:services] << problem[:services][1].dup.tap{ |s| s[:id] = 'service_4' }
+
+    vrp = TestHelper.create(problem)
+    solution = @pyvrp.solve(vrp, 'test')
+    assert_equal 0, solution.unassigned_stops.size
+  end
 end
