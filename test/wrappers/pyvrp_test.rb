@@ -570,7 +570,6 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert_equal 0, solution.unassigned_stops.size
   end
 
-  focus
   def test_setup_duration
     problem = VRP.basic
 
