@@ -152,7 +152,8 @@ module Wrappers
         quantity_hash = {}
         service.quantities.each{ |quantity|
           quantity_hash[quantity.unit_id] = {
-            value: quantity.value + (quantity&.pickup || 0) - (quantity&.delivery || 0),
+            # we can't have both pickup and delivery
+            value: quantity.value + (quantity&.pickup || 0) + (quantity&.delivery || 0),
             empty: quantity.empty,
             fill: quantity.fill
           }
