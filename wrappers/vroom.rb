@@ -92,7 +92,7 @@ module Wrappers
 
       tic = Time.now
       problem = vroom_problem(vrp, [:time, :distance])
-      result = run_vroom(problem, job, 2, vrp.configuration.resolution.duration)
+      result = run_vroom(problem, job, 5, vrp.configuration.resolution.duration)
       elapsed_time = (Time.now - tic) * 1000
 
       return if !result
