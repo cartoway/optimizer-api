@@ -27,12 +27,16 @@ RUN apt update -y && apt install -y \
         python3-pip \
         python3-venv
 
-ARG PYVRP_VERSION=0.11.1
+# ARG PYVRP_VERSION=0.11.1
+# Use dev version until `max_penalty` is released
+ARG PYVRP_VERSION=dev
+ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 
 RUN python -m venv /opt/pyenv && \
     /opt/pyenv/bin/pip install --upgrade pip && \
     /opt/pyenv/bin/pip install numpy && \
-    /opt/pyenv/bin/pip install pyvrp=="$PYVRP_VERSION"
+    # /opt/pyenv/bin/pip install pyvrp=="$PYVRP_VERSION"
+    /opt/pyenv/bin/pip install git+$PYVRP_GIT_URL
 ENV PATH="/opt/pyenv/bin:$PATH"
 
 ENV LANG C.UTF-8
