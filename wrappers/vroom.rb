@@ -264,6 +264,7 @@ module Wrappers
           delivery_hash[quantity.unit_id] = (quantity.delivery * CUSTOM_QUANTITY_BIGNUM).round if quantity.delivery
           pickup_hash[quantity.unit_id] = (quantity.pickup * CUSTOM_QUANTITY_BIGNUM).round if quantity.pickup
 
+          @total_quantities[quantity.unit_id] += [quantity.delivery, quantity.pickup, quantity.value&.abs, 0].compact.max
           next if quantity.value.zero?
 
           if quantity.value < 0
