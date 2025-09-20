@@ -102,11 +102,11 @@ jobs:
           path: /tmp
       - name: Load Docker image
         run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        run: timeout 4m docker compose -f ./docker/docker-compose.test.yml up --wait
-      - run: docker compose ps
       - name: Starting tests
-        run: timeout ${TIMEOUT} docker compose exec api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
+        run: |
+          timeout 4m docker compose -f ./docker/docker-compose.test.yml up --wait &&
+          docker compose ps && \
+          timeout ${TIMEOUT} docker compose exec api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
 
   test_dicho:
     needs: build
