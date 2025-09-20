@@ -1,6 +1,3 @@
-# TODO use anchor when supported https://github.community/t/support-for-yaml-anchors/16128/81
-name: Docker Image CI
-
 on:
   push:
     branches: [master, dev]
@@ -106,12 +103,9 @@ jobs:
       - name: Load Docker image
         run: docker load --input /tmp/optimizer-api.tar
       - name: Launch Stack
-        timeout-minutes: 4
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        run: ./.github/actions/launch_stack.sh
+        run: timeout 4m docker compose -f ./docker/docker-compose.test.yml up --wait
       - name: Starting tests
-        run: timeout ${TIMEOUT} ./.github/actions/tests.sh
+        run: timeout ${TIMEOUT} docker compose exec api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
 
   test_dicho:
     needs: build
