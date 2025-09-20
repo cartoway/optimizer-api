@@ -1,14 +1,3 @@
-version: '3.7'
-
-x-default-redis: &default-redis
-  image: redis:7-alpine
-  command: redis-server --appendonly yes
-  networks:
-    - optimizer-network
-  deploy:
-    restart_policy:
-      condition: any
-
 x-default-service: &default-service
   image: optimizer-api:latest
   environment: &default-environment
@@ -17,23 +6,19 @@ x-default-service: &default-service
     LOG_LEVEL: fatal
     OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
     OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
-    REDIS_COUNT_HOST: redis-count
+    # REDIS_CACHE_HOST: redis-cache
     REDIS_RESQUE_HOST: redis-resque
-    REDIS_RESULT_TTL_DAYS: 1
-    DOCKER: 'true'
-  networks:
-    - optimizer-network
+    REDIS_RESULT_TTL_DAYS: ${REDIS_RESULT_TTL_DAYS:-1}
   depends_on:
     - redis-resque
+    # - redis-cache
 
 services:
   api:
     <<: *default-service
     ports:
-      - "8083:80"
+      - "8083:80" # HOST:CONTAINER, edit only HOST part
     command: bundle exec puma -v -p 80 --pidfile 'server.pid'
-    networks:
-      - optimizer-network
 
   resque-default:
     <<: *default-service
@@ -42,20 +27,21 @@ services:
       COUNT: 5
       QUEUES: DEFAULT
     command: bundle exec rake resque:workers --trace
-    networks:
-      - optimizer-network
+    healthcheck:
+      disable: true
 
   redis-resque:
-    <<: *default-redis
-    networks:
-      - optimizer-network
-  redis-count:
-    <<: *default-redis
-    volumes:
-      - ${APP_HOME:-..}/redis-count:/data
-    hostname: redis-count
+    image: redis:${REDIS_VERSION:-7-alpine}
+    command: redis-server --appendonly yes
 
-
-networks:
-  optimizer-network:
-    driver: overlay
+  # redis-cache:
+  #   image: redis:${REDIS_VERSION:-7-alpine}
+  #   command: redis-server --save ""
+  #   healthcheck:
+  #     test: redis-cli --raw incr ping
+  #     start_interval: 1s
+  #     start_period: 30s
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #   restart: unless-stopped
