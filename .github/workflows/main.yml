@@ -90,6 +90,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     env:
+      COMPOSE_FILE: ./docker/docker-compose.test.yml
       OPTIONS: "COV=false LOG_LEVEL=info SKIP_DICHO=true SKIP_REAL_CASES=true SKIP_PERIODIC=true SKIP_SPLIT_CLUSTERING=true"
       TIMEOUT: 10m
     steps: &test_steps
@@ -103,9 +104,9 @@ jobs:
       - name: Load Docker image
         run: docker load --input /tmp/optimizer-api.tar
       - name: Launch Stack
-        run: timeout 4m docker compose -f ./docker/docker-compose.test.yml up --wait
+        run: timeout 4m docker compose up --wait
       - name: Starting tests
-        run: timeout ${TIMEOUT} docker compose -f ./docker/docker-compose.test.yml exec api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
+        run: timeout ${TIMEOUT} docker compose exec api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
 
   test_dicho:
     needs: build
