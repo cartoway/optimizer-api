@@ -94,7 +94,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info SKIP_DICHO=true SKIP_REAL_CASES=true SKIP_PERIODIC=true SKIP_SPLIT_CLUSTERING=true"
-    steps:
+      TIMEOUT: 10m
+    steps: &test_steps
       - name: Checkout
         uses: actions/checkout@v4
       - name: Download Docker image
@@ -109,167 +110,56 @@ jobs:
         env:
           COMPOSE_FILE: ./docker/docker-compose.test.yml
         run: ./.github/actions/launch_stack.sh
-        shell: bash
       - name: Starting tests
-        timeout-minutes: 10
-        run: ./.github/actions/tests.sh
-        shell: bash
+        run: timeout ${TIMEOUT} ./.github/actions/tests.sh
 
   test_dicho:
     needs: build
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/lib/heuristics/dichotomous_test.rb"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-      - name: Load Docker image
-        run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        timeout-minutes: 4
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        run: ./.github/actions/launch_stack.sh
-        shell: bash
-      - name: Starting tests
-        timeout-minutes: 20
-        run: ./.github/actions/tests.sh
-        shell: bash
+      TIMEOUT: 20m
+    steps: *test_steps
 
   test_real:
     needs: build
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/real_cases_test.rb"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-      - name: Load Docker image
-        run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        timeout-minutes: 4
-        run: ./.github/actions/launch_stack.sh
-        shell: bash
-      - name: Starting tests
-        timeout-minutes: 10
-        run: ./.github/actions/tests.sh
-        shell: bash
+      TIMEOUT: 10m
+    steps: *test_steps
 
   test_real_periodic:
     needs: build
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/real_cases_periodic_test.rb"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-      - name: Load Docker image
-        run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        timeout-minutes: 4
-        run: ./.github/actions/launch_stack.sh
-        shell: bash
-      - name: Starting tests
-        timeout-minutes: 10
-        run: ./.github/actions/tests.sh
-        shell: bash
+      TIMEOUT: 10m
+    steps: *test_steps
 
   test_real_periodic_solver:
     needs: build
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/real_cases_periodic_solver_test.rb"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-      - name: Load Docker image
-        run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        timeout-minutes: 4
-        run: ./.github/actions/launch_stack.sh
-        shell: bash
-      - name: Starting tests
-        timeout-minutes: 25
-        run: ./.github/actions/tests.sh
-        shell: bash
+      TIMEOUT: 25m
+    steps: *test_steps
 
   test_periodic:
     needs: build
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/lib/heuristics/periodic_*"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-      - name: Load Docker image
-        run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        timeout-minutes: 4
-        run: ./.github/actions/launch_stack.sh
-        shell: bash
-      - name: Starting tests
-        timeout-minutes: 3
-        run: ./.github/actions/tests.sh
-        shell: bash
+      TIMEOUT: 3m
+    steps: *test_steps
 
   test_split_clustering:
     needs: build
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/lib/interpreters/split_clustering_test.rb"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-          path: /tmp
-      - name: Load Docker image
-        run: docker load --input /tmp/optimizer-api.tar
-      - name: Launch Stack
-        env:
-          COMPOSE_FILE: ./docker/docker-compose.test.yml
-        timeout-minutes: 4
-        run: ./.github/actions/launch_stack.sh
-        shell: bash
-      - name: Starting tests
-        timeout-minutes: 25
-        run: ./.github/actions/tests.sh
-        shell: bash
+      TIMEOUT: 25m
+    steps: *test_steps
 
   docker:
     runs-on: ubuntu-latest
