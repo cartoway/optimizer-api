@@ -28,7 +28,7 @@ services:
       QUEUES: DEFAULT
     command: bundle exec rake resque:workers --trace
     healthcheck:
-      disable: true
+      test: echo ok
 
   redis-resque:
     image: redis:${REDIS_VERSION:-7-alpine}
