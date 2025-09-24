@@ -40,6 +40,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    ports:
+      - 6379:6379
 
   # redis-cache:
   #   image: redis:${REDIS_VERSION:-7-alpine}
