@@ -1,0 +1,15 @@
+x-default-service: &default-service
+  image: optimizer-api:latest
+  environment: &default-environment
+    APP_ENV: test
+    BUNDLE_WITH: "test development"
+    LOG_LEVEL: fatal
+    OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
+    OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
+
+services:
+  api:
+    <<: *default-service
+    ports:
+      - "8083:80" # HOST:CONTAINER, edit only HOST part
+    command: bundle exec puma -v -p 80 --pidfile 'server.pid'
