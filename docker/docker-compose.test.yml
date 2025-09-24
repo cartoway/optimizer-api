@@ -10,7 +10,8 @@ x-default-service: &default-service
     REDIS_RESQUE_HOST: redis-resque
     REDIS_RESULT_TTL_DAYS: ${REDIS_RESULT_TTL_DAYS:-1}
   depends_on:
-    - redis-resque
+    redis-resque:
+      condition: service_healthy
     # - redis-cache
 
 services:
