@@ -7,7 +7,7 @@ x-default-service: &default-service
     OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
     OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
     # REDIS_CACHE_HOST: redis-cache
-    REDIS_RESQUE_HOST: redis-resque
+    REDIS_RESQUE_HOST: localhost
     REDIS_RESULT_TTL_DAYS: ${REDIS_RESULT_TTL_DAYS:-1}
   depends_on:
     redis-resque:
