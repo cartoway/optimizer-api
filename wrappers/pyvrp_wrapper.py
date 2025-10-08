@@ -48,7 +48,15 @@ def main(input_path, output_path, timeout=None):
         "routes": [
             {
                 "vehicle_type": route.vehicle_type(),
-                "visits": route.visits(),
+                "trips": [
+                    {
+                        "visits": trip.visits(),
+                        "start_depot": trip.start_depot(),
+                        "end_depot": trip.end_depot(),
+                        "release_time": trip.release_time()
+                    }
+                    for trip in route.trips()
+                ],
                 "start_depot": route.start_depot(),
                 "end_depot": route.end_depot(),
                 "start_time": route.start_time(),

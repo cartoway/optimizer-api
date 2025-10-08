@@ -600,4 +600,44 @@ class Wrappers::PyVRPTest < Minitest::Test
     solution = @pyvrp.solve(vrp, 'test')
     assert_equal 0, solution.unassigned_stops.size
   end
+
+  def test_reload_depot_with_lat_lon_capacitated
+    problem = VRP.lat_lon_capacitated
+
+    problem[:reload_depots] = [{
+      id: 'reload_depot_1',
+      point_id: 'point_0',
+      duration: 300,
+      timewindows: [{
+        start: 0,
+        end: 86400
+      }]
+    }, {
+      id: 'reload_depot_2',
+      point_id: 'point_0',
+      duration: 300,
+      timewindows: [{
+        start: 0,
+        end: 86400
+      }]
+    }]
+
+    problem[:vehicles].first[:reload_depot_ids] = ['reload_depot_1', 'reload_depot_2']
+    problem[:vehicles].first[:maximum_reloads] = 4 # Only 2 are necessary
+
+    vrp = TestHelper.create(problem)
+    solution = @pyvrp.solve(vrp, 'test')
+
+    assert solution
+    assert_equal 1, solution.routes.size
+
+    assert_equal vrp.services.size + 4, solution.routes.first.stops.size,
+                 'Route should contain all services, 2 depots and 2 reloads'
+
+    assert_equal(
+      [3, 6],
+      solution.routes.first.stops.size.times.select{ |i| solution.routes.first.stops[i][:type] == :reload_depot },
+      'Route should contain 2 reload depots at indices 3 and 6'
+    )
+  end
 end

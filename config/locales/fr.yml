@@ -48,6 +48,7 @@ fr:
       tw_start: "horaire début %{index}"
       type: type arrêt
       type_rest: pause
+      type_reload_depot: dépôt de recharge
       type_store: dépôt
       type_visit: visite
       visit_index: indice de la visite

@@ -62,6 +62,7 @@ module Models
     field :duration, default: nil
     field :overall_duration, default: nil
     field :distance, default: nil
+    field :maximum_reloads, default: nil
     field :maximum_ride_time, default: nil
     field :maximum_ride_distance, default: nil
     field :matrix_id, default: nil
@@ -101,6 +102,8 @@ module Models
 
     belongs_to :start_point, class_name: 'Models::Point', as_json: :id
     belongs_to :end_point, class_name: 'Models::Point', as_json: :id
+    has_many :reload_depots, class_name: 'Models::ReloadDepot', as_json: :ids
+
     belongs_to :timewindow, class_name: 'Models::Timewindow'
     has_many :capacities, class_name: 'Models::Capacity'
     # include ValidateTimewindows # <- This doesn't work

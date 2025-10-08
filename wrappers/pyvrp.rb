@@ -86,9 +86,15 @@ module Wrappers
           end
 
           vehicle = vrp.vehicles[route[:vehicle_type]]
-          stops += route[:visits].map{ |visit_index|
-            read_visit(vrp, vehicle, visit_index)
-          }.compact
+          route[:trips].each.with_index { |trip, idx|
+            stops +=
+              trip[:visits].map{ |visit_index|
+                read_visit(vrp, vehicle, visit_index)
+              }
+            next if idx == route[:trips].size - 1
+
+            stops << read_reload_depot_trip(vrp, vehicle, trip[:end_depot])
+          }
 
           if route[:end_depot]
             end_stop = read_depot_end(vrp, vehicle)
@@ -164,6 +170,16 @@ module Wrappers
       Models::Solution::StopDepot.new(point, info: Models::Solution::Stop::Info.new(route_data))
     end
 
+    def read_reload_depot_trip(vrp, vehicle, reload_depot_index)
+      reload_depot = @depot_hash[reload_depot_index]
+      return nil if reload_depot.nil?
+
+      route_data = compute_route_data(vrp, vehicle, reload_depot.point)
+
+      @previous = reload_depot.point
+      Models::Solution::Stop.new(reload_depot, info: Models::Solution::Stop::Info.new(route_data), loads: nil)
+    end
+
     def read_activity(vrp, vehicle, visit_index)
       service = @service_index_map[visit_index]
       @service_hash.delete(service.id)
@@ -234,6 +250,14 @@ module Wrappers
           [veh.start_point, veh.end_point]
         }.uniq
       additive_setups = Array.new(depot_points.size, 0)
+
+      reload_depot_points =
+        vrp.vehicles.flat_map{ |veh|
+          veh.reload_depots.map{ |depot|
+            additive_setups << depot.duration.to_i
+            depot.point
+          }
+        }
       client_points =
         vrp.services.flat_map{ |service|
           points =
@@ -244,7 +268,7 @@ module Wrappers
           points
         }
 
-      all_points = (depot_points + client_points)
+      all_points = (depot_points + reload_depot_points + client_points)
 
       distance_matrices.map! do |matrix|
         matrix =
@@ -280,6 +304,12 @@ module Wrappers
         vrp.vehicles.flat_map{ |veh|
           [veh.start_point, veh.end_point]
         }.uniq.each_with_index.map { |pt, idx| [pt&.id, idx] }.to_h
+      reload_depot_hash =
+        vrp.vehicles.flat_map{ |veh|
+          veh.reload_depots.map.with_index{ |depot, idx|
+            ["#{veh.id}_#{depot.id}", idx + depot_hash.size]
+          }
+        }.to_h
       all_units = vrp.units.index_by(&:id)
 
       vrp.vehicles.map { |veh|
@@ -304,14 +334,14 @@ module Wrappers
           fixed_cost: veh.cost_fixed.to_i,
           tw_early: veh.timewindow&.start || 0,
           tw_late: veh.timewindow&.end || MAX_INT64,
-          max_duration: veh.duration || MAX_INT64,
+          shift_duration: veh.duration || MAX_INT64,
           max_distance: veh.distance || MAX_INT64,
           unit_distance_cost: veh.cost_distance_multiplier.to_i,
           unit_duration_cost: veh.cost_time_multiplier.to_i,
           profile: used_matrices.index(veh.matrix_id),
           start_late: nil,
-          reload_depots: [],
-          max_reloads: MAX_INT64,
+          reload_depots: veh.reload_depots.map{ |depot| reload_depot_hash["#{veh.id}_#{depot.id}"] },
+          max_reloads: veh.maximum_reloads || 0,
           name: veh.id.to_s
         }
       }
@@ -390,16 +420,32 @@ module Wrappers
 
     def build_depots(vrp)
       depot_points = vrp.vehicles.flat_map { |vehicle| [vehicle.start_point, vehicle.end_point] }.uniq
-      @service_index_map += depot_points.map{ nil }
-      depot_points.map do |point|
-        {
-          x: point&.location&.lon || 0,
-          y: point&.location&.lat || 0,
-          tw_early: 0,
-          tw_late: MAX_INT64,
-          name: point&.id&.to_s || '_null_store'
+      @depot_hash = Array.new(depot_points.size, nil)
+      depots =
+        depot_points.map do |point|
+          {
+            x: point&.location&.lon || 0,
+            y: point&.location&.lat || 0,
+            tw_early: 0,
+            tw_late: MAX_INT64,
+            name: point&.id&.to_s || '_null_store'
+          }
+        end
+      depots +=
+        vrp.vehicles.flat_map { |vehicle|
+          vehicle.reload_depots.map{ |depot|
+            @depot_hash << depot
+            {
+              x: depot.point&.location&.lon || 0,
+              y: depot.point&.location&.lat || 0,
+              tw_early: depot.timewindows.first&.start || 0,
+              tw_late: depot.timewindows.first&.end || MAX_INT64,
+              name: "#{vehicle.id}_#{depot.id}"
+            }
+          }
         }
-      end
+      @service_index_map += depots.map{ nil }
+      depots
     end
 
     def run_pyvrp(problem, timeout = nil)

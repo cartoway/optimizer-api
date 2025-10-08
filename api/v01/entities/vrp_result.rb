@@ -68,12 +68,13 @@ module Api
       expose :begin_time, documentation: { type: Integer, desc: 'Time visit starts' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :end_time, documentation: { type: Integer, desc: 'Time visit ends' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :departure_time, documentation: { type: Integer, desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
+      expose :reload_depot_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the reload depot' }
       expose :service_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the service' }
       expose :pickup_shipment_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the shipment' }
       expose :delivery_shipment_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the shipment' }
       expose :rest_id, expose_nil: false, documentation: { type: String, desc: 'Internal reference of the rest' }
       expose :detail, using: VrpResultSolutionRouteActivityDetails, documentation: { desc: '' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
-      expose :type, documentation: { type: String, desc: 'depot, rest, service, pickup or delivery' }
+      expose :type, documentation: { type: String, desc: 'depot, reload_depot, rest, service, pickup or delivery' }
       expose :current_distance, documentation: { type: Integer, desc: 'Travel distance from route start to current point (in m)' }, if: lambda { |instance, options| options[:detailed_solutions] == true }
       expose :alternative, documentation: { type: Integer, desc: 'When one service has alternative activities, index of the chosen one' }
       expose :visit_index, documentation: { type: Integer, desc: 'Index of the visit' }

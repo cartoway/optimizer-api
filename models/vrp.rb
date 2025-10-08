@@ -40,6 +40,7 @@ module Models
     has_many :timewindows, class_name: 'Models::Timewindow', as_json: :none
     has_many :capacities, class_name: 'Models::Capacity', as_json: :none
     has_many :quantities, class_name: 'Models::Quantity', as_json: :none
+    has_many :reload_depots, class_name: 'Models::ReloadDepot'
     has_many :vehicles, class_name: 'Models::Vehicle'
     has_many :services, class_name: 'Models::Service'
     has_many :relations, class_name: 'Models::Relation'
@@ -68,7 +69,7 @@ module Models
       self.filter(hash) if options[:check] # TODO : add filters.rb here
       vrp.check_consistency(hash) if options[:check] # TODO: this check can be directly done on the hash without concern
       [:name, :matrices, :units, :points, :rests, :zones, :capacities, :quantities, :timewindows,
-       :vehicles, :services, :relations, :subtours, :routes, :configuration].each{ |key|
+       :reload_depots, :vehicles, :services, :relations, :subtours, :routes, :configuration].each{ |key|
         vrp.send("#{key}=", hash[key]) if hash[key]
       }
 

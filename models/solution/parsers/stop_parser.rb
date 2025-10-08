@@ -80,6 +80,19 @@ module Parsers
     end
   end
 
+  class ReloadDepotParser
+    def self.parse(reload_depot, options)
+      {
+        id: reload_depot.original_id || reload_depot.id,
+        reload_depot_id: reload_depot.original_id || reload_depot.id,
+        type: :reload_depot,
+        loads: options[:loads],
+        activity: Models::ReloadDepot.new(reload_depot.as_json),
+        info: options[:info] || Models::Solution::Stop::Info.new({})
+      }
+    end
+  end
+
   class RestParser
     def self.parse(rest, options)
       {

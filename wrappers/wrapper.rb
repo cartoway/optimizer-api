@@ -57,6 +57,10 @@ module Wrappers
       vrp.vehicles.none?{ |vehicle| vehicle.skills.any? }
     end
 
+    def assert_vehicles_no_reload_depots(vrp)
+      vrp.vehicles.none?{ |vehicle| vehicle.reload_depots.any? }
+    end
+
     def assert_services_no_priority(vrp)
       vrp.services.uniq(&:priority).size <= 1
     end
