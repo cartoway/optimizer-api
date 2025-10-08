@@ -169,7 +169,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
     if vrp.is_a?(Hash) # TODO: make this work for the model as well.
       # So that, it can detect model change and dump incompatibility.
       unknown_model_fields = vrp.keys - [:name, :matrices, :units, :points, :rests,
-                                         :zones, :vehicles, :services, :shipments, :relations, :subtours,
+                                         :zones, :vehicles, :services, :shipments, :relations, :reload_depots, :subtours,
                                          :routes, :configuration]
       unless unknown_model_fields.empty?
         raise 'If there is a new model class add it above. '\

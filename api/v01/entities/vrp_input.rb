@@ -34,6 +34,8 @@ module VrpInput
 
     optional(:points, type: Array, documentation: { desc: 'Particular place in the map' }) do use :vrp_request_point end
 
+    optional(:reload_depots, type: Array, documentation: { desc: 'Depots available for reload' }) do use :vrp_request_reload_depot end
+
     optional(:units, type: Array, documentation: { desc: 'The name of a Capacity/Quantity' }) do use :vrp_request_unit end
 
     optional(:rests, type: Array, documentation: { desc: 'Break within a vehicle tour' }) do use :vrp_request_rest end
@@ -329,6 +331,15 @@ end
 module VrpMissions
   extend Grape::API::Helpers
 
+  params :vrp_request_reload_depot do
+    requires(:id, type: String, allow_blank: false)
+    requires(:duration, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Duration of the relaod', coerce_with: ->(value) { ScheduleType.type_cast(value) })
+    optional(:timewindows, type: Array, desc: 'Time window within the depot is available for reload. At most one timewindow per reload depot is supported.') do
+      use :vrp_request_timewindow
+    end
+    optional(:point_id, type: String, desc: 'Point of the depot')
+  end
+
   params :vrp_request_rest do
     requires(:id, type: String, allow_blank: false)
     requires(:duration, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Duration of the vehicle rest', coerce_with: ->(value) { ScheduleType.type_cast(value) })
@@ -541,6 +552,7 @@ module VrpVehicles
     optional(:duration, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum tour duration', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:overall_duration, type: Integer, values: ->(v) { v.positive? }, documentation: { hidden: true }, desc: '(Schedule only) If schedule covers several days, maximum work duration over whole period. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:distance, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum tour distance. Not available with periodic heuristic.')
+    optional(:maximum_reloads, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Maximum number of reloads within the tour')
     optional(:maximum_ride_time, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum ride duration between two route activities')
     optional(:maximum_ride_distance, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum ride distance between two route activities')
     optional :skills, type: Array[Array[Symbol]],
@@ -583,6 +595,7 @@ module VrpVehicles
   params :vehicle_model_related do
     optional(:start_point_id, type: String, desc: 'Begin of the tour')
     optional(:end_point_id, type: String, desc: 'End of the tour')
+    optional(:reload_depot_ids, type: Array[String], desc: 'Reload depots within the tour')
     optional(:capacity_ids, type: String, documentation: { hidden: true }, desc: 'Capacities to consider, CSV front only')
     optional(:capacities, type: Array, desc: 'Define the limit of entities the vehicle could carry. The maximum precision supported is 1e-3.') do
       use :vrp_request_capacity

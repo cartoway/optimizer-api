@@ -48,6 +48,7 @@ en:
       tw_start: "time window start %{index}"
       type: stop type
       type_rest: rest
+      type_reload_depot: reload depot
       type_store: store
       type_visit: visit
       visit_index: visit index

@@ -158,6 +158,8 @@ module OutputHelper
         [I18n.t('export_file.stop.type_visit'), "#{activity[:shipment_id]}_#{activity[:type]}"]
       elsif activity[:rest_id]
         [I18n.t('export_file.stop.type_rest'), activity[:rest_id]]
+      elsif activity[:reload_depot_id]
+        [I18n.t('export_file.stop.type_reload_depot'), activity[:reload_depot_id]]
       else
         [I18n.t('export_file.stop.type_store'), activity[:point_id]]
       end

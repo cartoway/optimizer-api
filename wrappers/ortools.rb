@@ -37,6 +37,7 @@ module Wrappers
         :assert_end_optimization,
         :assert_vehicles_objective,
         :assert_vehicles_no_alternative_skills,
+        :assert_vehicles_no_reload_depots,
         :assert_zones_only_size_one_alternative,
         :assert_only_empty_or_fill_quantities,
         :assert_points_same_definition,

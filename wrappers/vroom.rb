@@ -53,6 +53,7 @@ module Wrappers
         :assert_vehicles_no_force_start,
         :assert_vehicles_no_late_multiplier,
         :assert_vehicles_no_overload_multiplier,
+        :assert_vehicles_no_reload_depots,
         :assert_vehicles_start_or_end,
         :assert_no_overall_duration,
 

@@ -29,6 +29,7 @@ module Models
       field :service_id
       field :pickup_shipment_id
       field :delivery_shipment_id
+      field :reload_depot_id
       field :rest_id
       field :skills, default: [], vrp_result: :hide
       field :original_skills, default: [], vrp_result: :hide
@@ -45,6 +46,8 @@ module Models
           case object.class.to_s
           when 'Models::Service'
             Parsers::ServiceParser.parse(object, options)
+          when 'Models::ReloadDepot'
+            Parsers::ReloadDepotParser.parse(object, options)
           when 'Models::Rest'
             Parsers::RestParser.parse(object, options)
           when 'Models::Point'
@@ -129,6 +132,14 @@ module Models
     end
 
     class StopDepot < Stop
+      field :type
+
+      has_many :loads, class_name: 'Models::Solution::Load'
+      belongs_to :activity, class_name: 'Models::Activity'
+      belongs_to :info, class_name: 'Models::Solution::Stop::Info', vrp_result: :hide
+    end
+
+    class StopReloadDepot < Stop
       field :type
 
       has_many :loads, class_name: 'Models::Solution::Load'
