@@ -52,6 +52,27 @@ module Models
     end
 
     class << self
+      # Override active_hash to improve performances
+      def insert(record)
+        @records ||= []
+        record_id(record)
+        validate_unique_id(record) if dirty
+        mark_dirty
+
+        add_to_record_index({ record.id.to_s => @records.length })
+        @records << record
+      end
+
+      # Override active_hash to improve performances
+      def record_id(record)
+        # sets record[:id] to @max_id+1 if it doesn't exist
+        if record[:id]&.is_a?(Numeric)
+          @max_id = [@max_id || 0, record[:id].ceil].max
+        else
+          record[:id] ||= (@max_id = @max_id.to_i.succ)
+        end
+      end
+
       def json_fields
         @json_fields ||= []
       end
