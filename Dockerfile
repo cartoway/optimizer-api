@@ -27,9 +27,7 @@ RUN apt update -y && apt install -y \
         python3-pip \
         python3-venv
 
-# ARG PYVRP_VERSION=0.11.1
-# Use dev version until `max_penalty` is released
-ARG PYVRP_VERSION=dev
+ARG PYVRP_VERSION=0.12.1
 ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 
 RUN python -m venv /opt/pyenv && \
