@@ -22,7 +22,7 @@ gem 'grape-swagger-entity'
 gem 'actionpack', require: 'action_dispatch'
 # waiting for the following PRs to get merged and "released!"
 # https://github.com/zilkey/active_hash/pull/231 and https://github.com/zilkey/active_hash/pull/233
-gem 'active_hash', github: 'cartoway/active_hash', branch: 'dev'
+gem 'active_hash'
 gem 'activemodel'
 gem 'activesupport', require: 'active_support'
 gem 'google-protobuf', '>=3', require: 'google/protobuf'
