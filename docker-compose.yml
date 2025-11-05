@@ -26,7 +26,7 @@ services:
     <<: *default-service
     ports:
       - "8083:80" # HOST:CONTAINER, edit only HOST part
-    command: bundle exec puma -v -p 80 --pidfile 'server.pid' -t ${PUMA_THREADS:-0:1}" -w ${PUMA_WORKERS:-4}"
+    command: bundle exec puma -v -p 80 --pidfile 'server.pid' -t "${PUMA_THREADS:-0:1}" -w "${PUMA_WORKERS:-4}"
     restart: unless-stopped
 
   resque-default:
