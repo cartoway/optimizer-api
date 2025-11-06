@@ -711,6 +711,7 @@ module Interpreters
 
       sub_vrp.matrices = vrp.matrices
       sub_vrp.units = vrp.units
+      sub_vrp.reload_depots = vrp.reload_depots
 
       sub_vrp.services = vrp.services.select{ |service| partial_service_ids.include?(service.id) }
       sub_vrp.rests = sub_vrp.vehicles.flat_map(&:rests).uniq

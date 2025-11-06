@@ -79,6 +79,7 @@ module Core
         # Repopulate Objects which are referenced by others using ids but deleted by the multiple sub problem creations
         vrp.units.each{ |unit| Models::Unit.insert(unit) } if Models::Unit.all.empty?
         vrp.points.each{ |point| Models::Point.insert(point) } if Models::Point.all.empty?
+        vrp.reload_depots.each{ |reload_depot| Models::ReloadDepot.insert(reload_depot) } if Models::ReloadDepot.all.empty?
         vrp.services.each{ |s| Models::Service.insert(s) } if Models::Service.all.empty?
 
         log "--> define_process VRP (service: #{vrp.services.size} including #{shipment_size} shipment relations, "\

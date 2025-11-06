@@ -444,15 +444,17 @@ module OutputHelper
       end
 
       def generate_points_geometry(result, vehicle_color_indices)
-        return nil unless (result[:unassigned].empty? || result[:unassigned].any?{ |un| un[:detail][:lat] }) &&
+        return nil unless (result[:unassigned].empty? || result[:unassigned].any?{ |un| un[:detail][:lat] && un[:detail][:lon] }) &&
                           (result[:routes].all?{ |r| r[:activities].empty? } ||
-                           result[:routes].any?{ |r| r[:activities].any?{ |a| a[:detail] && a[:detail][:lat] } })
+                           result[:routes].any?{ |r| r[:activities].any?{ |a| a[:detail] && a[:detail][:lat] && a[:detail][:lon] } })
 
         points = []
 
         mission_types = [:service, :pickup, :delivery]
 
         result[:unassigned].each{ |unassigned|
+          next unless unassigned[:detail][:lat] && unassigned[:detail][:lon]
+
           points << {
             type: 'Feature',
             properties: {
@@ -470,6 +472,7 @@ module OutputHelper
           color = compute_color([], nil, vehicle_color_indices[r[:original_vehicle_id]] || r[:day] || 0)
           r[:activities].each{ |a|
             next unless mission_types.include?(a[:type].to_sym)
+            next unless a[:detail][:lat] && a[:detail][:lon]
 
             skills_properties = compute_skills_properties([nil, [a]])
             points << {
