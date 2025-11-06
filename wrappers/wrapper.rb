@@ -58,7 +58,7 @@ module Wrappers
     end
 
     def assert_vehicles_no_reload_depots(vrp)
-      vrp.vehicles.none?{ |vehicle| vehicle.reload_depots.any? }
+      vrp.vehicles.none?{ |vehicle| vehicle.reload_depots.any? && vehicle.maximum_reloads > 0 }
     end
 
     def assert_services_no_priority(vrp)
