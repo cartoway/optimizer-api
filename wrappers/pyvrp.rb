@@ -400,7 +400,7 @@ module Wrappers
             tw_late: tw.end || MAX_INT64,
             release_time: 0,
             prize: service.exclusion_cost || (MAX_PENALTY / (service.priority + 1)).round,
-            required: service.priority == 0 && activity.timewindows.size <= 1,
+            required: false,
             name: "#{service.id}_tw#{tw_idx}"
           }
           service_to_client_indices[service.id] ||= []
