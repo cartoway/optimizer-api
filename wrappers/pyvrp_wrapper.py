@@ -34,7 +34,7 @@ def main(input_path, output_path, timeout=None):
     data = ProblemData.from_dict(json_data)
     m = Model.from_data(data)
     # Solve the problem
-    penalty_params = PenaltyParams(min_penalty=1e10, max_penalty=1e10)
+    penalty_params = PenaltyParams(min_penalty=1e5, max_penalty=1e10)
     solve_params = SolveParams(penalty=penalty_params)
     result = m.solve(stop=MaxRuntime(int(timeout)), params=solve_params)
 
