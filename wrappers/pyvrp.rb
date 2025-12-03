@@ -314,11 +314,9 @@ module Wrappers
 
       vrp.vehicles.map { |veh|
         capacity_hash = all_units.map{ |id, _unit| [id, MAX_INT64] }.to_h
-        limit_hash = all_units.map{ |id, _unit| [id, MAX_INT64] }.to_h
         veh.capacities.each do |capacity|
           capacity_hash[capacity.unit_id] =
             (capacity.limit && (capacity.limit * CUSTOM_QUANTITY_BIGNUM).to_i || MAX_INT_UNITS)
-          limit_hash[capacity.unit_id] = capacity.initial&.to_i || capacity.limit&.to_i || MAX_INT64
         end
 
         capacity_skills = Array.new(@skills_index_hash.size, 0)
