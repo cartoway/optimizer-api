@@ -1,4 +1,5 @@
 import json
+import math
 import sys
 import numpy as np
 from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PenaltyParams
@@ -34,7 +35,14 @@ def main(input_path, output_path, timeout=None):
     data = ProblemData.from_dict(json_data)
     m = Model.from_data(data)
     # Solve the problem
-    penalty_params = PenaltyParams(min_penalty=1e10, max_penalty=1e10)
+    # ProblemData exposes clients as a method, not as a list attribute.
+    clients = list(data.clients())
+    # Closest power of two for the number of clients (rounded to nearest).
+    num_clients = len(clients)
+    closest_power_two_exponent = 0 if num_clients <= 0 else round(math.log(num_clients, 3))
+    min_penalty = 10 ** (1 + closest_power_two_exponent)
+    penalty_params = PenaltyParams(min_penalty=min_penalty, max_penalty=1e10)
+    # penalty_params = PenaltyParams(min_penalty=smallest_prize * 1e-5, max_penalty=cumulated_prizes * 1e-2)
     solve_params = SolveParams(penalty=penalty_params)
     result = m.solve(stop=MaxRuntime(int(timeout)), params=solve_params)
 
