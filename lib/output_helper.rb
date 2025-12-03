@@ -444,9 +444,13 @@ module OutputHelper
       end
 
       def generate_points_geometry(result, vehicle_color_indices)
-        return nil unless (result[:unassigned].empty? || result[:unassigned].any?{ |un| un[:detail][:lat] && un[:detail][:lon] }) &&
-                          (result[:routes].all?{ |r| r[:activities].empty? } ||
-                           result[:routes].any?{ |r| r[:activities].any?{ |a| a[:detail] && a[:detail][:lat] && a[:detail][:lon] } })
+        unassigned_has_coords =
+          result[:unassigned].empty? ||
+          result[:unassigned].any?{ |un| un[:detail][:lat] && un[:detail][:lon] }
+        routes_have_coords =
+          result[:routes].all?{ |r| r[:activities].empty? } ||
+          result[:routes].any?{ |r| r[:activities].any?{ |a| a[:detail] && a[:detail][:lat] && a[:detail][:lon] } }
+        return nil unless unassigned_has_coords && routes_have_coords
 
         points = []
 
