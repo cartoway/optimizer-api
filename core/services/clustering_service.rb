@@ -47,7 +47,7 @@ module Core
 
         matrix = vrp.matrices[0][vrp.vehicles[0].router_dimension.to_sym]
         used_units = {}
-        vrp.services.each{ |s| s.quantities.each{ |q| used_units[q.unit.id] = true if q.value != 0 } }
+        vrp.services.each{ |s| s.quantities.each{ |q| used_units[q.unit.id] = true if q.pickup != 0 || q.delivery != 0 } }
         no_useful_capacities =
           vrp.vehicles.none?{ |v|
             v.capacities.any?{ |capa| capa.limit && used_units.key?(capa.unit.id) }
