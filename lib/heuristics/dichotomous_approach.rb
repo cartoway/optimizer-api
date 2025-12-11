@@ -177,6 +177,22 @@ module Interpreters
             sv_one.points << new_point
           end
         }
+
+        vehicle.reload_depots.each do |reload_depot|
+          reload_point = reload_depot.point
+          if reload_point
+            existing_reload_point = sv_one.points.find{ |p| p.id == reload_point.id }
+            if existing_reload_point
+              reload_depot.point = existing_reload_point if reload_depot.point_id == reload_point.id
+            else
+              sv_one.points << reload_point
+            end
+          end
+
+          sv_one.reload_depots << reload_depot if sv_one.reload_depots.none?{ |rd| rd.id == reload_depot.id }
+          still_used = sv_zero.vehicles.any?{ |veh| veh.reload_depots.include?(reload_depot) }
+          sv_zero.reload_depots -= [reload_depot] unless still_used
+        end
       }
 
       # Transfer unsued vehicle limit to the other side as well

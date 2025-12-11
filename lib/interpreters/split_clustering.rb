@@ -327,13 +327,15 @@ module Interpreters
 
       # Select the vehicles and services belonging to this sub-problem from the service_vehicle_assignments
       # transfer a vehicle with a forcing linked relation only if all of its linked vehicles can be transferred as well
+      sub_vrp.reload_depots = o_vrp.reload_depots
       sub_vrp.vehicles = ss_data[:current_vehicles] + transfer_unused_vehicles(ss_data)
       sub_vrp.services = ss_data[:current_vehicles].flat_map{ |v| ss_data[:service_vehicle_assignments][v.id] }
       sub_vrp.services.concat ss_data[:transferred_empties_or_fills]
 
       # only necessary points -- because compute_matrix doesn't check the difference
       sub_vrp.points = sub_vrp.services.flat_map{ |s| s.activity&.point || s.activities.map(&:point) } |
-                       sub_vrp.vehicles.flat_map{ |v| [v.start_point, v.end_point].compact }
+                       sub_vrp.vehicles.flat_map{ |v| [v.start_point, v.end_point].compact } |
+                       sub_vrp.reload_depots.flat_map(&:point)
 
       # only necessary relations
       sub_vrp.relations = select_existing_relations(o_vrp.relations, sub_vrp)
