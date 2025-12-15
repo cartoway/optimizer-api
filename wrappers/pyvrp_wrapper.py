@@ -2,7 +2,7 @@ import json
 import math
 import sys
 import numpy as np
-from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PenaltyParams
+from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PenaltyParams, solve
 from pyvrp.stop import MaxRuntime
 
 def _problem_data_from_dict(cls, data: dict):
@@ -41,10 +41,15 @@ def main(input_path, output_path, timeout=None):
     num_clients = len(clients)
     closest_power_two_exponent = 0 if num_clients <= 0 else round(math.log(num_clients, 3))
     min_penalty = 10 ** (1 + closest_power_two_exponent)
-    penalty_params = PenaltyParams(min_penalty=min_penalty, max_penalty=1e10)
-    # penalty_params = PenaltyParams(min_penalty=smallest_prize * 1e-5, max_penalty=cumulated_prizes * 1e-2)
+    penalty_params = PenaltyParams(target_feasible=0.8, min_penalty=min_penalty, max_penalty=1e10)
     solve_params = SolveParams(penalty=penalty_params)
-    result = m.solve(stop=MaxRuntime(int(timeout)), params=solve_params)
+
+    result = solve(
+        data,
+        stop=MaxRuntime(int(timeout)),
+        params=solve_params,
+        display=True,
+    )
 
     best_solution = result.best
     solution = {
