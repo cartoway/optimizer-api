@@ -28,17 +28,6 @@ module Core
 
               service_vrp_repeats = Interpreters::SeveralSolutions.expand_repetitions(service_vrp)
 
-              # Fallback resolution with vroom in case pyvrp returns a degraded or infeasible solution with reload depots
-              if service_vrp[:service] == :pyvrp && service_vrp[:skipped_services].any?{ |skipped_service|
-                   skipped_service[:service] == :vroom &&
-                   skipped_service[:reasons].all?{ |reason| reason == :assert_vehicles_no_reload_depots }
-                 }
-                rerun_service_vrp = Interpreters::SeveralSolutions.duplicate_service_vrp(service_vrp)
-                rerun_service_vrp.vrp.configuration.resolution.solver = :vroom
-                rerun_service_vrp[:service] = :vroom
-                service_vrp_repeats << rerun_service_vrp
-              end
-
               service_vrp_repeats.each_with_index{ |repeated_service_vrp, repetition_index|
                 repeated_results <<
                   define_process(repeated_service_vrp, job) { |wrapper, avancement, total, message, cost, time, solution|
@@ -106,6 +95,8 @@ module Core
         solution ||= Interpreters::SplitClustering.split_clusters(service_vrp, job, &block)
         # Calls define_process recursively
         solution ||= Interpreters::Dichotomous.dichotomous_heuristic(service_vrp, job, &block)
+
+        solution ||= Interpreters::MultiTrip.presolve(service_vrp, job, &block)
 
         solution ||= solve(service_vrp, job, block)
 
@@ -247,7 +238,6 @@ module Core
                   elsif (vrp.configuration.preprocessing.heuristic_result.nil? ||
                           vrp.configuration.preprocessing.heuristic_result.empty?) &&
                         !vrp.configuration.restitution.allow_empty_result
-                    puts cliqued_solution
                     raise 'No solution provided'
                   end
                 }

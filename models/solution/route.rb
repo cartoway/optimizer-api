@@ -67,6 +67,10 @@ module Models
         shift_route_times(idle_time + stop.activity.duration, index)
       end
 
+      def under_used?
+        info.total_time < 0.8 * vehicle.work_duration
+      end
+
       def compute_setup_times(hash)
         previous_point_id = nil
         stops.each.with_index{ |stop, stop_index|
