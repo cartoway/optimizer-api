@@ -28,13 +28,18 @@ RUN apt update -y && apt install -y \
         python3-venv
 
 ARG PYVRP_VERSION=0.12.1
+# PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
+ARG PYVRP_BRANCH=b638d7c5dde5029f8d94e6ab80da84f19fb6c563
 ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 
 RUN python -m venv /opt/pyenv && \
     /opt/pyenv/bin/pip install --upgrade pip && \
     /opt/pyenv/bin/pip install numpy && \
-    # /opt/pyenv/bin/pip install pyvrp=="$PYVRP_VERSION"
-    /opt/pyenv/bin/pip install git+$PYVRP_GIT_URL
+    if [ -z "$PYVRP_BRANCH" ]; then \
+        /opt/pyenv/bin/pip install pyvrp=="$PYVRP_VERSION"; \
+    else \
+        /opt/pyenv/bin/pip install git+$PYVRP_GIT_URL@$PYVRP_BRANCH; \
+    fi
 ENV PATH="/opt/pyenv/bin:$PATH"
 
 ENV LANG C.UTF-8
