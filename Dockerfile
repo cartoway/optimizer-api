@@ -29,7 +29,7 @@ RUN apt update -y && apt install -y \
 
 ARG PYVRP_VERSION=0.12.1
 # PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
-ARG PYVRP_BRANCH=b638d7c5dde5029f8d94e6ab80da84f19fb6c563
+ARG PYVRP_BRANCH=9d18224b09bfee81fea7600991300c4ceee9a922
 ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 
 RUN python -m venv /opt/pyenv && \

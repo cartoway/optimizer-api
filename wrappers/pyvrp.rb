@@ -57,6 +57,7 @@ module Wrappers
 
       problem = pyvrp_problem(vrp)
       result = run_pyvrp(problem, [1, vrp.configuration.resolution.duration.to_f / 1000].max.to_i)
+
       elapsed_time = result[:runtime]
       @index_hash = @service_index_map.map.with_index{ |service, index|
         next unless service
@@ -253,11 +254,9 @@ module Wrappers
 
       reload_depot_points =
         vrp.vehicles.flat_map{ |veh|
-          veh.reload_depots.map{ |depot|
-            additive_setups << depot.duration.to_i
-            depot.point
-          }
+          veh.reload_depots.map(&:point)
         }
+      additive_setups += Array.new(reload_depot_points.size, 0)
       client_points =
         vrp.services.flat_map{ |service|
           points =
@@ -438,6 +437,7 @@ module Wrappers
               y: depot.point&.location&.lat || 0,
               tw_early: depot.timewindows.first&.start || 0,
               tw_late: depot.timewindows.first&.end || MAX_INT64,
+              service_duration: depot.duration.to_i,
               name: "#{vehicle.id}_#{depot.id}"
             }
           }
