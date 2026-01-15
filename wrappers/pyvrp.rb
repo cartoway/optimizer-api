@@ -57,6 +57,8 @@ module Wrappers
       problem = pyvrp_problem(vrp)
       result = run_pyvrp(problem, [1, vrp.configuration.resolution.duration.to_f / 1000].max.to_i)
 
+      raise 'No feasible solution found' unless result[:feasible]
+
       elapsed_time = result[:runtime]
       @index_hash = @service_index_map.map.with_index{ |service, index|
         next unless service
