@@ -746,7 +746,8 @@ module Interpreters
       end
 
       sub_vrp.points = sub_vrp.services.map{ |s| s.activity.point }.compact |
-                       sub_vrp.vehicles.flat_map{ |vehicle| [vehicle.start_point, vehicle.end_point] }.compact
+                       sub_vrp.vehicles.flat_map{ |vehicle| [vehicle.start_point, vehicle.end_point] }.compact |
+                       sub_vrp.reload_depots.flat_map(&:point).compact
       sub_vrp.points.uniq!
       sub_vrp = add_corresponding_entity_skills(entity, sub_vrp)
 
