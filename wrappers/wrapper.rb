@@ -103,7 +103,9 @@ module Wrappers
     end
 
     def assert_vehicles_no_duration_limit(vrp)
-      vrp.vehicles.none?(&:duration)
+      vrp.vehicles.none?(&:duration) ||
+        vrp.vehicles.select(&:duration)
+           .all?{ |vehicle| vehicle.duration <= ((vehicle.timewindow&.end || 2**32) - (vehicle.timewindow&.start || 0)) }
     end
 
     def assert_no_quantity_pickup_and_delivery(vrp)
