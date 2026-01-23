@@ -37,7 +37,7 @@ module Interpreters
           solution.unassigned_stops = []
 
           vehicles = under_used_routes.map(&:vehicle)
-          reload_depots = vehicles.flat_map(&:reload_depots)
+          reload_depots = vehicles.flat_map(&:reload_depots).uniq
           points =
             vehicles.map(&:start_point) +
             vehicles.map(&:end_point) +
