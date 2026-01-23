@@ -15,10 +15,10 @@
 # along with Mapotempo. If not, see:
 # <http://www.gnu.org/licenses/agpl.html>
 #
-require './models/base'
+require './models/mission'
 
 module Models
-  class Activity < Base
+  class Activity < Mission
     field :duration, default: 0
     field :setup_duration, default: 0
     field :additional_value, default: 0
