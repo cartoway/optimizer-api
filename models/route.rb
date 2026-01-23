@@ -22,5 +22,25 @@ module Models
     field :mission_ids, default: []
     field :day_index
     belongs_to :vehicle, class_name: 'Models::Vehicle', as_json: :id
+
+    has_many :missions, class_name: 'Models::Mission', as_json: :ids
+
+    def initialize(hash)
+      hash[:missions] ||= []
+      if hash[:mission_ids].present?
+        hash[:missions] +=
+          hash[:mission_ids]&.map{ |mission_id|
+            Models::Service.find_by_id(mission_id) ||
+              Models::ReloadDepot.find_by_id(mission_id) ||
+              Models::Rest.find_by_id(mission_id)
+          }&.compact
+        hash.delete(:mission_ids)
+      end
+      super(hash)
+    end
+
+    def mission_ids
+      missions.map{ |mission| mission.original_id || mission.id }
+    end
   end
 end

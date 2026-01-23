@@ -18,7 +18,7 @@
 require './models/base'
 
 module Models
-  class Service < Base
+  class Service < Mission
     field :id
     field :original_id, default: nil
 
