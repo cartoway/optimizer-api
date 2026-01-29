@@ -250,12 +250,16 @@ module Interpreters
         next if solution.nil?
 
         solution.routes.map{ |route|
-          mission_ids = route.stops.map(&:service_id).compact
-          next if mission_ids.empty?
+          missions = route.stops.map{ |stop|
+            next if stop.is_a?(Models::Solution::StopDepot) || stop.mission.is_a?(Models::Rest)
+
+            stop.mission
+          }.compact
+          next if missions.empty?
 
           Models::Route.create(
             vehicle: route.vehicle,
-            mission_ids: mission_ids
+            missions: missions
           )
         }
       }.compact

@@ -42,6 +42,7 @@ module Parsers
         alternative: options[:index], # nil if unassigned but return by default the last activity
         loads: build_loads(service, options),
         activity: dup_activity,
+        mission: service,
         info: options[:info] || Models::Solution::Stop::Info.new({}),
         reason: options[:reason],
         skills: options[:skills] || service.skills,
@@ -88,6 +89,7 @@ module Parsers
         type: :reload_depot,
         loads: options[:loads],
         activity: Models::ReloadDepot.new(reload_depot.as_json),
+        mission: reload_depot,
         info: options[:info] || Models::Solution::Stop::Info.new({})
       }
     end
@@ -100,6 +102,7 @@ module Parsers
         rest_id: rest.original_id || rest.id,
         type: :rest,
         activity: Models::Rest.new(rest.as_json),
+        mission: rest,
         info: options[:info] || Models::Solution::Stop::Info.new({})
       }
     end

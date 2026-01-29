@@ -2,7 +2,7 @@ import json
 import math
 import sys
 import numpy as np
-from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PenaltyParams, solve
+from pyvrp import Model, ProblemData, Client, Depot, VehicleType, ClientGroup, SolveParams, PenaltyParams, solve, Solution, Route, Trip
 from pyvrp.stop import MaxRuntime
 
 def _problem_data_from_dict(cls, data: dict):
@@ -24,8 +24,39 @@ def _problem_data_from_dict(cls, data: dict):
         groups=groups,
     )
 
+def _route_from_dict(route_dict: dict, data: ProblemData):
+    """
+    Creates a :class:`~pyvrp._pyvrp.Route` instance from a dictionary.
+    """
+    trips = []
+    for trip_dict in route_dict.get("visits", []):
+        trip = Trip(
+            data,
+            visits=trip_dict.get("visits", []),
+            vehicle_type=trip_dict.get("vehicle_type", 0),
+            start_depot=trip_dict.get("start_depot"),
+            end_depot=trip_dict.get("end_depot")
+        )
+        trips.append(trip)
+
+    return Route(
+        data,
+        visits=trips,
+        vehicle_type=route_dict.get("vehicle_type", 0)
+    )
+
+def _solution_from_dict(cls, json_data: dict, data: ProblemData):
+    routes = [_route_from_dict(route, data) for route in json_data.get("routes", [])]
+    if not routes:
+        return None
+    return Solution(
+        data=data,
+        routes=routes,
+    )
+
 # Monkey-patch
 setattr(ProblemData, "from_dict", classmethod(_problem_data_from_dict))
+setattr(Solution, "from_dict", classmethod(_solution_from_dict))
 
 def main(input_path, output_path, timeout=None):
     # Load problem data from JSON
@@ -33,7 +64,7 @@ def main(input_path, output_path, timeout=None):
         json_data = json.loads(f.read())
 
     data = ProblemData.from_dict(json_data)
-    m = Model.from_data(data)
+    initial_solution = Solution.from_dict(json_data, data)
     # Solve the problem
     # ProblemData exposes clients as a method, not as a list attribute.
     clients = list(data.clients())
@@ -49,6 +80,7 @@ def main(input_path, output_path, timeout=None):
         stop=MaxRuntime(int(timeout)),
         params=solve_params,
         display=True,
+        initial_solution=initial_solution,
     )
 
     best_solution = result.best

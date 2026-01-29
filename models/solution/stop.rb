@@ -37,6 +37,7 @@ module Models
       field :exclusion_cost
 
       has_many :loads, class_name: 'Models::Solution::Load'
+      belongs_to :mission, class_name: 'Models::Mission', vrp_result: :hide
       belongs_to :activity, class_name: 'Models::Activity'
       belongs_to :info, class_name: 'Models::Solution::Stop::Info', vrp_result: :hide
 
