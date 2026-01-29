@@ -24,7 +24,7 @@ module Wrappers
         :assert_no_ride_constraint,
         :assert_no_service_duration_modifiers,
         :assert_vehicles_no_alternative_skills,
-        :assert_vehicles_no_force_start,
+        :assert_vehicles_no_force_start, # Use shift_preference instead
         :assert_vehicles_no_initial_load,
         :assert_vehicles_no_late_multiplier,
         :assert_vehicles_no_overload_multiplier,
@@ -173,7 +173,7 @@ module Wrappers
     end
 
     def read_reload_depot_trip(vrp, vehicle, reload_depot_index)
-      reload_depot = @reload_depots[reload_depot_index]
+      reload_depot = @reload_depots[@depots.size - reload_depot_index]
       return nil if reload_depot.nil?
 
       route_data = compute_route_data(vrp, vehicle, reload_depot.point)
@@ -224,6 +224,11 @@ module Wrappers
 
       # Skills can be considered as capacities
       @skills_index_hash = {}
+
+      # to keep the client and depot indices consistent, the depots should be built before the clients and the matrices
+      @point_hash = vrp.points.index_by(&:id)
+      depots = build_depots(vrp)
+
       vrp.vehicles.map(&:skills).flatten.uniq.each_with_index{ |skill, index| @skills_index_hash[skill] = index }
       used_matrices = vrp.vehicles.map(&:matrix_id).uniq
       matrices = used_matrices.map { |id| vrp.matrices.find { |m| m.id == id } }
@@ -232,9 +237,6 @@ module Wrappers
       expand_matrices(vrp, distance_matrices, duration_matrices)
 
       distance_matrices = duration_matrices if distance_matrices.empty?
-
-      # to keep the client indices consistent, the depots should be built before the clients
-      depots = build_depots(vrp)
 
       @reload_depot_index_hash = {}
       vrp.reload_depots.each_with_index{ |depot, index| @reload_depot_index_hash[depot.id] = depots.size + index }
@@ -253,11 +255,7 @@ module Wrappers
     end
 
     def expand_matrices(vrp, distance_matrices, duration_matrices)
-      depot_points =
-        vrp.vehicles.flat_map{ |veh|
-          [veh.start_point, veh.end_point]
-        }.uniq
-      additive_setups = Array.new(depot_points.size, 0)
+      additive_setups = Array.new(@depots.size, 0)
 
       reload_depot_points =
         vrp.reload_depots.map(&:point)
@@ -272,7 +270,7 @@ module Wrappers
           points
         }
 
-      all_points = (depot_points + reload_depot_points + client_points)
+      all_points = (@depots + reload_depot_points + client_points)
 
       distance_matrices.map! do |matrix|
         matrix =
@@ -304,10 +302,6 @@ module Wrappers
 
     def build_vehicles(vrp)
       used_matrices = vrp.vehicles.map(&:matrix_id).uniq
-      @depot_index_hash =
-        vrp.vehicles.flat_map{ |veh|
-          [veh.start_point, veh.end_point]
-        }.uniq.each_with_index.map { |pt, idx| [pt&.id, idx] }.to_h
       all_units = vrp.units.index_by(&:id)
 
       vrp.vehicles.map { |veh|
@@ -325,8 +319,8 @@ module Wrappers
         {
           num_available: 1,
           capacity: capacity_hash.values + capacity_skills,
-          start_depot: @depot_index_hash[veh.start_point&.id],
-          end_depot: @depot_index_hash[veh.end_point&.id],
+          start_depot: @vehicle_start_point_index_hash[veh.id],
+          end_depot: @vehicle_end_point_index_hash[veh.id],
           fixed_cost: veh.cost_fixed.to_i,
           tw_early: veh.timewindow&.start || 0,
           tw_late: veh.timewindow&.end || MAX_INT64,
@@ -336,7 +330,7 @@ module Wrappers
           unit_duration_cost: veh.cost_time_multiplier.to_i,
           profile: used_matrices.index(veh.matrix_id),
           start_late: nil,
-          reload_depots: veh.reload_depots.map{ |depot| @depot_hash[depot.id] },
+          reload_depots: veh.reload_depots.map{ |depot| @reload_depot_hash[depot.id] },
           max_reloads: veh.maximum_reloads || 0,
           name: veh.id.to_s
         }
@@ -414,26 +408,106 @@ module Wrappers
       [client_list, groups]
     end
 
+    def add_depot_point(point, index_hash, criteria = nil)
+      return if point.nil?
+
+      return index_hash[point.id] if index_hash.key?(point.id) && index_hash[point.id].is_a?(Integer)
+
+      return index_hash[point.id][criteria] if index_hash[point.id].is_a?(Hash) && index_hash[point.id].key?(criteria)
+
+      @depots << point
+      if criteria
+        index_hash[point.id] ||= {}
+        index_hash[point.id][criteria] = index_hash[point.id].size
+      else
+        index_hash[point.id] = index_hash.size
+      end
+    end
+
     def build_depots(vrp)
-      depot_points = vrp.vehicles.flat_map { |vehicle| [vehicle.start_point, vehicle.end_point] }.uniq
-      @reload_depots = Array.new(depot_points.size, nil)
-      @depot_hash = {}
-      @depot_vehicle_hash = {}
-      depots =
-        depot_points.map do |point|
+      @depots = []
+      @vehicle_start_point_index_hash = {}
+      @vehicle_end_point_index_hash = {}
+      @depot_points_standard_index_hash = {}
+      @depot_points_force_start_by_timewindow_start_index_hash = {}
+      @depot_points_force_end_by_timewindow_end_index_hash = {}
+      vrp.vehicles.group_by(&:shift_preference).each do |shift_preference, vehicles|
+        vehicles.group_by(&:timewindow).each do |timewindow, sub_vehicles|
+          case shift_preference
+          when :force_start
+            sub_vehicles.each do |vehicle|
+              @vehicle_start_point_index_hash[vehicle.id] =
+                add_depot_point(
+                  vehicle.start_point,
+                  @depot_points_force_start_by_timewindow_start_index_hash,
+                  timewindow.start
+                )
+              @vehicle_end_point_index_hash[vehicle.id] =
+                add_depot_point(vehicle.end_point, @depot_points_standard_index_hash)
+            end
+          when :force_end
+            sub_vehicles.each do |vehicle|
+              @vehicle_start_point_index_hash[vehicle.id] =
+                add_depot_point(vehicle.start_point, @depot_points_standard_index_hash)
+              @vehicle_end_point_index_hash[vehicle.id] =
+                add_depot_point(
+                  vehicle.end_point,
+                  @depot_points_force_end_by_timewindow_end_index_hash,
+                  timewindow.end
+                )
+            end
+          when :minimize_span
+            sub_vehicles.each do |vehicle|
+              @vehicle_start_point_index_hash[vehicle.id] =
+                add_depot_point(vehicle.start_point, @depot_points_standard_index_hash)
+              @vehicle_end_point_index_hash[vehicle.id] =
+                add_depot_point(vehicle.end_point, @depot_points_standard_index_hash)
+            end
+          end
+        end
+      end
+      depots = Array.new(@depots.size, nil)
+      @depot_points_standard_index_hash.map { |point_id, index|
+        depots[index] =
           {
-            x: point&.location&.lon || 0,
-            y: point&.location&.lat || 0,
+            x: @point_hash[point_id]&.location&.lon || 0,
+            y: @point_hash[point_id]&.location&.lat || 0,
             tw_early: 0,
             tw_late: MAX_INT64,
-            name: point&.id&.to_s || '_null_store'
+            name: "#{point_id}_standard" || '_null_store'
           }
-        end
+      }
+      @depot_points_force_start_by_timewindow_start_index_hash.each{ |point_id, (timewindow_start, point_indices)|
+        point_indices.map { |point_index|
+          depots[point_index] =
+            {
+              x: @point_hash[point_id]&.location&.lon || 0,
+              y: @point_hash[point_id]&.location&.lat || 0,
+              tw_early: timewindow_start || 0,
+              tw_late: timewindow_start,
+              name: "#{point_id}_#{timewindow_start}_force_start" || '_null_store'
+            }
+        }
+      }
+      @depot_points_force_end_by_timewindow_end_index_hash.keys.flat_map { |point_id, (timewindow_end, point_indices)|
+        point_indices.map { |point_index|
+          depots[point_index] = {
+            x: @point_hash[point_id]&.location&.lon || 0,
+            y: @point_hash[point_id]&.location&.lat || 0,
+            tw_early: timewindow_end || 0,
+            tw_late: timewindow_end  || MAX_INT64,
+            name: "#{point_id}_#{timewindow_end}_force_end" || '_null_store'
+          }
+        }
+      }
+
+      @reload_depots = []
+      @reload_depot_hash = {}
       vrp.reload_depots.each do |depot|
-        next if @depot_hash.key?(depot.id)
+        next if @reload_depot_hash.key?(depot.id)
 
         @reload_depots << depot
-        @depot_hash[depot.id] = depot_points.size
+        @reload_depot_hash[depot.id] = @depots.size
         depots <<
           {
             x: depot.point&.location&.lon || 0,
@@ -465,18 +539,18 @@ module Wrappers
     def build_trips(vrp, route, vehicle_type)
       trips = []
       vehicle = vrp.vehicles[vehicle_type]
-      end_depot = @depot_index_hash[vehicle.end_point&.id]
+      end_depot = @vehicle_end_point_index_hash[vehicle.id]
       current_trip = {
         visits: [],
         vehicle_type: vehicle_type,
-        start_depot: @depot_index_hash[vehicle.start_point&.id],
+        start_depot: @vehicle_start_point_index_hash[vehicle.id],
         end_depot: end_depot
       }
       route.missions.each do |mission|
         if mission.is_a?(Models::Service)
           current_trip[:visits] << @service_index_map.find_index{ |service| service && service.id == mission.id }
         elsif mission.is_a?(Models::ReloadDepot)
-          reload_depot = @depot_hash[mission.id]
+          reload_depot = @reload_depot_hash[mission.id]
           current_trip[:end_depot] = reload_depot
           trips << current_trip
           current_trip = {
