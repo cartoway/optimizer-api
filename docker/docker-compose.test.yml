@@ -7,10 +7,11 @@ x-default-service: &default-service
     OPTIM_DEFAULT_MAX_LATENESS_RATIO: 1
     OPTIM_GENERATE_GEOJSON_POLYLINES: 'true'
     # REDIS_CACHE_HOST: redis-cache
-    REDIS_RESQUE_HOST: redis-resque
+    REDIS_RESQUE_HOST: localhost
     REDIS_RESULT_TTL_DAYS: ${REDIS_RESULT_TTL_DAYS:-1}
   depends_on:
-    - redis-resque
+    redis-resque:
+      condition: service_healthy
     # - redis-cache
 
 services:
@@ -40,6 +41,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    ports:
+      - 6379:6379
 
   # redis-cache:
   #   image: redis:${REDIS_VERSION:-7-alpine}
