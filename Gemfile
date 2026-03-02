@@ -50,6 +50,9 @@ gem 'polylines'
 gem 'rgeo'
 gem 'rgeo-geojson', require: 'rgeo/geo_json'
 
+# Constraint programming for batch assignment (optional: requires OR-Tools C++ library)
+gem 'or-tools'
+
 gem 'sentry-resque'
 gem 'sentry-ruby'
 

@@ -196,6 +196,66 @@ module Api
           ::Models.delete_all
         end
 
+        resource :graph do
+          desc 'Get Delaunay graph from VRP', {
+            nickname: 'get_vrp_graph',
+            success: [{
+              code: 200,
+              message: 'Graph built from VRP'
+            }],
+            failure: [{
+                code: 400,
+                message: 'Bad Request',
+                model: ::Api::V01::Status
+              }, {
+                code: 501,
+                message: 'vrp_delaunay binary not built (rake ext:vrp_delaunay)',
+                model: ::Api::V01::Status
+              }],
+            detail: 'Build and return the proximity graph (Delaunay, skills/timewindow compatibilities, K-NN) from a VRP instance.'
+          }
+          params {
+            use(:input)
+            optional(:format, type: Symbol, values: [:json, :geojson], default: :json,
+                     desc: 'Output format: json (full graph) or geojson')
+          }
+          post do
+            d_params = declared(params, include_missing: false)
+            vrp_params = d_params[:points] ? d_params : d_params[:vrp]
+            vrp = ::Models::Vrp.create(vrp_params)
+
+            if !vrp.valid? || vrp_params.nil? || vrp_params.keys.empty?
+              vrp.errors.add(:empty_file, message: 'JSON file is empty') if vrp_params.nil?
+              vrp.errors.add(:empty_vrp, message: 'VRP structure is empty') if vrp_params&.keys&.empty?
+              error!("Model Validation Error: #{vrp.errors}", 400)
+            end
+
+            graph = begin
+              VrpGraph::GraphBuilder.new(vrp).build
+            rescue LoadError => e
+              error!({ message: "Graph build failed: #{e.message}" }, 501)
+            end
+
+            if graph
+              vrp.graph = graph
+            end
+
+            if graph.nil?
+              error!({ message: 'No services with points to build graph' }, 400)
+            end
+
+            if params[:format] == :geojson
+              content_type 'application/vnd.geo+json'
+              graph.to_geojson
+            else
+              status 200
+              present graph.to_hash
+            end
+          ensure
+            ::Models.delete_all
+          end
+        end
+
         resource :jobs do
           desc 'Fetch vrp job status', {
             nickname: 'get_job',

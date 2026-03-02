@@ -48,6 +48,7 @@ module Models
     has_many :subtours, class_name: 'Models::Subtour'
     has_many :zones, class_name: 'Models::Zone'
     belongs_to :configuration, class_name: 'Models::Configuration'
+    belongs_to :graph, class_name: 'Models::Graph', as_json: :none, vrp_result: :hide
 
     def self.create(hash, options = {})
       options = { delete: true, check: true }.merge(options)

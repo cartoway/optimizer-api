@@ -48,13 +48,16 @@ WORKDIR /srv/app
 
 RUN apt update && \
     libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
-    apt install -y git libgeos-dev ${libgeos} libicu-dev libglpk-dev nano
+    apt install -y git libgeos-dev ${libgeos} libicu-dev libglpk-dev nano cargo
 
 ADD ./Gemfile /srv/app/
 ADD ./Gemfile.lock /srv/app/
 RUN bundle install --full-index --without ${BUNDLE_WITHOUT}
 
 ADD . /srv/app
+
+# Build vrp_delaunay Rust binary (Delaunay triangulation for graph endpoint)
+RUN bundle exec rake ext:vrp_delaunay 2>/dev/null || true
 
 EXPOSE 80
 
