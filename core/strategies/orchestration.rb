@@ -1,3 +1,5 @@
+require './lib/interpreters/re_partition.rb'
+
 module Core
   module Strategies
     module Orchestration
@@ -92,9 +94,8 @@ module Core
         expected_activity_count = vrp.visits
 
         # Calls define_process recursively
+        solution ||= Interpreters::RePartition.repartition(service_vrp, job, &block)
         solution ||= Interpreters::SplitClustering.split_clusters(service_vrp, job, &block)
-        # Calls define_process recursively
-        solution ||= Interpreters::Dichotomous.dichotomous_heuristic(service_vrp, job, &block)
 
         solution ||= Interpreters::MultiTrip.presolve(service_vrp, job, &block)
 

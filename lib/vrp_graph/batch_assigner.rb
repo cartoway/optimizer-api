@@ -22,10 +22,11 @@
 
 module VrpGraph
   class BatchAssigner
-    def initialize(graph, solution, max_routes_per_batch: 5)
+    def initialize(graph, solution, max_routes_per_batch: 5, route_vehicle_skills: {})
       @graph = graph
       @solution = solution
       @max_routes_per_batch = max_routes_per_batch
+      @route_vehicle_skills = route_vehicle_skills
     end
 
     # @return [Hash] route_index => batch_index
@@ -74,22 +75,31 @@ module VrpGraph
       route_to_batch
     end
 
-    # Proximity = number of graph edges between services of the two routes
+    # Proximity = number of graph KNN links between services of the two routes,
+    # filtered through the vehicle's compatible skill-set graphs.
     def build_proximity_matrix
       n = @solution.routes.size
       prox = Array.new(n){ Array.new(n, 0) }
+      use_filtered = @route_vehicle_skills.any? && @graph.respond_to?(:neighbors_for_service_with_vehicle_skills)
 
       @solution.routes.each_with_index do |route_a, i|
-        ids_a = route_stop_point_ids(route_a)
+        ids_a = route_stop_service_ids(route_a)
+        v_skills_a = @route_vehicle_skills[i]
+
         @solution.routes.each_with_index do |route_b, j|
           next if i >= j
 
-          ids_b = route_stop_point_ids(route_b)
-          # Count K-NN links (point a in route_a, neighbor point b in route_b)
+          ids_b = route_stop_service_ids(route_b)
           count = 0
-          ids_a.each do |point_id|
-            (@graph.neighbors_for_point(point_id) || []).each do |nb_point_id|
-              count += 1 if ids_b.include?(nb_point_id)
+          ids_a.each_key do |sid|
+            neighbors =
+              if use_filtered && v_skills_a&.any?
+                @graph.neighbors_for_service_with_vehicle_skills(sid, v_skills_a)
+              else
+                @graph.neighbors_for_service(sid)
+              end
+            (neighbors || []).each do |nb_sid|
+              count += 1 if ids_b.key?(nb_sid)
             end
           end
           prox[i][j] = prox[j][i] = count
@@ -98,8 +108,8 @@ module VrpGraph
       prox
     end
 
-    def route_stop_point_ids(route)
-      route.stops.filter_map { |s| s.activity&.point_id }.compact.to_set
+    def route_stop_service_ids(route)
+      route.stops.filter_map { |s| s.service_id }.compact.each_with_object({}) { |sid, h| h[sid] = true }
     end
 
     def assign_with_ortools

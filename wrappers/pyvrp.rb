@@ -109,6 +109,11 @@ module Wrappers
             info: Models::Solution::Route::Info.new(
               start_time: route[:start_time],
               end_time: route[:end_time]
+            ),
+            cost_info: Models::Solution::CostInfo.new(
+              fixed: vehicle.cost_fixed || 0,
+              time: (route[:duration] || 0) * vehicle.cost_time_multiplier || 0,
+              distance: (route[:distance] || 0) * vehicle.cost_distance_multiplier || 0
             )
           )
         }

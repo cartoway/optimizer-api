@@ -50,8 +50,8 @@ gem 'polylines'
 gem 'rgeo'
 gem 'rgeo-geojson', require: 'rgeo/geo_json'
 
-# Constraint programming for batch assignment (optional: requires OR-Tools C++ library)
-gem 'or-tools'
+# Graph partitioning / clustering
+gem 'graph-clustering', git: 'https://github.com/braktar/graph-clustering', glob: 'ruby/*.gemspec'
 
 gem 'sentry-resque'
 gem 'sentry-ruby'

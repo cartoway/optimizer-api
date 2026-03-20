@@ -1026,8 +1026,8 @@ module Wrappers
     end
 
     def prioritize_first_available_trips_and_vehicles(vrp, solution = nil, options = { mode: :simplify })
-      # For each vehicle group, it applies a small but increasing fixed_cost so that or-tools can
-      # distinguish two identical vehicles and use the one that comes first.
+      # vehicle_trips chains use one global increasing fixed_cost sequence (legacy).
+      # Loner vehicles only: within each skill-equivalence group, increasing fixed_cost; groups are independent.
       # This is to handle two cases:
       #  i.  Skipped intermediary trips of the same vehicle_trips relation
       #  ii. Skipped intermediary "similar" vehicles of vrp.vehicles list
@@ -1039,7 +1039,7 @@ module Wrappers
         # TODO: if needed this limitation can be partially removed for the cases where a group of vehicles
         # have one cost and another group has another cost. The below logic can be applied such groups of vehicles
         # separately but the code would be messier. Wait for a real use case.
-        return unless vrp.vehicles.uniq(&:cost_fixed).size == 1
+        return if vrp.vehicles.uniq(&:cost_fixed).size > 1
 
         simplification_active = true
 
@@ -1048,7 +1048,24 @@ module Wrappers
         loner_vehicles = vrp.vehicles.map(&:id) - all_vehicle_trips_relations.flat_map(&:linked_vehicle_ids)
 
         cost_increment = 1e-4 # cost is multiplied with 1e6 (CUSTOM_BIGNUM_COST) inside optimizer-ortools
-        cost_adjustment = cost_increment
+        # All vehicle_trips-linked vehicles share one monotonic sequence (not split by skills).
+        trip_priority_adjustment = cost_increment
+
+        # Loner vehicles only: nth within the same skill group gets n * cost_increment (groups are independent).
+        loner_index_in_skill_group = Hash.new(0)
+
+        apply_loner_fixed_cost_prioritization =
+          lambda do |veh|
+            next if veh.nil?
+
+            # Vehicles sharing the same alternative skill sets belong to one group;
+            skill_group_key = veh.skills.to_a.map{ |set| set.to_a.sort }.sort
+            loner_index_in_skill_group[skill_group_key] += 1
+            adjustment = cost_increment * loner_index_in_skill_group[skill_group_key]
+
+            veh[:fixed_cost_before_adjustment] = veh.cost_fixed
+            veh.cost_fixed += adjustment
+          end
 
         # Below both (i. and ii.) cases are handled
         # The vehicles that are the "leader" trip of a vehicle trip relation handle the
@@ -1063,13 +1080,11 @@ module Wrappers
               # WARNING: this logic depends on the fact that each vehicle can appear in at most one vehicle_trips
               # relation ensured by check_vehicle_trips_relation_consistency (models/concerns/validate_data.rb)
               linked_vehicle[:fixed_cost_before_adjustment] = linked_vehicle.cost_fixed
-              linked_vehicle.cost_fixed += cost_adjustment
-              cost_adjustment += cost_increment
+              linked_vehicle.cost_fixed += trip_priority_adjustment
+              trip_priority_adjustment += cost_increment
             }
           when *loner_vehicles
-            vehicle[:fixed_cost_before_adjustment] = vehicle.cost_fixed
-            vehicle.cost_fixed += cost_adjustment
-            cost_adjustment += cost_increment
+            apply_loner_fixed_cost_prioritization.call(vehicle)
           end
         }
       when :rewind

@@ -62,6 +62,16 @@ module Models
         stops.count(&:service_id)
       end
 
+      # Missions in stop order for building VRP input routes (excludes depot and rest stops).
+      def missions_for_initial_routes
+        stops.filter_map{ |stop|
+          next if stop.is_a?(Models::Solution::StopDepot) || stop.mission.is_a?(Models::Rest)
+          next unless stop.mission
+
+          stop.mission
+        }
+      end
+
       def insert_stop(_vrp, stop, index, idle_time = 0)
         stops.insert(index, stop)
         shift_route_times(idle_time + stop.activity.duration, index)

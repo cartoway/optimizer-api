@@ -18,6 +18,8 @@
 # <http://www.gnu.org/licenses/agpl.html>
 #
 # Graph builder for VRP services: Delaunay triangulation, compatibility checks, K-NN.
+# Nodes are keyed by service_id (one node per service). Edges are service-level pairs.
+# Delaunay and KNN operate at point level, then results are expanded to service-level.
 # Uses travel time matrix (routing or precomputed).
 
 require_relative 'delaunay_adapter'
@@ -34,34 +36,111 @@ module VrpGraph
       @matrix_id = options[:matrix_id] || vrp.vehicles.first&.matrix_id
     end
 
+    # Builds a single graph from all services (backward-compatible entry point).
     def build
+      all_services = @vrp.services.reject{ |s| s.activity.nil? || s.activity.point.nil? }
+      return nil if all_services.empty?
+
+      shared = precompute_shared(all_services)
+      build_for_services(all_services, shared, label: nil)
+    end
+
+    # Builds one Delaunay graph per unique skill-set (sorted combination of
+    # skills) found across services. Each graph includes all services whose
+    # skill-set shares at least one skill with the graph key (intersection),
+    # and have no extra skills through union of skills.
+    # plus all no-skill services as universal bridges.
+    # Returns a Models::MultiGraph wrapping { skill_set_key => Models::Graph }.
+    def build_per_skill
+      t_total = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      all_services = @vrp.services.reject{ |s| s.activity.nil? || s.activity.point.nil? }
+      return nil if all_services.empty?
+
+      shared = precompute_shared(all_services)
+
+      groups = all_services.group_by{ |s| s.skills.to_a.map(&:to_s).sort }
+      no_skill_services = groups.delete([]) || []
+
+      if groups.empty?
+        graph = build_for_services(no_skill_services, shared, label: nil)
+        log_duration('graph_per_skill_total', t_total, 'no_skills_single_graph')
+        return graph && Models::MultiGraph.new(graphs: { nil => graph })
+      end
+
+      graphs = {}
+      groups.each_key do |skill_set|
+        key = skill_set.join(',')
+        compatible = []
+        groups.each do |other_set, svcs|
+          compatible.concat(svcs) if (skill_set & other_set).any? && (skill_set | other_set).size == skill_set.size
+        end
+        compatible.concat(no_skill_services)
+        graphs[key] = build_for_services(compatible, shared, label: key)
+      end
+
+      log_duration('graph_per_skill_total', t_total, "skill_sets=#{groups.size} graphs=#{graphs.size}")
+
+      Models::MultiGraph.new(graphs: graphs)
+    end
+
+    private
+
+    # Pre-computes state shared across all per-skill sub-builds:
+    # incompatibilities (tw+capacity), vehicle_skill_sets, time matrix.
+    # Skills incompatibility is handled structurally by the per-skill-set
+    # graph partitioning — no need to precompute it here.
+    def precompute_shared(services)
+      t3 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      tw_incompat = TimewindowCompatibility.compute_incompatibilities(@vrp)
+      log_duration('graph_timewindow_compatibility', t3)
+
+      t4 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      cap_incompat = CapacityCompatibility.compute_incompatibilities(@vrp)
+      log_duration('graph_capacity_compatibility', t4)
+
+      all_incompat = merge_nested_incompat(tw_incompat, cap_incompat)
+      vehicle_skill_sets = @vrp.vehicles.map { |v| v.skills.first.to_a.map(&:to_s) }
+
+      vrp_matrix = @vrp.matrices.find{ |m| m.id == @matrix_id }
+
+      {
+        all_incompat: all_incompat,
+        vehicle_skill_sets: vehicle_skill_sets,
+        vrp_time_matrix: vrp_matrix&.time,
+        service_by_id: services.each_with_object({}) { |s, h| h[s.id] = s }
+      }
+    end
+
+    # Builds a Models::Graph from a subset of services using pre-computed shared data.
+    def build_for_services(services, shared, label: nil)
       t_build_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      log_prefix = label ? "graph[#{label}]" : 'graph'
 
-      services = @vrp.services.reject{ |s| s.activity.nil? || s.activity.point.nil? }
-      return nil if services.empty?
+      all_incompat = shared[:all_incompat]
+      vehicle_skill_sets = shared[:vehicle_skill_sets]
+      vrp_time_matrix = shared[:vrp_time_matrix]
+      service_by_id = shared[:service_by_id]
 
-      # Unique points (1 point can have several services). Source: vrp.points filtered by usage in services.
       used_point_ids = services.map { |s| s.activity.point_id || s.activity.point&.id }.compact.uniq
       graph_points = @vrp.points.select { |p| used_point_ids.include?(p.id) }
-      # Fallback if vrp.points is empty: derive from services
       graph_points = services.map{ |s| s.activity.point }.compact.uniq(&:id) if graph_points.empty?
 
       point_by_index = graph_points.each_with_index.to_h { |p, i| [i, p] }
       services_by_point_id = {}
+      point_id_to_service_ids = {}
       services.each do |s|
         pid = (s.activity.point_id || s.activity.point&.id).to_s
         (services_by_point_id[pid] ||= []) << s
+        (point_id_to_service_ids[pid] ||= []) << s.id
       end
 
-      # One coordinate list per point (no duplicate points in Delaunay)
       delaunay_points = graph_points.map { |p| point_location_coords(p) }
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       delaunay_edges = DelaunayAdapter.compute_edges(delaunay_points)
-      log_duration('graph_delaunay', t0)
+      log_duration("#{log_prefix}_delaunay", t0)
 
-      # Build nodes (keyed by point_id) and map service_id -> point_id
       nodes = {}
-      service_point = {}
       services.each do |s|
         activity = s.activity
         pt = activity.point
@@ -70,13 +149,9 @@ module VrpGraph
         loc = pt.location
         pid = pt.id
 
-        node = (nodes[pid] ||= {
+        nodes[s.id] = {
+          point_id: pid,
           point: { lat: loc&.lat, lon: loc&.lon },
-          services: []
-        })
-
-        node[:services] << {
-          id: s.id,
           skills: s.skills.to_a.map(&:to_s),
           timewindows: (activity.timewindows || []).map{ |tw| { start: tw.start, end: tw.end } },
           duration: activity.duration,
@@ -92,33 +167,9 @@ module VrpGraph
             }
           }
         }
-
-        service_point[s.id] = pid
       end
 
-      # Use VRP matrix only if already present (no compute). For K-NN without matrix: rectangular via router only.
-      vrp_matrix = @vrp.matrices.find{ |m| m.id == @matrix_id }
-      vrp_time_matrix = vrp_matrix&.time
-
-      # Skills incompatibilities
-      t2 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      skills_incompat = SkillsCompatibility.compute_incompatibilities(@vrp)
-      log_duration('graph_skills_compatibility', t2)
-
-      # Timewindow incompatibilities (timewindows + duration only, no travel time)
-      t3 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      tw_incompat = TimewindowCompatibility.compute_incompatibilities(@vrp)
-      log_duration('graph_timewindow_compatibility', t3)
-
-      # Capacity incompatibilities (pairs at different points: sum of quantities > max vehicle capacity)
-      t4 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      cap_incompat = CapacityCompatibility.compute_incompatibilities(@vrp)
-      log_duration('graph_capacity_compatibility', t4)
-
-      # Merge nested incompatibilities (each is incompat[a][b] = true)
-      all_incompat = merge_nested_incompat(skills_incompat, tw_incompat, cap_incompat)
-
-      # Map Delaunay edges (point indices) to point IDs and filter: keep edge if at least one service pair is compatible
+      # Expand Delaunay edges (point-level) to service-level compatible pairs
       t5 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       original_degree = Hash.new(0)
@@ -132,32 +183,56 @@ module VrpGraph
       end
 
       edges = []
+      edge_set = {}
+      filtered_degree = Hash.new(0)
+
       delaunay_edges.each do |i, j|
         pid_a = point_by_index[i]&.id
         pid_b = point_by_index[j]&.id
         next unless pid_a && pid_b
         next if pid_a == pid_b
 
-        # Edge is valid if at least one (service at A, service at B) pair is not incompatible
-        compatible =
-          (services_by_point_id[pid_a] || []).any? { |s_a|
-            (services_by_point_id[pid_b] || []).any? { |s_b|
-              !all_incompat.dig(s_a.id, s_b.id)
-            }
-          }
-        next unless compatible
+        added_for_pair = false
 
-        edges << [pid_a, pid_b]
+        (services_by_point_id[pid_a] || []).each do |s_a|
+          (services_by_point_id[pid_b] || []).each do |s_b|
+            next if all_incompat.dig(s_a.id, s_b.id)
+
+            pair = [s_a.id, s_b.id].sort
+            next if edge_set.key?(pair)
+
+            edges << [s_a.id, s_b.id]
+            edge_set[pair] = true
+            added_for_pair = true
+          end
+        end
+
+        next unless added_for_pair
+
+        filtered_degree[pid_a] += 1
+        filtered_degree[pid_b] += 1
       end
 
-      # Track degree per point after filtering
-      filtered_degree = Hash.new(0)
-      edges.each do |a, b|
-        filtered_degree[a] += 1
-        filtered_degree[b] += 1
-      end
+      # Intra-point edges: compatible co-located service pairs.
+      # Requires vehicle-level feasibility (at least one vehicle covers both).
+      # point_id_to_service_ids.each do |_pid, sids|
+      #   next if sids.size < 2
 
-      # Points that lost at least one Delaunay edge
+      #   sids.each_with_index do |sid_a, idx_a|
+      #     (idx_a + 1).upto(sids.size - 1) do |idx_b|
+      #       sid_b = sids[idx_b]
+      #       next if all_incompat.dig(sid_a, sid_b)
+      #       next unless any_vehicle_covers_both?(service_by_id[sid_a], service_by_id[sid_b], vehicle_skill_sets)
+
+      #       pair = [sid_a, sid_b].sort
+      #       next if edge_set.key?(pair)
+
+      #       edges << [sid_a, sid_b]
+      #       edge_set[pair] = true
+      #     end
+      #   end
+      # end
+
       repaired_nodes = {}
       original_degree.each do |pid, deg|
         next if deg <= (filtered_degree[pid] || 0)
@@ -165,17 +240,16 @@ module VrpGraph
         repaired_nodes[pid] = true
       end
 
-      removed = delaunay_edges.size - edges.size
       log_duration(
-        'graph_edges_filter',
+        "#{log_prefix}_edges_filter",
         t5,
-        "delaunay=#{delaunay_edges.size} kept=#{edges.size} removed=#{removed} repaired_nodes=#{repaired_nodes.size}"
+        "delaunay=#{delaunay_edges.size} service_edges=#{edges.size} repaired_nodes=#{repaired_nodes.size}"
       )
 
-      # K-NN: use square matrix in memory when available; otherwise compute rectangular (repaired × other) via router only.
+      # K-NN: point-level computation, then expand to service-level
       t6 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       repaired_pids = repaired_nodes.keys
-      all_pids = graph_points.map { |p| p.id }
+      all_pids = graph_points.map(&:id)
       other_pids = all_pids - repaired_pids
       point_incompat = build_point_incompat(services_by_point_id, all_incompat, all_pids)
       pid_to_point = graph_points.to_h { |p| [p.id, p] }
@@ -188,65 +262,86 @@ module VrpGraph
           { rectangular: [] }
         end
       k_per_point = (repaired_pids.empty? || other_pids.empty?) ? 0 : other_pids.size
-      knn_neighbors = KnnNeighborhood.compute_knn_points(
+      point_knn_neighbors = KnnNeighborhood.compute_knn_points(
         repaired_pids, other_pids, knn_matrix, point_incompat, k: k_per_point
       )
-      # Add K-NN arcs as edges (point-to-point)
-      edge_set = edges.map{ |a, b| [a, b].sort }.to_h{ |p| [p, true] }
+
       knn_added = 0
       knn_segments = []
       knn_edge_indices = []
-      knn_neighbors.each do |pid_a, neighbor_pids|
+      point_knn_neighbors.each do |pid_a, neighbor_pids|
         next unless repaired_nodes[pid_a]
 
         missing = (original_degree[pid_a] || 0) - (filtered_degree[pid_a] || 0)
         next if missing <= 0
 
-        added = 0
+        point_added = 0
         neighbor_pids.each do |pid_b|
-          pair = [pid_a, pid_b].sort
-          next if edge_set.key?(pair)
+          break if point_added >= missing
 
-          edges << [pid_a, pid_b]
-          edge_set[pair] = true
-          knn_added += 1
-          added += 1
+          first_edge_idx = nil
+          (services_by_point_id[pid_a] || []).each do |s_a|
+            (services_by_point_id[pid_b] || []).each do |s_b|
+              next if all_incompat.dig(s_a.id, s_b.id)
 
-          node_a = nodes[pid_a]
-          node_b = nodes[pid_b]
-          if node_a && node_b
-            pa = node_a[:point] || node_a['point']
-            pb = node_b[:point] || node_b['point']
-            if pa && pb && pa[:lat] && pa[:lon] && pb[:lat] && pb[:lon]
-              knn_segments << [pa[:lat].to_f, pa[:lon].to_f, pb[:lat].to_f, pb[:lon].to_f]
-              knn_edge_indices << (edges.size - 1)
+              pair = [s_a.id, s_b.id].sort
+              next if edge_set.key?(pair)
+
+              edges << [s_a.id, s_b.id]
+              edge_set[pair] = true
+              knn_added += 1
+              first_edge_idx ||= edges.size - 1
             end
           end
 
-          break if added >= missing
+          next unless first_edge_idx
+
+          point_added += 1
+          loc_a = pid_to_point[pid_a]&.location
+          loc_b = pid_to_point[pid_b]&.location
+          if loc_a && loc_b
+            knn_segments << [loc_a.lat.to_f, loc_a.lon.to_f, loc_b.lat.to_f, loc_b.lon.to_f]
+            knn_edge_indices << first_edge_idx
+          end
+        end
+      end
+
+      service_knn_neighbors = {}
+      point_knn_neighbors.each do |pid_a, neighbor_pids|
+        sids_a = point_id_to_service_ids[pid_a] || []
+        sids_a.each do |sid_a|
+          neighbors_for_sid = []
+          neighbor_pids.each do |pid_b|
+            sids_b = point_id_to_service_ids[pid_b] || []
+            sids_b.each do |sid_b|
+              next if all_incompat.dig(sid_a, sid_b)
+
+              neighbors_for_sid << sid_b
+            end
+          end
+          service_knn_neighbors[sid_a] = neighbors_for_sid unless neighbors_for_sid.empty?
         end
       end
 
       add_knn_traces!(edges, knn_segments, knn_edge_indices) if knn_segments.any?
 
       knn_matrix_type = vrp_time_matrix ? 'square_in_memory' : "rectangular=#{repaired_pids.size}x#{other_pids.size}"
-      log_duration('graph_knn', t6, "knn_added=#{knn_added} #{knn_matrix_type}")
+      log_duration("#{log_prefix}_knn", t6, "knn_added=#{knn_added} #{knn_matrix_type}")
 
-      log_duration('graph_build_total', t_build_start)
+      log_duration("#{log_prefix}_build", t_build_start)
 
       Models::Graph.new(
         nodes: nodes,
         edges: edges,
         incompatibilities: nested_incompat_to_pairs(all_incompat),
-        knn_neighbors: knn_neighbors,
+        knn_neighbors: service_knn_neighbors,
         metadata: {
           delaunay_built_at: Time.now.iso8601,
-          matrix_id_used: @matrix_id
+          matrix_id_used: @matrix_id,
+          skill_label: label
         }
       )
     end
-
-    private
 
     def merge_nested_incompat(*hashes)
       result = Hash.new { |h, k| h[k] = {} }
@@ -291,6 +386,20 @@ module VrpGraph
       msg = "VrpGraph #{label}: #{elapsed_ms}ms"
       msg += " (#{extra})" if extra
       OptimizerLogger.log(msg, level: :info)
+    end
+
+    # Returns true if at least one vehicle has the skills to serve both services.
+    def any_vehicle_covers_both?(service_a, service_b, vehicle_skill_sets)
+      return true unless service_a && service_b
+
+      skills_a = service_a.skills.to_a.map(&:to_s)
+      skills_b = service_b.skills.to_a.map(&:to_s)
+      return true if skills_a.empty? && skills_b.empty?
+
+      vehicle_skill_sets.any? { |v_skills|
+        (skills_a.empty? || (skills_a - v_skills).empty?) &&
+          (skills_b.empty? || (skills_b - v_skills).empty?)
+      }
     end
 
     # Point-level incompatibility: [pid_a, pid_b] is incompatible iff no (service at A, service at B) pair is compatible.

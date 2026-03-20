@@ -16,7 +16,9 @@
 # <http://www.gnu.org/licenses/agpl.html>
 #
 # Graph model for VRP: Delaunay triangulation, compatibilities, K-NN neighborhood.
-# Nodes and edges are point-based (point_id). knn_neighbors: point_id => [neighbor_point_id, ...].
+# Nodes are keyed by service_id (one node per service). Each node carries point_id as back-reference.
+# Edges are service-level pairs [service_id_a, service_id_b].
+# knn_neighbors: service_id => [neighbor_service_id, ...].
 # Plain value object (not ActiveHash).
 
 module Models
@@ -43,34 +45,55 @@ module Models
       (incompatibilities || []).any?{ |a, b| [a, b].sort == pair }
     end
 
-    # K-NN is point-based: returns neighbor point_ids for the given point_id.
+    # Returns neighbor service_ids for the given service_id,
+    # combining Delaunay edges and KNN-repair edges.
+    def neighbors_for_service(service_id)
+      adjacency[service_id] || []
+    end
+
+    # Backward-compatible lookup: collects all services at the given point_id
+    # and returns the union of their KNN neighbors.
     def neighbors_for_point(point_id)
-      (knn_neighbors || {})[point_id] || []
+      sids = service_ids_for_point(point_id)
+      return [] if sids.empty?
+
+      result = []
+      sids.each do |sid|
+        result.concat(neighbors_for_service(sid))
+      end
+      result.uniq
+    end
+
+    # Returns service_ids whose node has the given point_id.
+    def service_ids_for_point(point_id)
+      @service_ids_by_point ||= build_service_ids_by_point
+      @service_ids_by_point[point_id] || @service_ids_by_point[point_id.to_s] || []
     end
 
     def edge_set
       @edge_set ||= (edges || []).map{ |e| [[e[0], e[1]].sort, true] }.to_h
     end
 
-    def connected?(point_id_a, point_id_b)
-      edge_set.key?([point_id_a, point_id_b].sort)
+    def connected?(id_a, id_b)
+      edge_set.key?([id_a, id_b].sort)
     end
 
-    # Returns connected point pairs within a route's point set.
-    # @param point_ids [Array<String, Integer>] Point IDs in the route
-    # @return [Array<[String, String]>] Pairs of connected point IDs
-    def tours_connectivity(point_ids)
-      ids = point_ids.to_set
-      edges.select{ |e| ids.include?(e[0]) && ids.include?(e[1]) }.map{ |e| [e[0], e[1]].sort }.uniq
+    # Returns connected service pairs within a set of service_ids.
+    # Also accepts point_ids for backward compatibility (expanded to service_ids).
+    # @param ids [Array<String>] service_ids or point_ids
+    # @return [Array<[String, String]>] Pairs of connected IDs
+    def tours_connectivity(ids)
+      id_hash = ids.each_with_object({}) { |id, h| h[id] = true }
+      edges.select{ |e| id_hash[e[0]] && id_hash[e[1]] }.map{ |e| [e[0], e[1]].sort }.uniq
     end
 
     # @param solution [Models::Solution]
-    # @return [Hash] route_index => [[point_id_a, point_id_b], ...]
+    # @return [Hash] route_index => [[service_id_a, service_id_b], ...]
     def tours_connectivity_from_solution(solution)
       result = {}
       solution.routes.each_with_index do |route, idx|
-        point_ids = route.stops.filter_map{ |s| s.activity&.point_id }.compact
-        result[idx] = tours_connectivity(point_ids)
+        service_ids = route.stops.filter_map{ |s| s.service_id }.compact
+        result[idx] = tours_connectivity(service_ids)
       end
       result
     end
@@ -82,8 +105,8 @@ module Models
       entity_factory = RGeo::GeoJSON::EntityFactory.instance
       features = []
 
-      # Points for each node (point-level); each node aggregates its services and constraints
-      nodes.each do |point_id, data|
+      # Point feature per service node
+      (nodes || {}).each do |service_id, data|
         pt = data[:point] || data['point']
         next unless pt
 
@@ -94,19 +117,22 @@ module Models
         point_geom = geo_factory.point(lon.to_f, lat.to_f)
 
         props = {
-          point_id: point_id,
-          services: data[:services] || data['services']
+          service_id: service_id,
+          point_id: data[:point_id] || data['point_id'],
+          skills: data[:skills] || data['skills'],
+          timewindows: data[:timewindows] || data['timewindows'],
+          batch: data[:batch]
         }.delete_if{ |_k, v| v.nil? }
 
-        features << entity_factory.feature(point_geom, point_id, props)
+        features << entity_factory.feature(point_geom, service_id, props)
       end
 
-      # LineStrings for each edge (format: [a, b] or [a, b, geometry])
-      edges.each do |e|
+      # LineStrings for each edge (format: [sid_a, sid_b] or [sid_a, sid_b, geometry])
+      (edges || []).each do |e|
         a, b = e[0], e[1]
         geometry = e[2]
-        node_a = nodes[a] || nodes[a.to_s]
-        node_b = nodes[b] || nodes[b.to_s]
+        node_a = (nodes || {})[a] || (nodes || {})[a.to_s]
+        node_b = (nodes || {})[b] || (nodes || {})[b.to_s]
         next unless node_a && node_b
 
         pt_a = node_a[:point] || node_a['point']
@@ -115,7 +141,6 @@ module Models
 
         pts =
           if geometry.is_a?(Array) && geometry.any?
-            # geometry from router: [[lon,lat], [lon,lat], ...]
             geometry.map{ |lon, lat| geo_factory.point(lon.to_f, lat.to_f) }
           else
             [
@@ -129,6 +154,177 @@ module Models
 
       collection = entity_factory.feature_collection(features)
       RGeo::GeoJSON.encode(collection)
+    end
+
+    private
+
+    # Full adjacency list: Delaunay edges + KNN-repair edges, cached.
+    def adjacency
+      @adjacency_cache ||= begin
+        adj = Hash.new { |h, k| h[k] = [] }
+        (edges || []).each do |e|
+          adj[e[0]] << e[1]
+          adj[e[1]] << e[0]
+        end
+        (knn_neighbors || {}).each do |sid, neighbors|
+          neighbors.each do |nb|
+            adj[sid] << nb unless adj[sid].include?(nb)
+            adj[nb] << sid unless adj[nb].include?(sid)
+          end
+        end
+        adj
+      end
+    end
+
+    def build_service_ids_by_point
+      result = Hash.new { |h, k| h[k] = [] }
+      (nodes || {}).each do |service_id, data|
+        pid = data[:point_id] || data['point_id']
+        result[pid] << service_id if pid
+      end
+      result
+    end
+  end
+
+  # Wraps multiple per-skill Graph instances and exposes a unified interface.
+  # Duck-types with Graph for neighbors_for_service, knn_neighbors, nodes, edges, to_geojson.
+  class MultiGraph
+    attr_reader :graphs
+
+    # @param graphs [Hash{String|nil => Models::Graph}] skill_key => graph
+    def initialize(graphs:)
+      @graphs = graphs || {}
+    end
+
+    def neighbors_for_service(service_id)
+      result = []
+      @graphs.each_value do |g|
+        result.concat(g.neighbors_for_service(service_id))
+      end
+      result.uniq
+    end
+
+    # Returns neighbors only from graphs whose skill-set intersects with the
+    # given vehicle skills. Nil-keyed graphs (no-skill) are always included.
+    def neighbors_for_service_with_vehicle_skills(service_id, vehicle_skills)
+      v_skills = vehicle_skills.map(&:to_s)
+      result = []
+      @graphs.each do |key, g|
+        if key.nil?
+          result.concat(g.neighbors_for_service(service_id))
+        else
+          graph_skills = key.split(',')
+          result.concat(g.neighbors_for_service(service_id)) if (v_skills & graph_skills).any?
+        end
+      end
+      result.uniq
+    end
+
+    def neighbors_for_point(point_id)
+      result = []
+      @graphs.each_value do |g|
+        result.concat(g.neighbors_for_point(point_id))
+      end
+      result.uniq
+    end
+
+    def knn_neighbors
+      @knn_neighbors_cache ||= begin
+        merged = {}
+        @graphs.each_value do |g|
+          (g.knn_neighbors || {}).each do |sid, neighbors|
+            (merged[sid] ||= []).concat(neighbors)
+          end
+        end
+        merged.each_value(&:uniq!)
+        merged
+      end
+    end
+
+    def nodes
+      @nodes_cache ||= begin
+        merged = {}
+        @graphs.each_value { |g| merged.merge!(g.nodes || {}) }
+        merged
+      end
+    end
+
+    def edges
+      @edges_cache ||= begin
+        seen = {}
+        result = []
+        @graphs.each_value do |g|
+          (g.edges || []).each do |e|
+            pair = [e[0], e[1]].sort
+            next if seen[pair]
+
+            seen[pair] = true
+            result << e
+          end
+        end
+        result
+      end
+    end
+
+    def edge_set
+      @edge_set_cache ||= edges.each_with_object({}) { |e, h| h[[e[0], e[1]].sort] = true }
+    end
+
+    def connected?(id_a, id_b)
+      edge_set.key?([id_a, id_b].sort)
+    end
+
+    def incompatible?(service_id_a, service_id_b)
+      @graphs.values.first&.incompatible?(service_id_a, service_id_b) || false
+    end
+
+    def service_ids_for_point(point_id)
+      result = []
+      @graphs.each_value { |g| result.concat(g.service_ids_for_point(point_id)) }
+      result.uniq
+    end
+
+    def tours_connectivity(ids)
+      id_hash = ids.each_with_object({}) { |id, h| h[id] = true }
+      edges.select{ |e| id_hash[e[0]] && id_hash[e[1]] }.map{ |e| [e[0], e[1]].sort }.uniq
+    end
+
+    def tours_connectivity_from_solution(solution)
+      result = {}
+      solution.routes.each_with_index do |route, idx|
+        service_ids = route.stops.filter_map{ |s| s.service_id }.compact
+        result[idx] = tours_connectivity(service_ids)
+      end
+      result
+    end
+
+    def incompatibilities
+      @graphs.values.first&.incompatibilities || []
+    end
+
+    def metadata
+      {
+        skill_keys: @graphs.keys,
+        graph_count: @graphs.size
+      }
+    end
+
+    def to_geojson
+      merged_graph = Models::Graph.new(
+        nodes: nodes,
+        edges: edges,
+        incompatibilities: incompatibilities,
+        knn_neighbors: knn_neighbors
+      )
+      merged_graph.to_geojson
+    end
+
+    def to_hash
+      {
+        graphs: @graphs.transform_values(&:to_hash),
+        merged_nodes: nodes.size,
+        merged_edges: edges.size
+      }
     end
   end
 end

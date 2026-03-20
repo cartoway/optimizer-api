@@ -23,6 +23,8 @@ require './util/job_manager.rb'
 
 module Interpreters
   class Dichotomous
+    # Deprecated: this interpreter is kept until RePartition is fully implemented
+    # Dichotomous heuristic is no longer called by the main orchestration pipeline.
     def self.dichotomous_candidate?(service_vrp)
       config = service_vrp.vrp.configuration
       service_vrp.dicho_level&.positive? ||
@@ -249,12 +251,8 @@ module Interpreters
       solutions.flat_map{ |solution|
         next if solution.nil?
 
-        solution.routes.map{ |route|
-          missions = route.stops.map{ |stop|
-            next if stop.is_a?(Models::Solution::StopDepot) || stop.mission.is_a?(Models::Rest)
-
-            stop.mission
-          }.compact
+        solution.routes.filter_map{ |route|
+          missions = route.missions_for_initial_routes
           next if missions.empty?
 
           Models::Route.create(

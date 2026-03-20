@@ -111,6 +111,25 @@ module Models
       solution.parse(self)
     end
 
+    # Resolves a mission id on this VRP (services and reload depots), e.g. after a partial reload.
+    def find_mission_by_id(mission_id)
+      services.find{ |s| s.id == mission_id || s.original_id == mission_id } ||
+        reload_depots.find{ |rd| rd.id == mission_id || rd.original_id == mission_id }
+    end
+
+    # Builds Models::Route list from rows produced by Solution#vrp_routes (optionally filtered via Solution.vrp_routes_for_vehicles).
+    def routes_from_initial_specs(route_specs)
+      route_specs.filter_map{ |spec|
+        vehicle = vehicles.find{ |v| v.id == spec[:vehicle_id] }
+        next unless vehicle
+
+        missions = spec[:mission_ids].filter_map{ |mid| find_mission_by_id(mid) }
+        next if missions.empty?
+
+        Models::Route.create(vehicle: vehicle, missions: missions)
+      }
+    end
+
     def empty_route(vehicle)
       route_start_time = [[vehicle.timewindow], vehicle.sequence_timewindows].compact.flatten[0]&.start.to_i
       route_end_time = route_start_time
