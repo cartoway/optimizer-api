@@ -1,4 +1,11 @@
 GIT
+  remote: https://github.com/braktar/graph-clustering
+  revision: 0ba22c3a2dbf8c8e57e2ae4afae42f9034ccf853
+  glob: ruby/*.gemspec
+  specs:
+    graph-clustering (0.1.0)
+
+GIT
   remote: https://github.com/cartoway/rubocop-policy.git
   revision: 209bde9a8088d4204b22829b2a9150860c16dcac
   specs:
@@ -312,6 +319,7 @@ DEPENDENCIES
   grape-swagger
   grape-swagger-entity
   grape_logging
+  graph-clustering!
   http_accept_language
   i18n
   minitest

@@ -3100,6 +3100,30 @@ class WrapperTest < Minitest::Test
     assert there_is_a_skipped_trip_when_simplification_is_off, assert_msg
   end
 
+  def test_prioritize_first_available_trips_fixed_cost_per_skill_group
+    base = VRP.basic
+    v0 = base[:vehicles].first
+    problem =
+      base.merge(
+        vehicles: [
+          v0.merge(id: 'va1', skills: [['skill_a']]),
+          v0.merge(id: 'vb1', skills: [['skill_b']]),
+          v0.merge(id: 'va2', skills: [['skill_a']]),
+          v0.merge(id: 'vb2', skills: [['skill_b']])
+        ]
+      )
+    vrp = TestHelper.create(problem)
+    demo = OptimizerWrapper.config[:services][:demo]
+    assert demo.prioritize_first_available_trips_and_vehicles(vrp, nil, mode: :simplify)
+
+    inc = 1e-4
+    %w[va1 vb1 va2 vb2].zip([inc, inc, 2 * inc, 2 * inc]).each do |vid, expected_delta|
+      vehicle = vrp.vehicles.find{ |v| v.id == vid }
+      before = vehicle[:fixed_cost_before_adjustment]
+      assert_in_delta expected_delta, vehicle.cost_fixed - before, 1e-12, "vehicle #{vid}"
+    end
+  end
+
   def test_protobuf_receives_correct_simplified_complex_shipments
     vrp = TestHelper.load_vrp(self, fixture_file: 'vrp_multipickup_singledelivery_shipments')
 

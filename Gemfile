@@ -50,6 +50,9 @@ gem 'polylines'
 gem 'rgeo'
 gem 'rgeo-geojson', require: 'rgeo/geo_json'
 
+# Graph partitioning / clustering
+gem 'graph-clustering', git: 'https://github.com/braktar/graph-clustering', glob: 'ruby/*.gemspec'
+
 gem 'sentry-resque'
 gem 'sentry-ruby'
 

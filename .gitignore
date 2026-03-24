@@ -49,3 +49,14 @@ TAGS
 docker/redis*
 docker/production.rb
 .env
+
+ext/**/target/
+/exe/
+
+__pycache__/
+*.pyo
+.Python
+venv/
+.venv/
+*.egg-info/
+.eggs/

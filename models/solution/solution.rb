@@ -102,5 +102,16 @@ module Models
       route.insert_stop(vrp, stop, index, idle_time)
       Parsers::SolutionParser.parse(self, vrp)
     end
+
+    def vrp_routes(vehicle_ids = nil)
+      routes.filter_map{ |route|
+        next if vehicle_ids && !vehicle_ids.include?(route.vehicle_id)
+
+        missions = route.missions_for_initial_routes
+        next if missions.empty?
+
+        { vehicle_id: route.vehicle_id, mission_ids: missions.map(&:id) }
+      }
+    end
   end
 end

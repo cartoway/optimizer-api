@@ -3,3 +3,13 @@
 docker/redis*
 docker/production.rb
 .env
+
+ext/**/target/
+/exe/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/

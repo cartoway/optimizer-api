@@ -68,3 +68,20 @@ end
 task :environment do
   require './environment'
 end
+
+# VrpDelaunay Rust binary (Spade)
+namespace :ext do
+  desc 'Compile VrpDelaunay binary (Spade - requires cargo)'
+  task :vrp_delaunay do
+    ext_dir = File.expand_path('ext/vrp_delaunay', __dir__)
+    Dir.chdir(ext_dir) do
+      sh 'cargo build --release'
+      bin = File.join(ext_dir, 'target/release/vrp_delaunay')
+      raise 'Build failed: no binary produced' unless File.executable?(bin)
+
+      dest = File.expand_path('exe', __dir__)
+      FileUtils.mkdir_p(dest)
+      FileUtils.cp(bin, File.join(dest, 'vrp_delaunay'))
+    end
+  end
+end

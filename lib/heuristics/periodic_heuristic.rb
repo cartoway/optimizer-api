@@ -890,6 +890,7 @@ module Wrappers
         @services_assignment[service_id][:vehicles] |= [route_data[:vehicle_original_id]]
         route_data[:stops].insert(best_index[:position] + i + 1,
                                   id: service_id,
+                                  mission: @services_data[service_id][:raw],
                                   point_id: best_index[:point],
                                   start: start,
                                   arrival: start,
@@ -1398,7 +1399,7 @@ module Wrappers
 
           vrp_routes << {
             vehicle_id: vrp_vehicle.id,
-            mission_ids: computed_stops.collect{ |stop| stop[:service_id] }.compact
+            missions: computed_stops.map{ |stop| stop[:mission] }.compact
           }
 
           solution_routes << Models::Solution::Route.new(stops: computed_stops,
@@ -1552,10 +1553,10 @@ module Wrappers
       route_vrp
     end
 
-    def generate_route(vehicle, services)
+    def generate_route(vehicle, stops)
       {
         vehicle: vehicle,
-        mission_ids: services.collect{ |service| service[:id] }
+        missions: stops.map{ |stop| stop[:mission] }.compact
       }
     end
 

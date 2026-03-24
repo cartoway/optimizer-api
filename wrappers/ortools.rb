@@ -85,7 +85,7 @@ module Wrappers
         }.each{ |relation|
           order_route = {
             vehicle: vrp.vehicles.size == 1 ? vrp.vehicles.first : nil,
-            mission_ids: relation.linked_service_ids
+            missions: relation.linked_services
           }
           vrp.routes += [order_route]
         }
@@ -136,7 +136,7 @@ module Wrappers
       @job = job
       @previous_result = nil
       relations = []
-      services = []
+      ortools_services = []
       routes = []
       services_activity_positions = { always_first: [], always_last: [], never_first: [], never_last: [] }
       vrp.services.each_with_index{ |service, service_index|
@@ -161,7 +161,7 @@ module Wrappers
         }
 
         if service.activity
-          services << OrtoolsVrp::Service.new(
+          ortools_services << OrtoolsVrp::Service.new(
             time_windows: service.activity.timewindows.collect{ |tw|
               OrtoolsVrp::TimeWindow.new(start: tw.start, end: tw.end || 2147483647,
                                          maximum_lateness: tw.maximum_lateness)
@@ -208,11 +208,12 @@ module Wrappers
             alternative_index: 0
           )
 
-          services = update_services_activity_positions(services, services_activity_positions, service.id,
-                                                        service.activity.position, service_index, 0)
+          ortools_services =
+            update_services_activity_positions(ortools_services, services_activity_positions, service.id,
+                                               service.activity.position, service_index, 0)
         elsif service.activities
           service.activities.each_with_index{ |possible_activity, activity_index|
-            services << OrtoolsVrp::Service.new(
+            ortools_services << OrtoolsVrp::Service.new(
               time_windows: possible_activity.timewindows.collect{ |tw|
                 OrtoolsVrp::TimeWindow.new(start: tw.start, end: tw.end || 2147483647,
                                            maximum_lateness: tw.maximum_lateness)
@@ -257,8 +258,9 @@ module Wrappers
               alternative_index: activity_index
             )
 
-            services = update_services_activity_positions(services, services_activity_positions, service.id,
-                                                          possible_activity.position, service_index, activity_index)
+            ortools_services =
+              update_services_activity_positions(ortools_services, services_activity_positions, service.id,
+                                                 possible_activity.position, service_index, activity_index)
           }
         end
       }
@@ -275,17 +277,17 @@ module Wrappers
         }
 
       vehicles = build_problem_vehicles(vrp, total_quantities)
-      build_problem_relations(vrp, services, relations)
+      build_problem_relations(vrp, ortools_services, relations)
 
       vrp.routes.collect{ |route|
-        next if route.vehicle.nil? || route.mission_ids.empty?
+        next if route.vehicle.nil? || route.missions.empty?
 
-        service_ids = corresponding_mission_ids(services.collect(&:id), route.mission_ids)
-        next if service_ids.empty?
+        ortools_service_ids = corresponding_mission_ids(ortools_services, route.missions)
+        next if ortools_service_ids.empty?
 
         routes << OrtoolsVrp::Route.new(
           vehicle_id: route.vehicle.id.to_s,
-          service_ids: service_ids.map(&:to_s)
+          service_ids: ortools_service_ids.map(&:to_s)
         )
       }
 
@@ -308,7 +310,7 @@ module Wrappers
 
       problem = OrtoolsVrp::Problem.new(
         vehicles: vehicles,
-        services: services,
+        services: ortools_services,
         matrices: matrices,
         relations: relations,
         routes: routes
@@ -710,8 +712,9 @@ module Wrappers
       }
     end
 
-    def corresponding_mission_ids(available_ids, mission_ids)
-      mission_ids.collect{ |mission_id|
+    def corresponding_mission_ids(available_ortools_services, missions)
+      available_ids = available_ortools_services.map(&:id)
+      missions.map(&:id).collect{ |mission_id|
         correct_id =
           if available_ids.include?(mission_id)
             mission_id
