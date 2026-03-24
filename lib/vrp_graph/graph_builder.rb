@@ -118,9 +118,7 @@ module VrpGraph
       log_prefix = label ? "graph[#{label}]" : 'graph'
 
       all_incompat = shared[:all_incompat]
-      vehicle_skill_sets = shared[:vehicle_skill_sets]
       vrp_time_matrix = shared[:vrp_time_matrix]
-      service_by_id = shared[:service_by_id]
 
       used_point_ids = services.map { |s| s.activity.point_id || s.activity.point&.id }.compact.uniq
       graph_points = @vrp.points.select { |p| used_point_ids.include?(p.id) }
