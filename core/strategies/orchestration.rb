@@ -1,4 +1,4 @@
-require './lib/interpreters/re_partition.rb'
+require './lib/interpreters/re_partition'
 
 module Core
   module Strategies

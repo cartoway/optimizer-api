@@ -5,12 +5,14 @@ require './test/test_helper'
 module VrpGraph
   class DelaunayAdapterTest < Minitest::Test
     def setup
-      skip 'vrp_delaunay binary not built (rake ext:vrp_delaunay)' unless File.executable?(VrpGraph::DelaunayAdapter::BINARY_PATH)
+      return if File.executable?(VrpGraph::DelaunayAdapter::BINARY_PATH)
+
+      skip 'vrp_delaunay binary not built (rake ext:vrp_delaunay)'
     end
 
     def test_compute_edges_returns_empty_for_insufficient_points
-      assert_equal [], DelaunayAdapter.compute_edges([])
-      assert_equal [], DelaunayAdapter.compute_edges([[1.0, 2.0]])
+      assert_empty DelaunayAdapter.compute_edges([])
+      assert_empty DelaunayAdapter.compute_edges([[1.0, 2.0]])
     end
 
     def test_compute_edges_two_points

@@ -5,7 +5,9 @@ require './test/test_helper'
 module VrpGraph
   class GraphBuilderTest < Minitest::Test
     def setup
-      skip 'vrp_delaunay binary not built (rake ext:vrp_delaunay)' unless File.executable?(VrpGraph::DelaunayAdapter::BINARY_PATH)
+      return if File.executable?(VrpGraph::DelaunayAdapter::BINARY_PATH)
+
+      skip 'vrp_delaunay binary not built (rake ext:vrp_delaunay)'
     end
 
     def test_build_creates_graph_with_service_level_nodes
@@ -99,9 +101,10 @@ module VrpGraph
         assert_equal graph.nodes['svc_a'][:point_id], graph.nodes['svc_b'][:point_id],
                      'Co-located services should share the same point_id'
 
-        intra_edge = graph.edges.any?{ |e|
-          [e[0], e[1]].sort == ['svc_a', 'svc_b'].sort
-        }
+        intra_edge =
+          graph.edges.any?{ |e|
+            [e[0], e[1]].sort == ['svc_a', 'svc_b'].sort
+          }
         assert intra_edge, 'Compatible co-located services should have an intra-point edge'
       end
     end

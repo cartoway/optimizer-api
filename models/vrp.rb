@@ -117,7 +117,8 @@ module Models
         reload_depots.find{ |rd| rd.id == mission_id || rd.original_id == mission_id }
     end
 
-    # Builds Models::Route list from rows produced by Solution#vrp_routes (optionally filtered via Solution.vrp_routes_for_vehicles).
+    # Builds Models::Route list from rows produced by Solution#vrp_routes
+    # (optionally filtered via Solution.vrp_routes_for_vehicles).
     def routes_from_initial_specs(route_specs)
       route_specs.filter_map{ |spec|
         vehicle = vehicles.find{ |v| v.id == spec[:vehicle_id] }

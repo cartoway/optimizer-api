@@ -217,7 +217,7 @@ module Api
           params {
             use(:input)
             optional(:format, type: Symbol, values: [:json, :geojson], default: :json,
-                     desc: 'Output format: json (full graph) or geojson')
+                              desc: 'Output format: json (full graph) or geojson')
           }
           post do
             d_params = declared(params, include_missing: false)
@@ -230,11 +230,12 @@ module Api
               error!("Model Validation Error: #{vrp.errors}", 400)
             end
 
-            graph = begin
-              VrpGraph::GraphBuilder.new(vrp).build
-            rescue LoadError => e
-              error!({ message: "Graph build failed: #{e.message}" }, 501)
-            end
+            graph =
+              begin
+                VrpGraph::GraphBuilder.new(vrp).build
+              rescue LoadError => e
+                error!({ message: "Graph build failed: #{e.message}" }, 501)
+              end
 
             if graph
               vrp.graph = graph

@@ -92,7 +92,7 @@ module Models
     def tours_connectivity_from_solution(solution)
       result = {}
       solution.routes.each_with_index do |route, idx|
-        service_ids = route.stops.filter_map{ |s| s.service_id }.compact
+        service_ids = route.stops.filter_map(&:service_id).compact
         result[idx] = tours_connectivity(service_ids)
       end
       result
@@ -160,20 +160,21 @@ module Models
 
     # Full adjacency list: Delaunay edges + KNN-repair edges, cached.
     def adjacency
-      @adjacency_cache ||= begin
-        adj = Hash.new { |h, k| h[k] = [] }
-        (edges || []).each do |e|
-          adj[e[0]] << e[1]
-          adj[e[1]] << e[0]
-        end
-        (knn_neighbors || {}).each do |sid, neighbors|
-          neighbors.each do |nb|
-            adj[sid] << nb unless adj[sid].include?(nb)
-            adj[nb] << sid unless adj[nb].include?(sid)
+      @adjacency ||=
+        begin
+          adj = Hash.new { |h, k| h[k] = [] }
+          (edges || []).each do |e|
+            adj[e[0]] << e[1]
+            adj[e[1]] << e[0]
           end
+          (knn_neighbors || {}).each do |sid, neighbors|
+            neighbors.each do |nb|
+              adj[sid] << nb unless adj[sid].include?(nb)
+              adj[nb] << sid unless adj[nb].include?(sid)
+            end
+          end
+          adj
         end
-        adj
-      end
     end
 
     def build_service_ids_by_point
@@ -229,45 +230,48 @@ module Models
     end
 
     def knn_neighbors
-      @knn_neighbors_cache ||= begin
-        merged = {}
-        @graphs.each_value do |g|
-          (g.knn_neighbors || {}).each do |sid, neighbors|
-            (merged[sid] ||= []).concat(neighbors)
+      @knn_neighbors ||=
+        begin
+          merged = {}
+          @graphs.each_value do |g|
+            (g.knn_neighbors || {}).each do |sid, neighbors|
+              (merged[sid] ||= []).concat(neighbors)
+            end
           end
+          merged.each_value(&:uniq!)
+          merged
         end
-        merged.each_value(&:uniq!)
-        merged
-      end
     end
 
     def nodes
-      @nodes_cache ||= begin
-        merged = {}
-        @graphs.each_value { |g| merged.merge!(g.nodes || {}) }
-        merged
-      end
+      @nodes ||=
+        begin
+          merged = {}
+          @graphs.each_value { |g| merged.merge!(g.nodes || {}) }
+          merged
+        end
     end
 
     def edges
-      @edges_cache ||= begin
-        seen = {}
-        result = []
-        @graphs.each_value do |g|
-          (g.edges || []).each do |e|
-            pair = [e[0], e[1]].sort
-            next if seen[pair]
+      @edges ||=
+        begin
+          seen = {}
+          result = []
+          @graphs.each_value do |g|
+            (g.edges || []).each do |e|
+              pair = [e[0], e[1]].sort
+              next if seen[pair]
 
-            seen[pair] = true
-            result << e
+              seen[pair] = true
+              result << e
+            end
           end
+          result
         end
-        result
-      end
     end
 
     def edge_set
-      @edge_set_cache ||= edges.each_with_object({}) { |e, h| h[[e[0], e[1]].sort] = true }
+      @edge_set ||= edges.each_with_object({}) { |e, h| h[[e[0], e[1]].sort] = true }
     end
 
     def connected?(id_a, id_b)
@@ -292,7 +296,7 @@ module Models
     def tours_connectivity_from_solution(solution)
       result = {}
       solution.routes.each_with_index do |route, idx|
-        service_ids = route.stops.filter_map{ |s| s.service_id }.compact
+        service_ids = route.stops.filter_map(&:service_id).compact
         result[idx] = tours_connectivity(service_ids)
       end
       result

@@ -33,7 +33,12 @@ module VrpGraph
     # @param k [Integer] max neighbors per repaired point
     # @return [Hash] point_id => [neighbor_point_id, ...] sorted by travel time
     def compute_knn_points(repaired_point_ids, other_point_ids, knn_matrix, point_incompat, k: 10)
-      incompat_set = point_incompat.is_a?(Hash) ? point_incompat : point_incompat.to_h { |a, b| [[a.to_s, b.to_s].sort, true] }
+      incompat_set =
+        if point_incompat.is_a?(Hash)
+          point_incompat
+        else
+          point_incompat.to_h { |a, b| [[a.to_s, b.to_s].sort, true] }
+        end
       result = {}
 
       repaired_point_ids.each_with_index do |pid, i|

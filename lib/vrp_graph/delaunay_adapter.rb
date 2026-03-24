@@ -37,7 +37,9 @@ module VrpGraph
       return [] if points.size < 2
 
       unless File.executable?(BINARY_PATH)
-        raise LoadError, "vrp_delaunay binary not found. Run: rake ext:vrp_delaunay (expected: #{BINARY_PATH})"
+        raise LoadError.new(
+          "vrp_delaunay binary not found. Run: rake ext:vrp_delaunay (expected: #{BINARY_PATH})"
+        )
       end
 
       input = points.map { |lon, lat| [lon.to_f, lat.to_f] }.to_json

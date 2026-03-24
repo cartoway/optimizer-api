@@ -109,7 +109,7 @@ module VrpGraph
     end
 
     def route_stop_service_ids(route)
-      route.stops.filter_map { |s| s.service_id }.compact.each_with_object({}) { |sid, h| h[sid] = true }
+      route.stops.filter_map(&:service_id).compact.each_with_object({}) { |sid, h| h[sid] = true }
     end
 
     def assign_with_ortools
