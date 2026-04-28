@@ -3,22 +3,37 @@ FROM ghcr.io/cartoway/optimizer-ortools:master
 ARG BUNDLE_WITHOUT="test development"
 # Install Vroom
 ARG VROOM_RELEASE=v1.14.0
+ARG VROOM_GIT_URL=https://github.com/braktar/vroom.git
+ARG VROOM_BRANCH=waiting-time
 RUN apt update -y && \
+    echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && \
+    apt update -y && \
     apt install -y \
         git-core \
         build-essential \
         g++ \
+        gcc-13 \
+        g++-13 \
         libssl-dev \
         libasio-dev \
         libglpk-dev \
         pkg-config \
         netcat-traditional
-RUN git clone --recurse-submodules https://github.com/VROOM-Project/vroom.git && \
-    cd vroom/src && \
-    git fetch --tags && \
-    git checkout -q $VROOM_RELEASE && \
-    make -j$(nproc) && \
-    cp ../bin/vroom /usr/local/bin && \
+RUN git clone "$VROOM_GIT_URL" vroom && \
+    cd vroom && \
+    if [ -n "$VROOM_BRANCH" ]; then \
+      git fetch origin "$VROOM_BRANCH" && \
+      git checkout -q "$VROOM_BRANCH"; \
+    else \
+      git fetch --tags && \
+      git checkout -q "$VROOM_RELEASE"; \
+    fi && \
+    git submodule sync --recursive && \
+    git submodule update --init --recursive && \
+    cd src && \
+    CC=gcc-13 CXX=g++-13 \
+    make -j"$(nproc)" && \
+    cp ../bin/vroom /usr/local/bin/vroom && \
     cd /
 
 RUN apt update -y && apt install -y \
