@@ -158,6 +158,39 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert_equal @minimal_problem[:services].size + 1, solution.routes.first.stops.size
   end
 
+  # API sends shift_preference as a string; build_depots must match :force_start so depots are not dropped from the PyVRP JSON.
+  def test_shift_preference_force_start_string_builds_depots
+    vehicle = @minimal_problem[:vehicles][0].dup
+    vehicle[:shift_preference] = 'force_start'
+    vehicle[:timewindow] = { start: 5, end: 100 }
+    vehicle[:end_point_id] = 'point_0'
+    problem = @minimal_problem.merge(vehicles: [vehicle])
+    vrp = TestHelper.create(problem)
+    payload = Wrappers::PyVRP.new.send(:pyvrp_problem, vrp)
+    refute_empty payload[:depots]
+    refute(payload[:depots].any?(&:nil?), 'PyVRP JSON depots must not contain nil slots (index collision)')
+    assert(payload[:depots].any?{ |d| d[:name].to_s.include?('force_start') })
+
+    solution = @pyvrp.solve(vrp)
+    assert solution
+  end
+
+  # Distinct start/end with force_start used to allocate duplicate depot indices (standard hash used local size).
+  def test_shift_preference_force_start_distinct_end_point_no_nil_depots
+    vehicle = @minimal_problem[:vehicles][0].dup
+    vehicle[:shift_preference] = 'force_start'
+    vehicle[:timewindow] = { start: 5, end: 100 }
+    vehicle[:end_point_id] = 'point_1'
+    problem = @minimal_problem.merge(vehicles: [vehicle])
+    vrp = TestHelper.create(problem)
+    payload = Wrappers::PyVRP.new.send(:pyvrp_problem, vrp)
+    refute(payload[:depots].any?(&:nil?), 'expected distinct global indices for start vs end depot rows')
+    assert_equal 2, payload[:depots].size
+
+    solution = @pyvrp.solve(vrp)
+    assert solution
+  end
+
   def test_pyvrp_with_self_selection
     vrp = VRP.basic
     vrp[:configuration][:preprocessing][:first_solution_strategy] = ['self_selection']
