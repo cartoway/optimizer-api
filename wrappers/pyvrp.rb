@@ -416,11 +416,25 @@ module Wrappers
       return index_hash[point.id][criteria] if index_hash[point.id].is_a?(Hash) && index_hash[point.id].key?(criteria)
 
       @depots << point
+      new_idx = @depots.size - 1
       if criteria
         index_hash[point.id] ||= {}
-        index_hash[point.id][criteria] = index_hash[point.id].size
+        index_hash[point.id][criteria] = new_idx
       else
-        index_hash[point.id] = index_hash.size
+        index_hash[point.id] = new_idx
+      end
+      new_idx
+    end
+
+    # Vehicle.shift_preference may be a String from the API or a Symbol from internal hashes — normalize for case/when.
+    def normalized_vehicle_shift_preference(vehicle)
+      case vehicle.shift_preference.to_s
+      when 'force_start'
+        :force_start
+      when 'force_end'
+        :force_end
+      else
+        :minimize_span
       end
     end
 
@@ -431,7 +445,7 @@ module Wrappers
       @depot_points_standard_index_hash = {}
       @depot_points_force_start_by_timewindow_start_index_hash = {}
       @depot_points_force_end_by_timewindow_end_index_hash = {}
-      vrp.vehicles.group_by(&:shift_preference).each do |shift_preference, vehicles|
+      vrp.vehicles.group_by{ |vehicle| normalized_vehicle_shift_preference(vehicle) }.each do |shift_preference, vehicles|
         vehicles.group_by(&:timewindow).each do |timewindow, sub_vehicles|
           case shift_preference
           when :force_start
@@ -477,8 +491,8 @@ module Wrappers
             name: "#{point_id}_standard" || '_null_store'
           }
       }
-      @depot_points_force_start_by_timewindow_start_index_hash.each{ |point_id, (timewindow_start, point_indices)|
-        point_indices.map { |point_index|
+      @depot_points_force_start_by_timewindow_start_index_hash.each do |point_id, tw_start_to_index|
+        tw_start_to_index.each do |timewindow_start, point_index|
           depots[point_index] =
             {
               x: @point_hash[point_id]&.location&.lon || 0,
@@ -487,19 +501,19 @@ module Wrappers
               tw_late: timewindow_start,
               name: "#{point_id}_#{timewindow_start}_force_start" || '_null_store'
             }
-        }
-      }
-      @depot_points_force_end_by_timewindow_end_index_hash.keys.flat_map { |point_id, (timewindow_end, point_indices)|
-        point_indices.map { |point_index|
+        end
+      end
+      @depot_points_force_end_by_timewindow_end_index_hash.each do |point_id, tw_end_to_index|
+        tw_end_to_index.each do |timewindow_end, point_index|
           depots[point_index] = {
             x: @point_hash[point_id]&.location&.lon || 0,
             y: @point_hash[point_id]&.location&.lat || 0,
             tw_early: timewindow_end || 0,
-            tw_late: timewindow_end  || MAX_INT64,
+            tw_late: timewindow_end || MAX_INT64,
             name: "#{point_id}_#{timewindow_end}_force_end" || '_null_store'
           }
-        }
-      }
+        end
+      end
 
       @reload_depots = []
       @reload_depot_hash = {}
@@ -507,7 +521,7 @@ module Wrappers
         next if @reload_depot_hash.key?(depot.id)
 
         @reload_depots << depot
-        @reload_depot_hash[depot.id] = @depots.size
+        @reload_depot_hash[depot.id] = depots.size
         depots <<
           {
             x: depot.point&.location&.lon || 0,
@@ -517,6 +531,13 @@ module Wrappers
             service_duration: depot.duration.to_i,
             name: "reload_#{depot&.id&.to_s || 'null_store'}"
           }
+      end
+      nil_indices = depots.each_with_index.select{ |slot, _i| slot.nil? }.map(&:last)
+      if nil_indices.any?
+        log(
+          "PyVRP build_depots: #{nil_indices.size} unknown depots at indices #{nil_indices.inspect} — ",
+          level: :warn
+        )
       end
       @service_index_map += depots.map{ nil }
       depots
