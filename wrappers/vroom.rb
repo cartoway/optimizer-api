@@ -373,9 +373,7 @@ module Wrappers
             per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000).to_i,
             per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600).to_i,
             per_wait_hour:
-              if vehicle.shift_preference == :force_start && vehicle.cost_waiting_time_multiplier
-                (vehicle.cost_waiting_time_multiplier * 3600).to_i
-              end
+              vehicle.cost_waiting_time_multiplier && (vehicle.cost_waiting_time_multiplier * 3600).to_i
           }.delete_if{ |k, v| v.nil? || v.zero? },
           max_distance: vehicle.distance,
           departure: vehicle.shift_preference == :force_start ? vehicle.timewindow&.start || 0 : nil
