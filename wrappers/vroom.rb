@@ -376,7 +376,7 @@ module Wrappers
           }.delete_if{ |k, v| v.nil? || v.zero? },
           max_distance: vehicle.distance,
           max_duration: vehicle.duration,
-          departure: vehicle.shift_preference == :force_start ? vehicle.timewindow&.start || 0 : nil
+          departure: vehicle.shift_preference.to_s == 'force_start' ? vehicle.timewindow&.start || 0 : nil
         }.delete_if{ |k, v|
           v.nil? || v.is_a?(Array) && v.empty? ||
             k == :time_window && v.first.zero? && v.last == 2**30
