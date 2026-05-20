@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/cartoway/balanced_vrp_clustering.git
-  revision: 8c72e7a71e707f4c2e9cb09f0ff8fd1ad733c763
+  revision: a58a13f6db1eddc804e443ceba92f4b692c4661b
   branch: bump
   specs:
     balanced_vrp_clustering (0.3.0)
