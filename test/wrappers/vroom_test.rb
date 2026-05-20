@@ -561,6 +561,28 @@ class Wrappers::VroomTest < Minitest::Test
     OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:vroom] }}, TestHelper.create(problem), nil)
   end
 
+  def test_collect_vehicles_force_start_accepts_string_shift_preference
+    problem = @minimal_problem.deep_dup
+    problem[:vehicles] = [{
+      id: 'vehicle_0',
+      start_point_id: 'point_0',
+      end_point_id: 'point_0',
+      matrix_id: 'matrix_0',
+      shift_preference: 'force_start',
+      timewindow: { start: 55, end: 500 }
+    }]
+    vrp = TestHelper.create(problem)
+    vroom = Wrappers::Vroom.new
+    vroom.send(:rest_equivalence, vrp)
+    vroom.instance_variable_set(:@total_quantities, Hash.new(0))
+    vehicles_payload = vroom.send(:collect_vehicles, vrp, [], [])
+    assert_equal 55, vehicles_payload.first[:departure],
+                  'String shift_preference must set VROOM departure (e.g. after dicho partial VRP rebuild)'
+    vrp.vehicles.first[:shift_preference] = :force_start
+    vehicles_payload_sym = vroom.send(:collect_vehicles, vrp, [], [])
+    assert_equal 55, vehicles_payload_sym.first[:departure]
+  end
+
   def test_partially_nil_capacities
     problem = VRP.basic
     problem[:services].each{ |service|
