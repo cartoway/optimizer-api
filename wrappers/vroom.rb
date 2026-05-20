@@ -49,7 +49,6 @@ module Wrappers
         :assert_no_ride_constraint,
         :assert_no_service_duration_modifiers,
         :assert_vehicles_no_capacity_initial,
-        :assert_vehicles_no_duration_limit,
         :assert_vehicles_no_force_start,
         :assert_vehicles_no_late_multiplier,
         :assert_vehicles_no_overload_multiplier,
@@ -376,6 +375,7 @@ module Wrappers
               vehicle.cost_waiting_time_multiplier && (vehicle.cost_waiting_time_multiplier * 3600).to_i
           }.delete_if{ |k, v| v.nil? || v.zero? },
           max_distance: vehicle.distance,
+          max_duration: vehicle.duration,
           departure: vehicle.shift_preference == :force_start ? vehicle.timewindow&.start || 0 : nil
         }.delete_if{ |k, v|
           v.nil? || v.is_a?(Array) && v.empty? ||
