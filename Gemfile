@@ -43,7 +43,7 @@ gem 'rest-client'
 
 # AI
 gem 'ai4r'
-gem 'balanced_vrp_clustering', github: 'mapotempo/balanced_vrp_clustering', branch: 'dev'
+gem 'balanced_vrp_clustering', github: 'cartoway/balanced_vrp_clustering', branch: 'bump'
 
 # Geo
 gem 'polylines'
