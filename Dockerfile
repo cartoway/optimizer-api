@@ -63,11 +63,29 @@ WORKDIR /srv/app
 
 RUN apt update && \
     libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
-    apt install -y git libgeos-dev ${libgeos} libicu-dev libglpk-dev nano
+    apt install -y --no-install-recommends \
+        git \
+        libgeos-dev \
+        ${libgeos} \
+        libicu-dev \
+        libglpk-dev \
+        nano \
+        rustc \
+        cargo \
+        pkg-config \
+        libssl-dev \
+        libclang-dev \
+        clang \
+    && rm -rf /var/lib/apt/lists/*
+
+# balanced_vrp_clustering (bump): Rust native ext via rb_sys — https://github.com/cartoway/balanced_vrp_clustering/tree/bump
+# SOURCE_DATE_EPOCH: RubyGems sets it during native compile; helps rb_sys/cargo detection during bundle install.
+ENV SOURCE_DATE_EPOCH=1
 
 ADD ./Gemfile /srv/app/
 ADD ./Gemfile.lock /srv/app/
-RUN bundle install --full-index --without ${BUNDLE_WITHOUT}
+RUN bundle config set --local without "${BUNDLE_WITHOUT}" && \
+    bundle install --full-index
 
 ADD . /srv/app
 
