@@ -18,6 +18,10 @@
 require './lib/clusterers/average_tree_linkage.rb'
 require './lib/clusterers/complete_linkage_max_distance.rb'
 require './lib/helper.rb'
+require './lib/heuristics/dicho_construction_timings.rb'
+require './lib/heuristics/dicho_level_timings.rb'
+require './lib/heuristics/dicho_resolution_timings.rb'
+require './lib/heuristics/ortools_timings.rb'
 require './lib/interpreters/periodic_visits.rb'
 
 module Interpreters
@@ -192,15 +196,50 @@ module Interpreters
       log '<-- split_solve (clustering by max_split)'
     end
 
-    def self.initialize_split_data(service_vrp, _job = nil)
+    def self.matrix_time_available?(vrp)
+      vrp && !vrp.matrices.empty? && vrp.matrices[0][:time]&.any?
+    end
+
+    def self.representative_split_kmeans_options(split_solve_data)
+      {
+        cut_symbol: :duration,
+        restarts: 1,
+        build_sub_vrps: false,
+        basic_split: true,
+        group_points: false,
+        use_matrix_distances: matrix_time_available?(split_solve_data[:original_vrp])
+      }
+    end
+
+    def self.init_split_kmeans_options(vrp)
+      {
+        cut_symbol: :duration,
+        restarts: 2,
+        build_sub_vrps: false,
+        use_matrix_distances: matrix_time_available?(vrp),
+      }
+    end
+
+    def self.initialize_split_data(service_vrp, job = nil)
+      dicho_data = service_vrp.dicho_data
+      dicho_data = {} unless dicho_data.is_a?(Hash)
+      service_vrp.dicho_data = dicho_data
+      DichoConstructionTimings.ensure!(dicho_data)
+      DichoLevelTimings.ensure!(dicho_data)
+      DichoResolutionTimings.ensure!(dicho_data)
+      OrtoolsTimings.ensure!(dicho_data)
+      init_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
       # Initialize by first split_by_vehicle and keep the assignment info (don't generate the sub-VRPs yet)
       vrp = service_vrp.vrp
       empties_or_fills = vrp.empties_or_fills
       vrp.services -= empties_or_fills
-      split_by_vehicle = split_balanced_kmeans(service_vrp, vrp.vehicles.size,
-                                               cut_symbol: :duration, restarts: 2, build_sub_vrps: false)
+      split_by_vehicle =
+        DichoConstructionTimings.measure(dicho_data, :initialize_split_kmeans_ms) {
+          split_balanced_kmeans(service_vrp, vrp.vehicles.size, init_split_kmeans_options(vrp))
+        }
 
-      split_data = {
+      dicho_data.merge!(
         current_vehicles: vrp.vehicles.map(&:itself), # new array but original objects
         current_vehicle_limit: vrp.configuration.resolution.vehicle_limit,
         vehicle_has_complete_matrix: vrp.vehicles.map{ |v| [v.id, !v.matrix_id.blank?] }.to_h,
@@ -210,11 +249,20 @@ module Interpreters
         transferred_time_limit: 0.0,
         service_vehicle_assignments: vrp.vehicles.map.with_index{ |v, i| [v.id, split_by_vehicle[i]] }.to_h,
         original_vrp: vrp,
-        representative_vrp: nil,
-      }
-      split_data[:representative_vrp] = create_representative_vrp(split_data)
+        representative_vrp: nil
+      )
+      dicho_data[:representative_vrp] =
+        DichoConstructionTimings.measure(dicho_data, :initialize_representative_vrp_ms) {
+          create_representative_vrp(dicho_data)
+        }
 
-      [split_data, empties_or_fills]
+      DichoConstructionTimings.add!(
+        dicho_data,
+        :initialize_split_data_ms,
+        (Process.clock_gettime(Process::CLOCK_MONOTONIC) - init_start) * 1000
+      )
+
+      [dicho_data, empties_or_fills]
     end
 
     # self-recursive method
@@ -229,8 +277,8 @@ module Interpreters
         # SPLIT current_vehicles list (by-vehicle-centroids) to create two "sides"
         sides =
           split_balanced_kmeans(
-            Models::ResolutionContext.new(vrp: create_representative_sub_vrp(ss_data)), 2,
-            cut_symbol: :duration, restarts: 3, build_sub_vrps: false, basic_split: true, group_points: false
+            Models::ResolutionContext.new(vrp: create_representative_sub_vrp(ss_data, job: job)), 2,
+            representative_split_kmeans_options(ss_data)
           ).sort_by!{ |side|
             [side.size, side.sum(&:visits_number)] # [number_of_vehicles, number_of_visits]
           }.reverse!.collect!{ |side|
@@ -319,6 +367,10 @@ module Interpreters
       log "<-- split_solve_sub_vrp lv: #{split_level}"
     end
 
+    def self.duplicate_configuration(configuration)
+      Models::Configuration.create(configuration.as_json)
+    end
+
     def self.create_sub_vrp(split_solve_data)
       ss_data = split_solve_data
       o_vrp = ss_data[:original_vrp]
@@ -353,7 +405,13 @@ module Interpreters
       sub_vrp.zones = o_vrp.zones
       sub_vrp.subtours = o_vrp.subtours
 
-      sub_vrp.configuration = Oj.load(Oj.dump(o_vrp.configuration)) # time and other limits are correct below
+      config_copy_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      sub_vrp.configuration = duplicate_configuration(o_vrp.configuration)
+      DichoConstructionTimings.add!(
+        ss_data,
+        :create_sub_vrp_config_copy_ms,
+        (Process.clock_gettime(Process::CLOCK_MONOTONIC) - config_copy_start) * 1000
+      )
       # split the limits
       s_res = sub_vrp.configuration.resolution
       if ss_data[:current_vehicle_limit]
@@ -662,112 +720,166 @@ module Interpreters
       log 'Some routes are emptied due to poor workload -- time or quantity.', level: :warn if emptied_routes
     end
 
-    def self.update_matrix(sub_vrp, matrix_indices)
-      sub_vrp.matrices.each{ |matrices|
-        [:time, :distance, :value].each{ |dimension|
-          matrix = matrices.send(dimension)
-          next unless matrix
-
-          matrices.send("#{dimension}=", matrix_indices.map{ |r_index| matrix[r_index].values_at(*matrix_indices) })
+    # Extract a square sub-matrix without values_at splat (faster for large index lists).
+    def self.extract_sub_matrix(source_matrix, row_indices, column_indices = row_indices)
+      row_indices.each_with_index.map{ |row_index, row_offset|
+        source_row = source_matrix[row_index]
+        column_indices.each_with_index.map{ |column_index, _column_offset|
+          source_row[column_index]
         }
       }
+    end
+
+    def self.slice_matrices(matrices, matrix_indices)
+      matrices.map{ |matrix|
+        sliced = Models::Matrix.create(id: matrix.id)
+        [:time, :distance, :value].each{ |dimension|
+          source_matrix = matrix.send(dimension)
+          next unless source_matrix
+
+          sliced.send("#{dimension}=", extract_sub_matrix(source_matrix, matrix_indices))
+        }
+        sliced
+      }
+    end
+
+    def self.update_matrix(sub_vrp, matrix_indices)
+      sub_vrp.matrices = slice_matrices(sub_vrp.matrices, matrix_indices)
     end
 
     def self.update_matrix_index(vrp)
       vrp.points.each_with_index{ |point, index|
         point.matrix_index = index
       }
+
+      point_index_by_id = vrp.points.each_with_index.to_h{ |point, index| [point.id, index] }
+      referenced_points =
+        vrp.services.filter_map{ |service| service.activity&.point } +
+        vrp.vehicles.flat_map{ |vehicle| [vehicle.start_point, vehicle.end_point] }.compact
+      referenced_points.uniq.each{ |point|
+        next if vrp.points.include?(point)
+
+        index = point_index_by_id[point.id]
+        point.matrix_index = index unless index.nil?
+      }
+    end
+
+    def self.copy_resolution_context_for_sub_vrp(service_vrp, sub_vrp)
+      Models::ResolutionContext.new(
+        service: service_vrp.service,
+        vrp: sub_vrp,
+        job_id: service_vrp.job_id,
+        split_level: service_vrp.split_level,
+        split_denominators: service_vrp.split_denominators,
+        split_sides: service_vrp.split_sides,
+        split_solve_data: service_vrp.split_solve_data,
+        dicho_level: service_vrp.dicho_level,
+        dicho_denominators: service_vrp.dicho_denominators,
+        dicho_sides: service_vrp.dicho_sides,
+        dicho_data: service_vrp.dicho_data,
+        resolution_time_budget_ms: service_vrp.resolution_time_budget_ms,
+        original_duration_ms: service_vrp.original_duration_ms,
+        selected_first_solution_strategy: service_vrp.selected_first_solution_strategy
+      )
     end
 
     def self.build_partial_service_vrp(service_vrp, partial_service_ids, available_vehicles_indices = nil, entity = nil)
       log '---> build_partial_service_vrp', level: :debug
-      Models.delete_all
-      tic = Time.now
-      vrp = service_vrp.vrp
-      # Create an empty vrp
-      sub_vrp = Models::Vrp.create({ name: vrp.name, configuration: vrp.configuration.as_json }, check: false)
-      if available_vehicles_indices
-        sub_vrp.vehicles = vrp.vehicles.select.with_index{ |_v, v_i| available_vehicles_indices.include?(v_i) }
-        sub_vrp.routes =
-          vrp.routes.select{ |r|
-            route_week_day = r.day_index ? r.day_index % 7 : nil
-            sub_vrp.vehicles.any?{ |vehicle|
-              vehicle_week_day_availability =
-                if vehicle.timewindow
-                  vehicle.timewindow.day_index || (0..6)
-                else
-                  vehicle.sequence_timewindows.collect{ |tw|
-                    tw.day_index || (0..6)
-                  }.flatten.uniq
-                end
+      dicho_data = service_vrp.dicho_data
+      DichoConstructionTimings.ensure!(dicho_data)
 
-              vehicle.id == r.vehicle_id &&
-                (route_week_day.nil? || vehicle_week_day_availability.include?(route_week_day))
+      DichoConstructionTimings.measure(dicho_data, :build_partial_ms) {
+        vrp = service_vrp.vrp
+        partial_service_id_set = partial_service_ids.to_set
+        assembly_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+        sub_vrp = Models::Vrp.create({}, delete: false, check: false)
+        sub_vrp.name = vrp.name
+        sub_vrp.configuration = duplicate_configuration(vrp.configuration)
+        sub_vrp.units = vrp.units
+        sub_vrp.reload_depots = vrp.reload_depots
+        sub_vrp.matrices = vrp.matrices
+
+        if available_vehicles_indices
+          sub_vrp.vehicles = vrp.vehicles.select.with_index{ |_v, v_i| available_vehicles_indices.include?(v_i) }
+          sub_vrp.routes =
+            vrp.routes.select{ |r|
+              route_week_day = r.day_index ? r.day_index % 7 : nil
+              sub_vrp.vehicles.any?{ |vehicle|
+                vehicle_week_day_availability =
+                  if vehicle.timewindow
+                    vehicle.timewindow.day_index || (0..6)
+                  else
+                    vehicle.sequence_timewindows.collect{ |tw|
+                      tw.day_index || (0..6)
+                    }.flatten.uniq
+                  end
+
+                vehicle.id == r.vehicle_id &&
+                  (route_week_day.nil? || vehicle_week_day_availability.include?(route_week_day))
+              }
             }
+        else
+          sub_vrp.vehicles = vrp.vehicles
+          sub_vrp.routes = vrp.routes
+        end
+
+        sub_vrp.services = vrp.services.select{ |service| partial_service_id_set.include?(service.id) }
+        sub_vrp.rests = sub_vrp.vehicles.flat_map(&:rests).uniq
+        available_vehicle_ids = sub_vrp.vehicles.map(&:id)
+
+        sub_vrp.relations =
+          vrp.relations.select{ |r|
+            next if r.type == :same_vehicle && entity == :vehicle
+
+            r.linked_service_ids[0..0].all?{ |sid| partial_service_id_set.include?(sid) } &&
+              r.linked_vehicle_ids[0..0].all?{ |vid| available_vehicle_ids.include?(vid) }
           }
-        sub_vrp
-      else
-        sub_vrp.vehicles = vrp.vehicles
-        sub_vrp.routes = vrp.routes
-      end
 
-      sub_vrp.matrices = vrp.matrices
-      sub_vrp.units = vrp.units
-      sub_vrp.reload_depots = vrp.reload_depots
+        split_respects_relations =
+          sub_vrp.relations.all?{ |r|
+            non_matching_linked_service_ids = r.linked_service_ids - partial_service_ids
+            non_matching_linked_vehicle_ids = r.linked_vehicle_ids - available_vehicle_ids
 
-      sub_vrp.services = vrp.services.select{ |service| partial_service_ids.include?(service.id) }
-      sub_vrp.rests = sub_vrp.vehicles.flat_map(&:rests).uniq
-      available_vehicle_ids = sub_vrp.vehicles.map(&:id)
+            (non_matching_linked_service_ids.empty? ||
+              non_matching_linked_service_ids.size == r.linked_service_ids.size) &&
+              (non_matching_linked_vehicle_ids.empty? ||
+                non_matching_linked_vehicle_ids.size == r.linked_vehicle_ids.size)
+          }
+        unless split_respects_relations
+          err_msg = 'Split does not respect relations. Some relations will be silently ignored.'
+          log err_msg, level: :warn
+          raise err_msg if ENV['APP_ENV'] != 'production'
+        end
 
-      sub_vrp.relations =
-        vrp.relations.select{ |r|
-          next if r.type == :same_vehicle && entity == :vehicle
+        sub_vrp.points = sub_vrp.services.filter_map{ |s| s.activity.point } |
+                         sub_vrp.vehicles.flat_map{ |vehicle| [vehicle.start_point, vehicle.end_point] }.compact |
+                         sub_vrp.reload_depots.flat_map(&:point).compact
+        sub_vrp.points.uniq!
+        sub_vrp = add_corresponding_entity_skills(entity, sub_vrp)
 
-          # Split should respect relations, it is enough to check only the first linked id --
-          # [0..0].all? is to handle empties
-          r.linked_service_ids[0..0].all?{ |sid| partial_service_ids.include?(sid) } &&
-            r.linked_vehicle_ids[0..0].all?{ |vid| available_vehicle_ids.include?(vid) }
+        vehicle_ids = sub_vrp.vehicles.map(&:id)
+        sub_vrp.services.each{ |service|
+          service.sticky_vehicle_ids.delete_if{ |stick| !vehicle_ids.include?(stick) }
         }
 
-      split_respects_relations =
-        sub_vrp.relations.all?{ |r|
-          non_matching_linked_service_ids = r.linked_service_ids - partial_service_ids
-          non_matching_linked_vehicle_ids = r.linked_vehicle_ids - available_vehicle_ids
+        DichoConstructionTimings.add!(
+          dicho_data,
+          :build_partial_vrp_create_ms,
+          (Process.clock_gettime(Process::CLOCK_MONOTONIC) - assembly_start) * 1000
+        )
 
-          (non_matching_linked_service_ids.empty? ||
-            non_matching_linked_service_ids.size == r.linked_service_ids.size) &&
-            (non_matching_linked_vehicle_ids.empty? ||
-              non_matching_linked_vehicle_ids.size == r.linked_vehicle_ids.size)
-        }
-      unless split_respects_relations
-        err_msg = 'Split does not respect relations. Some relations will be silently ignored.'
-        log err_msg, level: :warn
-        raise err_msg if ENV['APP_ENV'] != 'production'
-      end
+        # Share parent matrices and keep original matrix_index values (same as create_sub_vrp).
+        context_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        sub_service_vrp = copy_resolution_context_for_sub_vrp(service_vrp, sub_vrp)
+        DichoConstructionTimings.add!(
+          dicho_data,
+          :build_partial_context_ms,
+          (Process.clock_gettime(Process::CLOCK_MONOTONIC) - context_start) * 1000
+        )
 
-      sub_vrp.points = sub_vrp.services.map{ |s| s.activity.point }.compact |
-                       sub_vrp.vehicles.flat_map{ |vehicle| [vehicle.start_point, vehicle.end_point] }.compact |
-                       sub_vrp.reload_depots.flat_map(&:point).compact
-      sub_vrp.points.uniq!
-      sub_vrp = add_corresponding_entity_skills(entity, sub_vrp)
-
-      sub_vrp_hash = sub_vrp.as_json
-
-      vehicle_ids = sub_vrp_hash[:vehicles]&.map{ |v| v[:id] } || []
-      sub_vrp_hash[:services]&.each{ |service|
-        service[:sticky_vehicle_ids]&.delete_if{ |stick| !vehicle_ids.include?(stick) }
+        sub_service_vrp
       }
-
-      sub_vrp = Models::Vrp.create(sub_vrp_hash, check: false)
-
-      if !sub_vrp.matrices&.empty?
-        matrix_indices = sub_vrp.points.map(&:matrix_index)
-        update_matrix_index(sub_vrp)
-        update_matrix(sub_vrp, matrix_indices)
-      end
-
-      log "<--- build_partial_service_vrp takes #{Time.now - tic}", level: :debug
-      Models::ResolutionContext.new(service_vrp.as_json.merge(vrp: sub_vrp))
     end
 
     def self.adjust_independent_duration(vrp, this_sub_size, total_size)
@@ -809,7 +921,8 @@ module Interpreters
         options[:seed] ||= rand(1234567890) # gem does not initialise the seed randomly
         options[:seed] += restart
         log "BalancedVRPClustering is launched with seed #{options[:seed]}"
-        c.build(Ai4r::Data::DataSet.new(data_items: Marshal.load(Marshal.dump(data_items))),
+        restart_data_items = restart.zero? ? data_items : Oj.load(Oj.dump(data_items))
+        c.build(Ai4r::Data::DataSet.new(data_items: restart_data_items),
                 options[:cut_symbol],
                 Oj.load(Oj.dump(related_item_indices)),
                 ratio,
@@ -898,7 +1011,7 @@ module Interpreters
           if nb_clusters > 1 && vrp.services.any?
             cumulated_metrics = Hash.new(0)
 
-            if options[:entity] == :work_day || !vrp.matrices.empty?
+            if (options[:entity] == :work_day || !vrp.matrices.empty?) && options.fetch(:use_matrix_distances, true)
               vrp.compute_matrix if vrp.matrices.empty?
 
               options[:distance_matrix] = vrp.matrices[0][:time]
@@ -1350,7 +1463,8 @@ module Interpreters
           end
         }
 
-        if options[:group_points] && vrp.matrices.any? && vrp.matrices[0][:distance]&.any?
+        if options[:group_points] && options.fetch(:zip_grouped_points, true) &&
+           vrp.matrices.any? && vrp.matrices[0][:distance]&.any?
           zip_dataitems(vrp, data_items, grouped_objects, min_vehicle_capacities)
         end
 

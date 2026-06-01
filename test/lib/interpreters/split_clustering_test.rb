@@ -1196,6 +1196,95 @@ class SplitClusteringTest < Minitest::Test
                    'Split should not eliminate matrices in case vehicles are moved between subproblems'
     end
 
+    def test_build_partial_does_not_mutate_parent_matrices
+      problem = VRP.lat_lon_two_vehicles
+      vrp = TestHelper.create(problem)
+      parent_matrix_size = vrp.matrices.first.time.size
+
+      Interpreters::SplitClustering.build_partial_service_vrp(
+        Models::ResolutionContext.new(vrp: vrp, dicho_data: {}),
+        vrp.services.first(1).map(&:id),
+        [0]
+      )
+
+      assert_equal parent_matrix_size, vrp.matrices.first.time.size,
+                   'build_partial should not shrink the parent matrices'
+    end
+
+    def test_build_partial_shares_parent_matrices_when_all_points_are_kept
+      problem = VRP.lat_lon_two_vehicles
+      vrp = TestHelper.create(problem)
+      service = vrp.services.first
+      original_index = service.activity.point.matrix_index
+      parent_time_matrix = vrp.matrices.first.time
+
+      sub_vrp =
+        Interpreters::SplitClustering.build_partial_service_vrp(
+          Models::ResolutionContext.new(vrp: vrp, dicho_data: {}),
+          vrp.services.map(&:id),
+          [0]
+        ).vrp
+
+      assert_equal original_index, sub_vrp.services.first.activity.point.matrix_index
+      assert_same parent_time_matrix, sub_vrp.matrices.first.time
+    end
+
+    def test_build_partial_slices_matrices_for_proper_sub_problems
+      problem = VRP.lat_lon_two_vehicles
+      vrp = TestHelper.create(problem)
+      parent_matrix_size = vrp.matrices.first.time.size
+
+      sub_vrp =
+        Interpreters::SplitClustering.build_partial_service_vrp(
+          Models::ResolutionContext.new(vrp: vrp, dicho_data: {}),
+          vrp.services.first(1).map(&:id),
+          [0]
+        ).vrp
+
+      assert_operator sub_vrp.matrices.first.time.size, :<, parent_matrix_size
+      assert_equal sub_vrp.points.size, sub_vrp.matrices.first.time.size
+      sub_vrp.points.each_with_index{ |point, index| assert_equal index, point.matrix_index }
+    end
+
+    def test_initialize_split_data_assigns_all_services_to_vehicle_zones
+      problem = VRP.lat_lon
+      problem[:vehicles] << problem[:vehicles].first.merge(id: 'v_2')
+      vrp = TestHelper.create(problem)
+
+      split_data, _empties =
+        Interpreters::SplitClustering.initialize_split_data(Models::ResolutionContext.new(vrp: vrp, dicho_data: {}))
+
+      assigned_ids = split_data[:service_vehicle_assignments].values.flatten.map(&:id)
+      assert_equal vrp.services.map(&:id).sort, assigned_ids.sort
+      assert split_data[:representative_vrp]
+      assert_equal split_data[:service_vehicle_assignments].keys.sort, vrp.vehicles.map(&:id).sort
+    end
+
+    def test_init_split_kmeans_options_match_legacy_defaults
+      vrp = TestHelper.create(VRP.lat_lon)
+      options = Interpreters::SplitClustering.init_split_kmeans_options(vrp)
+
+      assert_equal :duration, options[:cut_symbol]
+      assert_equal 2, options[:restarts]
+      refute options[:build_sub_vrps]
+      refute options[:use_matrix_distances]
+
+      vrp.compute_matrix
+      assert Interpreters::SplitClustering.init_split_kmeans_options(vrp)[:use_matrix_distances]
+      refute options.key?(:max_iterations)
+      refute options.key?(:basic_split)
+    end
+
+    def test_extract_sub_matrix_matches_values_at_slice
+      source = [[0, 10, 20], [30, 0, 40], [50, 60, 0]]
+      indices = [0, 2]
+
+      expected = indices.map{ |row_index| source[row_index].values_at(*indices) }
+      actual = Interpreters::SplitClustering.extract_sub_matrix(source, indices)
+
+      assert_equal expected, actual
+    end
+
     def test_split_with_vehicle_alternative_skills
       problem = VRP.lat_lon_two_vehicles
 

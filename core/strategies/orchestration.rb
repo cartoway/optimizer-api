@@ -77,10 +77,18 @@ module Core
         shipment_size = vrp.relations.count{ |r| r.type == :shipment }
 
         # Repopulate Objects which are referenced by others using ids but deleted by the multiple sub problem creations
+        reinsert_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         vrp.units.each{ |unit| Models::Unit.insert(unit) } if Models::Unit.all.empty?
         vrp.points.each{ |point| Models::Point.insert(point) } if Models::Point.all.empty?
         vrp.reload_depots.each{ |reload_depot| Models::ReloadDepot.insert(reload_depot) } if Models::ReloadDepot.all.empty?
         vrp.services.each{ |s| Models::Service.insert(s) } if Models::Service.all.empty?
+        if service_vrp.dicho_data.is_a?(Hash) && service_vrp.dicho_data[:construction_timings]
+          Interpreters::DichoConstructionTimings.add!(
+            service_vrp.dicho_data,
+            :define_process_reinsert_ms,
+            (Process.clock_gettime(Process::CLOCK_MONOTONIC) - reinsert_start) * 1000
+          )
+        end
 
         log "--> define_process VRP (service: #{vrp.services.size} including #{shipment_size} shipment relations, "\
             "vehicle: #{vrp.vehicles.size}, v_limit: #{vrp.configuration.resolution.vehicle_limit}) "\
@@ -147,7 +155,14 @@ module Core
             )
           else
             # TODO: Eliminate the points which has no feasible vehicle or service
-            vrp.compute_matrix(job, &block)
+            if service_vrp.dicho_data.is_a?(Hash)
+              Interpreters::DichoResolutionTimings.measure(service_vrp.dicho_data, :compute_matrix_ms) {
+                Interpreters::DichoResolutionTimings.increment!(service_vrp.dicho_data, :compute_matrix_calls)
+                vrp.compute_matrix(job, &block)
+              }
+            else
+              vrp.compute_matrix(job, &block)
+            end
 
             optim_wrapper_config.check_distances(vrp, unfeasible_services)
 
@@ -199,7 +214,18 @@ module Core
                   end
 
                   # TODO: Move select best heuristic in each solver
-                  Interpreters::SeveralSolutions.custom_heuristics(service, vrp, block)
+                  Interpreters::SeveralSolutions.custom_heuristics(service, vrp, block, service_vrp: service_vrp)
+
+                  solve_options = {}
+                  if service == :ortools && service_vrp.dicho_data.is_a?(Hash)
+                    timings_target = Interpreters::OrtoolsTimings.dicho_data_target(service_vrp)
+                    if timings_target
+                      solve_options[:timings] = timings_target
+                      if timings_target[:level_timings]
+                        solve_options[:timings_level] = service_vrp.dicho_level unless service_vrp.dicho_level.nil?
+                      end
+                    end
+                  end
 
                   cliqued_solution =
                     optim_wrapper_config.solve(
@@ -211,7 +237,8 @@ module Core
                         result_object = OptimizerWrapper::Result.get(job) || { pids: [] }
                         result_object[:pids] = pids
                         OptimizerWrapper::Result.set(job, result_object)
-                      }
+                      },
+                      **solve_options
                     ) { |wrapper, avancement, total, _message, cost, _time, solution|
                       solution =
                         if solution.is_a?(Models::Solution)

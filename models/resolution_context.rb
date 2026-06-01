@@ -14,6 +14,10 @@ module Models
     field :dicho_denominators, default: [1]
     field :dicho_sides, default: [0]
     field :dicho_data, default: {}
+    field :resolution_time_budget_ms, default: nil
+    field :original_duration_ms, default: nil
+    # Set once at dicho root after self_selection; propagated to sub-problems (empty string = use supplied routes)
+    field :selected_first_solution_strategy, default: nil
     has_many :skipped_services, class_name: 'Models::SkippedService'
     belongs_to :vrp, class_name: 'Models::Vrp'
 
@@ -30,6 +34,9 @@ module Models
           dicho_level: hash_data[:dicho_level] || 0,
           dicho_denominators: hash_data[:dicho_denominators] || [1],
           dicho_sides: hash_data[:dicho_sides] || [0],
+          resolution_time_budget_ms: hash_data[:resolution_time_budget_ms],
+          original_duration_ms: hash_data[:original_duration_ms],
+          selected_first_solution_strategy: hash_data[:selected_first_solution_strategy],
           job_id: hash_data[:job_id]
         )
       else
