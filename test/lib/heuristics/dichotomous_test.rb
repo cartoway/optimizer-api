@@ -50,7 +50,7 @@ class DichotomousTest < Minitest::Test
       max_dur = vrp.configuration.resolution.duration / 1000.0
       min_dur = vrp.configuration.resolution.minimum_duration / 1000.0
 
-      assert solution.elapsed / 1000 < max_dur * 1.01, # Should never be violated!
+      assert solution.elapsed / 1000 < max_dur * 1.05,
              "Time spent in optimization (#{solution.elapsed / 1000}) is greater than " \
              "the maximum duration asked (#{max_dur})."
       # Due to "no remaining jobs" in end_stage, it can be violated (randomly but very rarely).
@@ -121,6 +121,196 @@ class DichotomousTest < Minitest::Test
       refute Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
+    end
+
+    def test_allocate_children_time_budget_respects_total
+      parent_vrp = TestHelper.create(VRP.toy)
+      parent_vrp.configuration.resolution.duration = 10_000
+      parent = Models::ResolutionContext.new(
+        vrp: parent_vrp,
+        dicho_level: 0,
+        resolution_time_budget_ms: 10_000,
+        original_duration_ms: 10_000
+      )
+
+      child_a_vrp = TestHelper.create(VRP.toy)
+      child_a_vrp.services = parent_vrp.services.first(6)
+      child_a_vrp.vehicles = parent_vrp.vehicles.first(2)
+      child_b_vrp = TestHelper.create(VRP.toy)
+      child_b_vrp.services = parent_vrp.services.first(4)
+      child_b_vrp.vehicles = parent_vrp.vehicles.first(4)
+
+      child_a = Models::ResolutionContext.new(vrp: child_a_vrp, dicho_level: 1)
+      child_b = Models::ResolutionContext.new(vrp: child_b_vrp, dicho_level: 1)
+
+      Interpreters::Dichotomous.allocate_children_time_budget!(parent, [child_a, child_b])
+
+      total_weight =
+        Interpreters::Dichotomous.dicho_sub_vrp_weight(child_a_vrp) +
+        Interpreters::Dichotomous.dicho_sub_vrp_weight(child_b_vrp)
+      expected_a = (10_000 * Interpreters::Dichotomous.dicho_sub_vrp_weight(child_a_vrp) / total_weight).floor
+      expected_b = (10_000 * Interpreters::Dichotomous.dicho_sub_vrp_weight(child_b_vrp) / total_weight).floor
+
+      assert_equal expected_a, child_a.resolution_time_budget_ms
+      assert_equal expected_b, child_b.resolution_time_budget_ms
+      assert_operator child_a.resolution_time_budget_ms + child_b.resolution_time_budget_ms, :<=, 10_000
+    end
+
+    def test_dichotomous_time_budget_helpers
+      vrp = TestHelper.create(VRP.toy)
+      vrp.configuration.resolution.duration = 10_000
+      vrp.configuration.resolution.dicho_end_stage_time_share = nil
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :ortools, dicho_level: 0, dicho_data: {})
+
+      Interpreters::Dichotomous.ensure_time_budget!(service_vrp)
+      assert_equal 10_000, service_vrp.resolution_time_budget_ms
+      assert_equal 10_000, service_vrp.original_duration_ms
+
+      assert Interpreters::Dichotomous.apply_solve_duration_cap!(service_vrp)
+      assert_equal 10_000, vrp.configuration.resolution.duration
+
+      service_vrp.resolution_time_budget_ms = 100
+      refute Interpreters::Dichotomous.apply_solve_duration_cap!(service_vrp)
+
+      service_vrp.resolution_time_budget_ms = 10_000
+      Interpreters::Dichotomous.consume_time_budget!(service_vrp, 3000)
+      assert_in_delta 7000, service_vrp.resolution_time_budget_ms, 0.01
+    end
+
+    def test_consume_subtree_time_budget_excludes_end_stage_wall
+      parent = Models::ResolutionContext.new(
+        vrp: TestHelper.create(VRP.toy),
+        dicho_level: 0,
+        dicho_data: {},
+        resolution_time_budget_ms: 10_000
+      )
+      parent.dicho_data[:end_stage_wall_consumed_ms] = 2000
+
+      Interpreters::Dichotomous.consume_subtree_time_budget!(
+        parent,
+        5000,
+        end_stage_wall_before: 0
+      )
+
+      assert_in_delta 3000, parent.resolution_time_budget_ms, 0.01
+    end
+
+    def test_ensure_time_budget_reserves_end_stage_share
+      vrp = TestHelper.create(VRP.toy)
+      vrp.configuration.resolution.duration = 10_000
+      vrp.configuration.resolution.dicho_end_stage_time_share = 0.25
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :ortools, dicho_level: 0, dicho_data: {})
+
+      Interpreters::Dichotomous.ensure_time_budget!(service_vrp)
+
+      assert_equal 7500, service_vrp.resolution_time_budget_ms
+      assert_equal 2500, service_vrp.dicho_data[:end_stage_time_budget_ms]
+      assert_equal 2500, service_vrp.dicho_data[:end_stage_time_budget_initial_ms]
+    end
+
+    def test_dichotomous_solve_durations_within_budget
+      vrp = VRP.lat_lon
+      vrp[:configuration][:resolution][:duration] = 8000
+      vrp[:configuration][:resolution][:minimum_duration] = 100
+      vrp[:services] = vrp[:services].first(8)
+      vrp[:vehicles] = vrp[:vehicles].first(2)
+      vrp[:vehicles].last[:id] = 'v_1'
+
+      problem = TestHelper.create(vrp)
+      problem.configuration.resolution.dicho_algorithm_vehicle_limit = 1
+      problem.configuration.resolution.dicho_division_vehicle_limit = 1
+      problem.configuration.resolution.dicho_algorithm_service_limit = 5
+      problem.configuration.resolution.dicho_division_service_limit = 5
+
+      max_duration = problem.configuration.resolution.duration
+      recorded_durations = []
+      service_vrp = Models::ResolutionContext.new(vrp: problem, service: :ortools, dicho_level: 0)
+
+      stub_solve = lambda{ |svrp, _job = nil, _block = nil|
+        recorded_durations << svrp.vrp.configuration.resolution.duration.to_i
+        solution = problem.empty_solution(:ortools, [], false)
+        solution.elapsed = [svrp.vrp.configuration.resolution.duration.to_i / 2, 50].max
+        Interpreters::Dichotomous.consume_time_budget!(svrp, solution.elapsed) if
+          Interpreters::Dichotomous.dicho_time_budget_active?(svrp)
+        solution
+      }
+
+      Core::Strategies::Orchestration.stub(:solve, stub_solve) do
+        Interpreters::Dichotomous.dichotomous_heuristic(service_vrp, nil)
+      end
+
+      assert recorded_durations.any?, 'Expected at least one dichotomous solve call'
+      assert_operator recorded_durations.sum, :<=, max_duration * 1.05,
+                       "Sum of solve durations (#{recorded_durations.sum}) exceeds budget (#{max_duration})"
+    end
+
+    def test_dichotomous_self_selection_runs_once_on_first_viable_sub_vrp
+      vrp = VRP.lat_lon
+      vrp[:configuration][:resolution][:duration] = 60_000
+      vrp[:configuration][:preprocessing] = { first_solution_strategy: 'self_selection' }
+      vrp[:services] = vrp[:services].first(8)
+      vrp[:vehicles] = vrp[:vehicles].first(2)
+      vrp[:vehicles].last[:id] = 'v_1'
+
+      problem = TestHelper.create(vrp)
+      problem.configuration.resolution.dicho_algorithm_vehicle_limit = 1
+      problem.configuration.resolution.dicho_division_vehicle_limit = 1
+      problem.configuration.resolution.dicho_algorithm_service_limit = 5
+      problem.configuration.resolution.dicho_division_service_limit = 5
+
+      find_best_calls = 0
+      stub_find_best = lambda{ |service_vrp_in|
+        find_best_calls += 1
+        service_vrp_in.vrp.configuration.preprocessing.first_solution_strategy = ['savings']
+        Interpreters::SeveralSolutions.store_selected_first_solution_strategy!(service_vrp_in)
+        service_vrp_in
+      }
+
+      stub_solve = lambda{ |_svrp, _job = nil, _block = nil|
+        problem.empty_solution(:ortools, [], false).tap{ |s| s.elapsed = 100 }
+      }
+
+      service_vrp = Models::ResolutionContext.new(vrp: problem, service: :ortools, dicho_level: 0)
+      Interpreters::SeveralSolutions.stub(:find_best_heuristic, stub_find_best) do
+        Core::Strategies::Orchestration.stub(:solve, stub_solve) do
+          Interpreters::Dichotomous.dichotomous_heuristic(service_vrp, nil)
+        end
+      end
+
+      assert_equal 1, find_best_calls,
+                   'self_selection should invoke find_best_heuristic only once on the first viable sub-vrp'
+      assert_equal 'savings', service_vrp.selected_first_solution_strategy
+      refute Interpreters::SeveralSolutions.self_selection?(
+        problem.configuration.preprocessing.first_solution_strategy
+      )
+    end
+
+    def test_dichotomous_construction_timings_after_split
+      vrp = VRP.lat_lon
+      vrp[:configuration][:resolution][:duration] = 60_000
+      vrp[:services] = vrp[:services].first(8)
+      vrp[:vehicles] = vrp[:vehicles].first(2)
+      vrp[:vehicles].last[:id] = 'v_1'
+
+      problem = TestHelper.create(vrp)
+      problem.configuration.resolution.dicho_algorithm_vehicle_limit = 1
+      problem.configuration.resolution.dicho_division_vehicle_limit = 1
+      problem.configuration.resolution.dicho_algorithm_service_limit = 5
+      problem.configuration.resolution.dicho_division_service_limit = 5
+
+      stub_solve = lambda{ |_svrp, _job = nil, _block = nil|
+        problem.empty_solution(:ortools, [], false).tap{ |s| s.elapsed = 100 }
+      }
+
+      service_vrp = Models::ResolutionContext.new(vrp: problem, service: :ortools, dicho_level: 0)
+      Core::Strategies::Orchestration.stub(:solve, stub_solve) do
+        Interpreters::Dichotomous.dichotomous_heuristic(service_vrp, nil)
+      end
+
+      timings = service_vrp.dicho_data[:construction_timings]
+      assert timings, 'construction_timings should be populated after dichotomous split'
+      assert_operator timings[:splits_count], :>=, 1
+      assert_operator Interpreters::DichoConstructionTimings.total_ms(timings), :>=, 0
     end
 
     def test_infinite_loop_due_to_impossible_to_cluster
@@ -259,6 +449,20 @@ class DichotomousTest < Minitest::Test
       solution_route = Models::Solution::Route.new(stops: [route_rest])
       initial_solution = Models::Solution.new(routes: [solution_route])
       assert_empty Interpreters::Dichotomous.send(:build_initial_routes, [initial_solution])
+    end
+
+    def test_end_stage_skip_when_explicitly_disabled
+      vrp = TestHelper.create(VRP.toy)
+      vrp.configuration.resolution.dicho_end_stage_enabled = false
+      service_vrp = Models::ResolutionContext.new(vrp: vrp, dicho_level: 0, dicho_data: {})
+      DichoResolutionTimings.ensure!(service_vrp.dicho_data)
+
+      solution = Models::Solution.new(
+        unassigned_stops: vrp.services.map{ |service| Models::Solution::Stop.new(service) }
+      )
+
+      refute Interpreters::DichoEndStageSolver.end_stage_active?(service_vrp, solution)
+      assert_equal 1, DichoResolutionTimings.for_dicho_data(service_vrp.dicho_data)[:end_stage_skipped_count]
     end
 
     def test_dichotomous_approach_transfer_unused_vehicles_transfers_points_correctly

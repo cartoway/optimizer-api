@@ -84,6 +84,10 @@ module Wrappers
     end
 
     def solve(vrp, job = nil, _thread_proc = nil)
+      solve_vroom(vrp, job)
+    end
+
+    def solve_vroom(vrp, job, timeout: nil)
       if vrp.vehicles.empty? || vrp.points.empty? || vrp.services.empty?
         return vrp.empty_solution(:vroom)
       end
@@ -92,7 +96,8 @@ module Wrappers
 
       tic = Time.now
       problem = vroom_problem(vrp, [:time, :distance])
-      result = run_vroom(problem, job, 5, vrp.configuration.resolution.duration)
+      duration = timeout || vrp.configuration.resolution.duration
+      result = run_vroom(problem, job, 5, duration)
       elapsed_time = (Time.now - tic) * 1000
 
       return if !result
@@ -136,6 +141,10 @@ module Wrappers
     end
 
     private
+
+    def job_priority_for(service)
+      (100 * (8 - service.priority).to_f / 8).to_i
+    end
 
     def rest_equivalence(vrp)
       rest_index = 0
@@ -279,7 +288,7 @@ module Wrappers
           service: service.activity.duration,
           setup: service.activity.setup_duration,
           skills: collect_skills(service, vrp_skills),
-          priority: (100 * (8 - service.priority).to_f / 8).to_i, # Scale from 0 to 100 (higher is more important)
+          priority: job_priority_for(service),
           time_windows: service.activity.timewindows[0..0].map{ |timewindow|
             [timewindow.start - service.activity.setup_duration,
              (timewindow.end || 2**30) - service.activity.setup_duration]
@@ -347,45 +356,48 @@ module Wrappers
 
     def collect_vehicles(vrp, vrp_skills, vrp_units)
       vrp.vehicles.map.with_index{ |vehicle, index|
-        {
-          id: index,
-          profile: "m#{vehicle.matrix_id}",
-          start_index: vehicle.start_point&.matrix_index,
-          end_index: vehicle.end_point&.matrix_index,
-          capacity: vrp_units.map{ |unit|
-            c = vehicle.capacities.find{ |capacity| capacity.unit.id == unit.id }
-            ((c&.limit || @total_quantities[unit.id]) * CUSTOM_QUANTITY_BIGNUM).round
-          },
-          time_window: [vehicle.timewindow&.start || 0, vehicle.timewindow&.end || 2**30],
-          # VROOM expects a default skill
-          skills: collect_skills(vehicle, vrp_skills),
-          breaks: vehicle.rests.map{ |rest|
-            rest_index = @rest_hash["#{vehicle.id}_#{rest.id}"][:index]
-            {
-              id: rest_index,
-              service: rest.duration,
-              time_windows: rest.timewindows.map{ |tw| [tw&.start || 0, tw&.end || 2**30] }
-            }
-          },
-          costs: {
-            fixed: vehicle.cost_fixed.to_i,
-            per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000).to_i,
-            per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600).to_i,
-            per_wait_hour:
-              vehicle.cost_waiting_time_multiplier && (vehicle.cost_waiting_time_multiplier * 3600).to_i
-          }.delete_if{ |k, v| v.nil? || v.zero? },
-          max_distance: vehicle.distance,
-          max_duration: vehicle.duration,
-          departure: vehicle.shift_preference.to_s == 'force_start' ? vehicle.timewindow&.start || 0 : nil
-        }.delete_if{ |k, v|
-          v.nil? || v.is_a?(Array) && v.empty? ||
-            k == :time_window && v.first.zero? && v.last == 2**30
-        }
+        vehicle_payload =
+          {
+            id: index,
+            profile: "m#{vehicle.matrix_id}",
+            start_index: vehicle.start_point&.matrix_index,
+            end_index: vehicle.end_point&.matrix_index,
+            capacity: vrp_units.map{ |unit|
+              c = vehicle.capacities.find{ |capacity| capacity.unit.id == unit.id }
+              ((c&.limit || @total_quantities[unit.id]) * CUSTOM_QUANTITY_BIGNUM).round
+            },
+            time_window: [vehicle.timewindow&.start || 0, vehicle.timewindow&.end || 2**30],
+            # VROOM expects a default skill
+            skills: collect_skills(vehicle, vrp_skills),
+            breaks: vehicle.rests.map{ |rest|
+              rest_index = @rest_hash["#{vehicle.id}_#{rest.id}"][:index]
+              {
+                id: rest_index,
+                service: rest.duration,
+                time_windows: rest.timewindows.map{ |tw| [tw&.start || 0, tw&.end || 2**30] }
+              }
+            },
+            costs: {
+              fixed: vehicle.cost_fixed.to_i,
+              per_km: vehicle.cost_distance_multiplier && (vehicle.cost_distance_multiplier * 1000).to_i,
+              per_hour: vehicle.cost_time_multiplier && (vehicle.cost_time_multiplier * 3600).to_i,
+              per_wait_hour:
+                vehicle.cost_waiting_time_multiplier && (vehicle.cost_waiting_time_multiplier * 3600).to_i
+            }.delete_if{ |k, v| v.nil? || v.zero? },
+            max_distance: vehicle.distance,
+            max_duration: vehicle.duration,
+            departure: vehicle.shift_preference.to_s == 'force_start' ? vehicle.timewindow&.start || 0 : nil
+          }.delete_if{ |k, v|
+            v.nil? || v.is_a?(Array) && v.empty? ||
+              k == :time_window && v.first.zero? && v.last == 2**30
+          }
+        vehicle_payload
       }
     end
 
     def vroom_problem(vrp, dimensions)
       problem = { vehicles: [], jobs: [], matrices: [] }
+      @object_id_map = {}
       @total_quantities = Hash.new { 0 }
       # WARNING: only first alternative set of skills is used
       vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq

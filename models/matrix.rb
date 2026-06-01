@@ -41,5 +41,49 @@ module Models
         }
       end
     end
+
+    def flat_time(matrix_size = nil)
+      flat_dimension(:time, matrix_size)
+    end
+
+    def flat_distance(matrix_size = nil)
+      flat_dimension(:distance, matrix_size)
+    end
+
+    def flat_value
+      matrix = value
+      return [] if matrix.nil?
+
+      flat_dimension(:value)
+    end
+
+    def clear_flatten_cache!
+      DIMENSIONS.each do |dimension|
+        remove_instance_variable(:"@_flat_#{dimension}") if
+          instance_variable_defined?(:"@_flat_#{dimension}")
+        remove_instance_variable(:"@_flat_#{dimension}_id") if
+          instance_variable_defined?(:"@_flat_#{dimension}_id")
+      end
+    end
+
+    private
+
+    def flat_dimension(dimension, zero_fill_size = nil)
+      matrix = send(dimension)
+      return Array.new(zero_fill_size**2, 0) if matrix.nil? && zero_fill_size
+      return [] if matrix.nil?
+
+      cache_key = :"@_flat_#{dimension}"
+      version_key = :"@_flat_#{dimension}_id"
+      source_id = matrix.__id__
+      if instance_variable_get(version_key) == source_id && (cached = instance_variable_get(cache_key))
+        return cached
+      end
+
+      flattened = matrix.flatten
+      instance_variable_set(cache_key, flattened)
+      instance_variable_set(version_key, source_id)
+      flattened
+    end
   end
 end

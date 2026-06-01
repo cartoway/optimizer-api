@@ -140,19 +140,98 @@ module Interpreters
       repeated_service_vrps
     end
 
-    def self.custom_heuristics(service, vrp, block = nil)
-      service_vrp = Models::ResolutionContext.new(vrp: vrp, service: service)
+    def self.self_selection?(first_solution_strategy)
+      Array(first_solution_strategy).map(&:to_s) == ['self_selection']
+    end
+
+    def self.store_selected_first_solution_strategy!(service_vrp)
+      fss = service_vrp.vrp.configuration.preprocessing.first_solution_strategy
+      service_vrp.selected_first_solution_strategy =
+        if fss.empty?
+          ''
+        else
+          fss.first
+        end
+    end
+
+    def self.apply_propagated_first_solution_strategy!(vrp, selected)
+      return if selected.nil?
+
+      vrp.configuration.preprocessing.first_solution_strategy =
+        if selected.empty?
+          []
+        else
+          [verified(selected)]
+        end
+    end
+
+    def self.dicho_selected_strategy(service_vrp)
+      service_vrp.selected_first_solution_strategy ||
+        (service_vrp.dicho_data.is_a?(Hash) && service_vrp.dicho_data[:selected_first_solution_strategy])
+    end
+
+    def self.dicho_strategy_already_resolved?(service_vrp)
+      selected = dicho_selected_strategy(service_vrp)
+      return false unless selected
+
+      service_vrp.selected_first_solution_strategy ||= selected
+      apply_propagated_first_solution_strategy!(service_vrp.vrp, selected)
+      true
+    end
+
+    def self.propagate_dicho_selected_strategy!(service_vrp)
+      selected = service_vrp.selected_first_solution_strategy
+      return if selected.nil?
+
+      dicho_data = service_vrp.dicho_data
+      return unless dicho_data.is_a?(Hash)
+
+      dicho_data[:selected_first_solution_strategy] = selected
+      original_vrp = dicho_data[:original_vrp]
+      apply_propagated_first_solution_strategy!(original_vrp, selected) if original_vrp
+    end
+
+    # Run self_selection once on the first dicho sub-problem small enough to solve (init_duration nil).
+    def self.ensure_dicho_first_solution_strategy!(service_vrp, block = nil)
+      preprocessing_fss = service_vrp.vrp.configuration.preprocessing.first_solution_strategy
+      return unless self_selection?(preprocessing_fss)
+      return if dicho_strategy_already_resolved?(service_vrp)
+
+      block&.call(nil, nil, nil, "process heuristic choice : #{preprocessing_fss}", nil, nil, nil)
+      find_best_heuristic(service_vrp)
+      store_selected_first_solution_strategy!(service_vrp)
+      propagate_dicho_selected_strategy!(service_vrp)
+      log "dicho - selected first_solution_strategy on first viable sub-vrp " \
+          "(level #{service_vrp.dicho_level}, #{service_vrp.vrp.services.size} services, " \
+          "#{service_vrp.vrp.vehicles.size} vehicles): #{service_vrp.selected_first_solution_strategy.inspect}",
+          level: :info
+      service_vrp
+    end
+
+    def self.custom_heuristics(service, vrp, block = nil, service_vrp: nil)
+      service_vrp ||= Models::ResolutionContext.new(vrp: vrp, service: service)
 
       preprocessing_fss = vrp.configuration.preprocessing.first_solution_strategy
 
       return service_vrp if service == :vroom || service == :pyvrp ||
                             preprocessing_fss.empty? ||
                             preprocessing_fss.include?('periodic') ||
-                            (preprocessing_fss.size == 1 && preprocessing_fss != ['self_selection'])
+                            (preprocessing_fss.size == 1 && !self_selection?(preprocessing_fss))
+
+      selected = dicho_selected_strategy(service_vrp)
+      if selected
+        service_vrp.selected_first_solution_strategy ||= selected
+        apply_propagated_first_solution_strategy!(vrp, selected)
+        return service_vrp
+      end
+
+      was_self_selection = self_selection?(preprocessing_fss)
 
       block&.call(nil, nil, nil, "process heuristic choice : #{preprocessing_fss}", nil, nil, nil)
 
       find_best_heuristic(service_vrp)
+      store_selected_first_solution_strategy!(service_vrp) if was_self_selection
+      service_vrp
     end
 
     def self.batch_heuristic(service_vrps, custom_heuristics = nil)
@@ -191,24 +270,39 @@ module Interpreters
 
         elapsed_times = []
         vrp_hash = service_vrp.vrp.as_json
+        dicho_data = service_vrp.dicho_data
+        ortools_timings = OrtoolsTimings.dicho_data_target(service_vrp) if service_vrp.service == :ortools
+        DichoResolutionTimings.ensure!(dicho_data) if dicho_data.is_a?(Hash)
+
         first_results =
-          custom_heuristics.collect{ |heuristic|
-            s_vrp = duplicate_service_vrp(service_vrp, vrp_hash)
-            if heuristic == 'supplied_initial_routes'
-              # fastest for fallback
-              s_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified('global_cheapest_arc')]
-            else
-              s_vrp.vrp.routes = []
-              s_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified(heuristic)]
-            end
-            s_vrp.vrp.configuration.restitution.allow_empty_result = true
-            s_vrp.vrp.configuration.resolution.batch_heuristic = true
-            s_vrp.vrp.configuration.resolution.minimum_duration = nil
-            # no more than 5 min for single heur
-            s_vrp.vrp.configuration.resolution.duration = [time_for_each_heuristic, 300000].min
-            heuristic_solution = OptimizerWrapper.config[:services][s_vrp[:service]].solve(s_vrp.vrp, nil)
-            elapsed_times << (heuristic_solution && heuristic_solution[:elapsed] || 0)
-            heuristic_solution
+          DichoResolutionTimings.measure(dicho_data, :heuristic_selection_ms) {
+            DichoResolutionTimings.increment!(dicho_data, :heuristic_selection_calls) if dicho_data.is_a?(Hash)
+            custom_heuristics.collect{ |heuristic|
+              s_vrp = duplicate_service_vrp(service_vrp, vrp_hash)
+              if heuristic == 'supplied_initial_routes'
+                # fastest for fallback
+                s_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified('global_cheapest_arc')]
+              else
+                s_vrp.vrp.routes = []
+                s_vrp.vrp.configuration.preprocessing.first_solution_strategy = [verified(heuristic)]
+              end
+              s_vrp.vrp.configuration.restitution.allow_empty_result = true
+              s_vrp.vrp.configuration.resolution.batch_heuristic = true
+              s_vrp.vrp.configuration.resolution.minimum_duration = nil
+              # no more than 5 min for single heur
+              s_vrp.vrp.configuration.resolution.duration = [time_for_each_heuristic, 300000].min
+              solve_options = {}
+              if s_vrp.service == :ortools && ortools_timings
+                solve_options[:timings] = ortools_timings
+                solve_options[:timings_context] = :heuristic_selection
+              end
+              heuristic_solution =
+                OptimizerWrapper.config[:services][s_vrp.service].solve(s_vrp.vrp, nil, nil, **solve_options)
+              elapsed = heuristic_solution&.elapsed || 0
+              elapsed_times << elapsed
+              DichoResolutionTimings.add!(dicho_data, :heuristic_selection_solver_ms, elapsed) if dicho_data.is_a?(Hash)
+              heuristic_solution
+            }
           }
 
         raise 'No solution found during heuristic selection' if first_results.all?(&:nil?)

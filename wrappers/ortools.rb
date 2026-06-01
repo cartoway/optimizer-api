@@ -18,6 +18,8 @@
 require './wrappers/wrapper'
 require './wrappers/ortools_vrp_pb'
 require './wrappers/ortools_result_pb'
+require './lib/heuristics/ortools_timings'
+require './lib/heuristics/dicho_level_timings'
 
 module Wrappers
   class Ortools < Wrapper
@@ -71,7 +73,11 @@ module Wrappers
       ]
     end
 
-    def solve(vrp, job, thread_proc = nil, &block)
+    def solve(vrp, job, thread_proc = nil, timings: nil, timings_context: nil, timings_level: nil, &block)
+      total_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      build_problem_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @call_phase_ms = { build: 0.0, prepare: 0.0, parse: 0.0, solver: 0.0 }
+      Interpreters::OrtoolsTimings.record_call!(timings, context: timings_context)
       tic = Time.now
       order_relations = vrp.relations.select{ |relation| relation.type == :order }
       already_begin = order_relations.collect{ |relation| relation.linked_service_ids[0..-2] }.flatten
@@ -139,26 +145,14 @@ module Wrappers
       ortools_services = []
       routes = []
       services_activity_positions = { always_first: [], always_last: [], never_first: [], never_last: [] }
+      detect_unfeasible_services_if_needed(vrp)
+      schedule_check = vrp.schedule?
+      matrix_index_by_id = matrix_id_to_index(vrp.matrices)
       vrp.services.each_with_index{ |service, service_index|
-        vehicles_indices = []
-        detect_unfeasible_services(vrp) if service.vehicle_compatibility.nil?
-        vrp.vehicles.each_with_index{ |vehicle, index|
-          next if service.vehicle_compatibility[vehicle.id] == false || # let nil through
-                  !service.vehicle_compatibility[vehicle.original_id] || # can't be nil
-                  !check_services_compatible_days(vrp, vehicle, service)
-
-          vehicles_indices << index
-        }
-
-        quantity_hash = {}
-        service.quantities.each{ |quantity|
-          quantity_hash[quantity.unit_id] = {
-            # we can't have both pickup and delivery
-            value: quantity.value + (quantity&.pickup || 0) + (quantity&.delivery || 0),
-            empty: quantity.empty,
-            fill: quantity.fill
-          }
-        }
+        vehicles_indices = compatible_vehicle_indices(vrp, service, schedule_check: schedule_check)
+        quantity_hash = service_quantity_hash(service)
+        setup_quantities = service_setup_quantities(vrp, quantity_hash)
+        refill_quantities = service_refill_quantities(vrp, quantity_hash)
 
         if service.activity
           ortools_services << OrtoolsVrp::Service.new(
@@ -166,26 +160,9 @@ module Wrappers
               OrtoolsVrp::TimeWindow.new(start: tw.start, end: tw.end || 2147483647,
                                          maximum_lateness: tw.maximum_lateness)
             },
-            quantities: vrp.units.collect{ |unit|
-              is_fill_unit = problem_unit_hash[unit.id][:fill]
-              is_empty_unit = problem_unit_hash[unit.id][:empty]
-              q = quantity_hash[unit.id]
-              next 0 if q.nil?
-
-              # make sure that if it is
-              #   - an empty unit then the amount is negative for the empty service and positive for the proper services
-              #   - a fill unit then the amount is positive for the fill service and negative for the proper services
-              if is_empty_unit || is_fill_unit
-                empty_fill_value = q && q[:value].to_f.abs || 0.0
-                if q && q[:empty] && empty_fill_value == 0
-                  # The empty operation itself having nil/0 value means complete empty operation
-                  empty_fill_value = total_quantities[unit.id].abs
-                end
-                empty_fill_value * ((is_empty_unit && q && q[:empty]) || (is_fill_unit && q && !q[:fill]) ? -1 : 1)
-              else
-                q[:value].to_f
-              end
-            },
+            quantities: build_service_quantities(
+              vrp, quantity_hash, problem_unit_hash, total_quantities
+            ),
             duration: service.activity.duration,
             additional_value: service.activity.additional_value,
             priority: service.priority,
@@ -194,15 +171,9 @@ module Wrappers
             setup_duration: service.activity.setup_duration,
             id: service.id.to_s,
             late_multiplier: service.activity.late_multiplier || 0,
-            setup_quantities: vrp.units.collect{ |unit|
-              q = service.quantities.find{ |quantity| quantity.unit == unit }
-              q && q.setup_value && unit.counting ? q.setup_value.to_i : 0
-            },
+            setup_quantities: setup_quantities,
             exclusion_cost: service.exclusion_cost && service.exclusion_cost.to_i || -1,
-            refill_quantities: vrp.units.collect{ |unit|
-              q = service.quantities.find{ |quantity| quantity.unit == unit }
-              !q.nil? && (q.fill || q.empty)
-            },
+            refill_quantities: refill_quantities,
             problem_index: service_index,
             point_id: service.activity.point_id,
             alternative_index: 0
@@ -218,24 +189,9 @@ module Wrappers
                 OrtoolsVrp::TimeWindow.new(start: tw.start, end: tw.end || 2147483647,
                                            maximum_lateness: tw.maximum_lateness)
               },
-              quantities: vrp.units.collect{ |unit|
-                is_fill_unit = problem_unit_hash[unit.id][:fill]
-                is_empty_unit = problem_unit_hash[unit.id][:empty]
-                q = quantity_hash[quantity.unit_id]
-                # make sure that if it is
-                # - an empty unit then the amount is negative for the empty service and positive for the proper services
-                # - a fill unit then the amount is positive for the fill service and negative for the proper services
-                if is_empty_unit || is_fill_unit
-                  empty_fill_value = q && q[:value].to_f.abs || 0.0
-                  if q && q[:empty] && empty_fill_value == 0
-                    # The empty operation itself having nil/0 value means complete empty operation
-                    empty_fill_value = total_quantities[unit.id].abs
-                  end
-                  empty_fill_value * ((is_empty_unit && q && q[:empty]) || (is_fill_unit && q && !q[:fill]) ? -1 : 1)
-                else
-                  q && q[:value].to_f
-                end
-              },
+              quantities: build_service_quantities(
+                vrp, quantity_hash, problem_unit_hash, total_quantities
+              ),
               duration: possible_activity.duration,
               additional_value: possible_activity.additional_value,
               priority: service.priority,
@@ -244,15 +200,9 @@ module Wrappers
               setup_duration: possible_activity.setup_duration,
               id: service.id.to_s,
               late_multiplier: possible_activity.late_multiplier || 0,
-              setup_quantities: vrp.units.collect{ |unit|
-                q = service.quantities.find{ |quantity| quantity.unit == unit }
-                q&.setup_value && unit.counting ? q.setup_value.to_i : 0
-              },
+              setup_quantities: setup_quantities,
               exclusion_cost: service.exclusion_cost || -1,
-              refill_quantities: vrp.units.collect{ |unit|
-                q = service.quantities.find{ |quantity| quantity.unit == unit }
-                !q.nil? && (q.fill || q.empty)
-              },
+              refill_quantities: refill_quantities,
               problem_index: service_index,
               point_id: possible_activity.point_id,
               alternative_index: activity_index
@@ -265,18 +215,9 @@ module Wrappers
         end
       }
 
-      matrices =
-        vrp.matrices.collect{ |matrix|
-          matrix_size = (matrix[:time] || matrix[:distance]).size
-          OrtoolsVrp::Matrix.new(
-            size: matrix_size,
-            time: matrix[:time] ? matrix[:time].flatten : Array.new(matrix_size**2, 0),
-            distance: matrix[:distance] ? matrix[:distance].flatten : Array.new(matrix_size**2, 0),
-            value: matrix[:value] ? matrix[:value].flatten : []
-          )
-        }
+      matrices = build_matrices(vrp)
 
-      vehicles = build_problem_vehicles(vrp, total_quantities)
+      vehicles = build_problem_vehicles(vrp, total_quantities, matrix_index_by_id)
       build_problem_relations(vrp, ortools_services, relations)
 
       vrp.routes.collect{ |route|
@@ -317,15 +258,23 @@ module Wrappers
       )
 
       log "ortools solve problem creation elapsed: #{Time.now - tic}sec", level: :debug
-      run_ortools(problem, vrp, thread_proc, &block)
+      build_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - build_problem_start) * 1000
+      @call_phase_ms[:build] = build_ms
+      Interpreters::OrtoolsTimings.add!(timings, :build_problem_ms, build_ms)
+      result = run_ortools(problem, vrp, thread_proc, timings: timings, &block)
+      call_total_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - total_start) * 1000
+      Interpreters::OrtoolsTimings.add!(timings, :total_ms, call_total_ms)
+      record_level_call!(timings, timings_level, call_total_ms, result)
+      result
     end
 
     private
 
     def build_problem_relations(vrp, services, relations)
+      service_ids = services.map(&:id)
       vrp.relations.each{ |relation|
         relation.split_regarding_lapses.each{ |portion_linked_ids, portion_vehicle_ids, portion_lapse|
-          current_linked_ids = (portion_linked_ids.map!(&:to_s) & services.map(&:id)).uniq if portion_linked_ids
+          current_linked_ids = (portion_linked_ids.map!(&:to_s) & service_ids).uniq if portion_linked_ids
           if portion_vehicle_ids
             current_linked_vehicles = vrp.vehicles.select{ |v| portion_vehicle_ids.include?(v.id) }.map(&:id)
           end
@@ -342,7 +291,7 @@ module Wrappers
       }
     end
 
-    def build_problem_vehicles(vrp, total_quantities)
+    def build_problem_vehicles(vrp, total_quantities, matrix_index_by_id)
       vrp.vehicles.collect{ |vehicle|
         OrtoolsVrp::Vehicle.new(
           id: vehicle.id.to_s,
@@ -387,8 +336,8 @@ module Wrappers
               exclusion_cost: rest.exclusion_cost || -1
             )
           },
-          matrix_index: vrp.matrices.index{ |matrix| matrix.id == vehicle.matrix_id },
-          value_matrix_index: vrp.matrices.index{ |matrix| matrix.id == vehicle.value_matrix_id } || 0,
+          matrix_index: matrix_index_by_id[vehicle.matrix_id],
+          value_matrix_index: matrix_index_by_id[vehicle.value_matrix_id] || 0,
           start_index: vehicle.start_point ? vehicle.start_point.matrix_index : -1,
           end_index: vehicle.end_point ? vehicle.end_point.matrix_index : -1,
           duration: vehicle.duration || 0,
@@ -402,6 +351,96 @@ module Wrappers
           start_point_id: vehicle.start_point_id.to_s
         )
       }
+    end
+
+    def detect_unfeasible_services_if_needed(vrp)
+      return unless vrp.services.any?{ |service| service.vehicle_compatibility.nil? }
+
+      detect_unfeasible_services(vrp)
+    end
+
+    def compatible_vehicle_indices(vrp, service, schedule_check:)
+      compatibility = service.vehicle_compatibility
+      indices = []
+      vrp.vehicles.each_with_index{ |vehicle, index|
+        next if compatibility[vehicle.id] == false # let nil through
+        next unless compatibility[vehicle.original_id] # can't be nil
+        next if schedule_check && !check_services_compatible_days(vrp, vehicle, service)
+
+        indices << index
+      }
+      indices
+    end
+
+    def service_quantity_hash(service)
+      service.quantities.each_with_object({}){ |quantity, memo|
+        memo[quantity.unit_id] = {
+          value: quantity.value + (quantity.pickup || 0) + (quantity.delivery || 0),
+          empty: quantity.empty,
+          fill: quantity.fill,
+          setup_value: quantity.setup_value
+        }
+      }
+    end
+
+    def build_service_quantities(vrp, quantity_hash, problem_unit_hash, total_quantities)
+      vrp.units.collect{ |unit|
+        is_fill_unit = problem_unit_hash[unit.id][:fill]
+        is_empty_unit = problem_unit_hash[unit.id][:empty]
+        q = quantity_hash[unit.id]
+        next 0 if q.nil?
+
+        if is_empty_unit || is_fill_unit
+          empty_fill_value = q[:value].to_f.abs
+          if q[:empty] && empty_fill_value.zero?
+            # The empty operation itself having nil/0 value means complete empty operation
+            empty_fill_value = total_quantities[unit.id].abs
+          end
+          empty_fill_value * ((is_empty_unit && q[:empty]) || (is_fill_unit && !q[:fill]) ? -1 : 1)
+        else
+          q[:value].to_f
+        end
+      }
+    end
+
+    def service_setup_quantities(vrp, quantity_hash)
+      vrp.units.collect{ |unit|
+        q = quantity_hash[unit.id]
+        q && q[:setup_value] && unit.counting ? q[:setup_value].to_i : 0
+      }
+    end
+
+    def service_refill_quantities(vrp, quantity_hash)
+      vrp.units.collect{ |unit|
+        q = quantity_hash[unit.id]
+        !q.nil? && (q[:fill] || q[:empty])
+      }
+    end
+
+    def matrix_id_to_index(matrices)
+      matrices.each_with_index.to_h{ |matrix, index| [matrix.id, index] }
+    end
+
+    def build_matrices(vrp)
+      vrp.matrices.collect{ |matrix|
+        matrix_size = (matrix[:time] || matrix[:distance]).size
+        OrtoolsVrp::Matrix.new(
+          size: matrix_size,
+          time: matrix.flat_time(matrix_size),
+          distance: matrix.flat_distance(matrix_size),
+          value: matrix.flat_value
+        )
+      }
+    end
+
+    def write_instance_file!(problem)
+      @ortools_instance_path ||= Tempfile.new(['optimize-or-tools-input', '.pb'], @tmp_dir, binmode: true).tap(&:close).path
+      File.binwrite(@ortools_instance_path, OrtoolsVrp::Problem.encode(problem))
+      @ortools_instance_path
+    end
+
+    def ortools_output_file
+      @ortools_output_file ||= Tempfile.new('optimize-or-tools-output', @tmp_dir, binmode: true)
     end
 
     def build_cost_details(cost_details)
@@ -522,6 +561,28 @@ module Wrappers
       {}
     end
 
+    def timed_parse_output(vrp, output, timings)
+      parse_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = parse_output(vrp, output)
+      parse_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - parse_start) * 1000
+      Interpreters::OrtoolsTimings.add!(timings, :parse_output_ms, parse_ms)
+      @call_phase_ms[:parse] += parse_ms if @call_phase_ms
+      result
+    end
+
+    def record_level_call!(timings, timings_level, call_total_ms, result)
+      return unless timings.is_a?(Hash) && !timings_level.nil?
+
+      ruby_ms = @call_phase_ms[:build] + @call_phase_ms[:prepare] + @call_phase_ms[:parse]
+      Interpreters::DichoLevelTimings.record_ortools_call!(
+        timings,
+        timings_level,
+        total_ms: call_total_ms,
+        ruby_ms: ruby_ms,
+        solver_ms: result&.elapsed.to_f || @call_phase_ms[:solver]
+      )
+    end
+
     def parse_output(vrp, output)
       if vrp.vehicles.empty? || vrp.services.empty?
         return vrp.empty_solution(:ortools)
@@ -538,7 +599,7 @@ module Wrappers
       solution.parse(vrp)
     end
 
-    def run_ortools(problem, vrp, thread_proc = nil, &block)
+    def run_ortools(problem, vrp, thread_proc = nil, timings: nil, &block)
       log "----> run_ortools services(#{vrp.services.size}) " \
           "preassigned(#{vrp.routes.flat_map{ |r| r[:mission_ids].size }.sum}) vehicles(#{vrp.vehicles.size})"
       tic = Time.now
@@ -546,11 +607,11 @@ module Wrappers
         return vrp.empty_solution(:ortools)
       end
 
-      input = Tempfile.new('optimize-or-tools-input', @tmp_dir, binmode: true)
-      input.write(OrtoolsVrp::Problem.encode(problem))
-      input.close
-
-      output = Tempfile.new('optimize-or-tools-output', @tmp_dir, binmode: true)
+      prepare_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      instance_path = write_instance_file!(problem)
+      output = ortools_output_file
+      output.truncate(0)
+      output.rewind
 
       correspondant =
         {
@@ -590,7 +651,7 @@ module Wrappers
           solver_parameter ? "-solver_parameter #{correspondant[solver_parameter]}" : nil,
           (resolution.evaluate_only || resolution.batch_heuristic) ? '-only_first_solution' : nil,
           config.restitution.intermediate_solutions ? '-intermediate_solutions' : nil,
-          "-instance_file '#{input.path}'",
+          "-instance_file '#{instance_path}'",
           "-solution_file '#{output.path}'"
         ].compact.join(' ')
 
@@ -598,7 +659,15 @@ module Wrappers
 
       block&.call() # before creating the optimization process in case optim is canceled
 
+      Interpreters::OrtoolsTimings.add!(
+        timings,
+        :prepare_ms,
+        (Process.clock_gettime(Process::CLOCK_MONOTONIC) - prepare_start) * 1000
+      )
+      @call_phase_ms[:prepare] = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - prepare_start) * 1000
+
       # Thread.abort_on_exception = true # This doesn't work with Open3.popen
+      subprocess_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       stdin, stdout_and_stderr, @thread = Open3.popen2e(cmd)
 
       return if !@thread
@@ -634,7 +703,7 @@ module Wrappers
         begin
           @previous_result =
             if vrp.configuration.restitution.intermediate_solutions && s && !/Final Iteration :/.match(line)
-              parse_output(vrp, output)
+              timed_parse_output(vrp, output, timings)
             end
           # if @previous_result=nil, the block will not override the existing solution
           block&.call(self, iterations, nil, nil, cost, time, @previous_result)
@@ -648,14 +717,24 @@ module Wrappers
       stdin&.close
       stdout_and_stderr&.close
 
+      Interpreters::OrtoolsTimings.add!(
+        timings,
+        :subprocess_ms,
+        (Process.clock_gettime(Process::CLOCK_MONOTONIC) - subprocess_start) * 1000
+      )
+
       result = out.split("\n")[-1]
       if @thread.value.success?
         @previous_result =
           if result == 'No solution found...'
             vrp.empty_solution(:ortools)
           else
-            parse_output(vrp, output)
+            timed_parse_output(vrp, output, timings)
           end
+        if @previous_result
+          Interpreters::OrtoolsTimings.add!(timings, :solver_reported_ms, @previous_result.elapsed.to_f)
+          @call_phase_ms[:solver] = @previous_result.elapsed.to_f
+        end
         @previous_result
       else # Fatal Error
         message =
@@ -670,9 +749,6 @@ module Wrappers
         raise message
       end
     ensure
-      input&.unlink
-      output&.close
-      output&.unlink
       stdin&.close
       stdout_and_stderr&.close
       if @thread&.alive? # Need to kill the job and its children if it is still alive
@@ -712,21 +788,21 @@ module Wrappers
       }
     end
 
-    def corresponding_mission_ids(available_ortools_services, missions)
-      available_ids = available_ortools_services.map(&:id)
-      missions.map(&:id).collect{ |mission_id|
-        correct_id =
-          if available_ids.include?(mission_id)
-            mission_id
-          elsif available_ids.include?("#{mission_id}pickup")
-            "#{mission_id}pickup"
-          elsif available_ids.include?("#{mission_id}delivery")
-            "#{mission_id}delivery"
-          end
+    def corresponding_mission_ids(available_services, missions)
+      available_ids = available_services.map(&:id)
+      available_counts = available_ids.each_with_object(Hash.new(0)){ |id, counts| counts[id] += 1 }
 
-        available_ids.delete(correct_id)
+      missions.map(&:id).filter_map{ |mission_id|
+        correct_id = [mission_id, "#{mission_id}pickup", "#{mission_id}delivery"].find{ |candidate|
+          available_counts[candidate].positive?
+        }
+        next unless correct_id
+
+        idx = available_ids.index(correct_id)
+        available_ids.delete_at(idx) if idx
+        available_counts[correct_id] -= 1
         correct_id
-      }.compact
+      }
     end
   end
 end
