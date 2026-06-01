@@ -57,6 +57,8 @@ module Models
     field :dicho_exclusion_scaling_angle, default: 38
     field :dicho_inclusion_rate, default: 0.6
     field :dicho_algorithm_service_limit, default: 20000 # This variable is exposed in a hidden way for studies
+    field :dicho_end_stage_enabled, default: true
+    field :dicho_end_stage_time_share, default: 0.25
 
     field :duration, default: nil
     field :iterations, default: nil

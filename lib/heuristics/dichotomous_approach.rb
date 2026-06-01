@@ -17,12 +17,124 @@
 #
 
 require './lib/interpreters/split_clustering.rb'
+require './lib/heuristics/dicho_construction_timings.rb'
+require './lib/heuristics/dicho_resolution_timings.rb'
+require './lib/heuristics/dicho_level_timings.rb'
+require './lib/heuristics/ortools_timings.rb'
+require './lib/heuristics/dicho_end_stage_solver.rb'
+require './lib/interpreters/compute_several_solutions.rb'
 require './lib/tsp_helper.rb'
 require './lib/helper.rb'
 require './util/job_manager.rb'
 
 module Interpreters
   class Dichotomous
+    MIN_DICHO_SOLVE_DURATION_MS = 150
+
+    def self.dicho_time_budget_active?(service_vrp)
+      !service_vrp.resolution_time_budget_ms.nil?
+    end
+
+    def self.ensure_time_budget!(service_vrp)
+      return unless service_vrp.dicho_level.zero?
+      return if service_vrp.resolution_time_budget_ms
+
+      duration = service_vrp.vrp.configuration.resolution.duration
+      return unless duration
+
+      service_vrp.original_duration_ms = duration
+      service_vrp.resolution_time_budget_ms = duration.to_f
+      if service_vrp.dicho_data.is_a?(Hash)
+        service_vrp.dicho_data[:resolution_duration_ms] = duration.to_f
+        service_vrp.dicho_data[:resolution_deadline_monotonic] =
+          Process.clock_gettime(Process::CLOCK_MONOTONIC) + duration.to_f / 1000.0
+      end
+      DichoEndStageSolver.reserve_time_budget!(service_vrp)
+    end
+
+    def self.dicho_sub_vrp_weight(vrp)
+      vrp.services.size * [1, vrp.vehicles.size].min
+    end
+
+    def self.apply_time_budget_to_vrp!(service_vrp)
+      budget = service_vrp.resolution_time_budget_ms
+      return unless budget
+
+      resolution = service_vrp.vrp.configuration.resolution
+      resolution.duration =
+        if resolution.duration
+          [resolution.duration, budget].min.round
+        else
+          budget.round
+        end
+      if resolution.minimum_duration && resolution.minimum_duration > budget
+        resolution.minimum_duration = budget.round
+      end
+    end
+
+    def self.allocate_children_time_budget!(parent, children)
+      remaining = parent.resolution_time_budget_ms
+      return unless remaining&.positive? && children.any?
+
+      weights = children.map{ |child| dicho_sub_vrp_weight(child.vrp) }
+      total_weight = weights.sum
+      return unless total_weight.positive?
+
+      children.each_with_index{ |child, index|
+        child.resolution_time_budget_ms = (remaining * weights[index] / total_weight).floor
+        child.original_duration_ms ||= parent.original_duration_ms
+        apply_time_budget_to_vrp!(child)
+      }
+    end
+
+    def self.remaining_time_budget(service_vrp)
+      service_vrp.resolution_time_budget_ms.to_f
+    end
+
+    def self.measure_wall_ms
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = yield
+      wall_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000
+      [wall_ms, result]
+    end
+
+    def self.consume_subtree_time_budget!(service_vrp, subtree_wall_ms, end_stage_wall_before: 0)
+      return unless dicho_time_budget_active?(service_vrp)
+
+      dicho_data = service_vrp.dicho_data
+      end_stage_delta =
+        if dicho_data.is_a?(Hash)
+          DichoEndStageSolver.end_stage_wall_consumed_ms(dicho_data) - end_stage_wall_before.to_f
+        else
+          0
+        end
+      main_wall_ms = [subtree_wall_ms.to_f - end_stage_delta, 0].max
+      consume_time_budget!(service_vrp, main_wall_ms) if main_wall_ms.positive?
+    end
+
+    def self.consume_time_budget!(service_vrp, elapsed_ms)
+      return unless service_vrp.resolution_time_budget_ms
+
+      service_vrp.resolution_time_budget_ms =
+        [service_vrp.resolution_time_budget_ms - elapsed_ms.to_f, 0].max
+    end
+
+    def self.apply_solve_duration_cap!(service_vrp)
+      return false if DichoEndStageSolver.resolution_deadline_reached?(service_vrp)
+
+      budget = service_vrp.resolution_time_budget_ms
+      return true if budget.nil?
+
+      deadline_ms = DichoEndStageSolver.resolution_deadline_remaining_ms(service_vrp)
+      budget = [budget, deadline_ms].min if deadline_ms
+
+      return false if budget <= MIN_DICHO_SOLVE_DURATION_MS
+
+      resolution = service_vrp.vrp.configuration.resolution
+      resolution.duration = [resolution.duration || budget, budget].min.round
+      true
+    end
+
     def self.dichotomous_candidate?(service_vrp)
       config = service_vrp.vrp.configuration
       service_vrp.dicho_level&.positive? ||
@@ -50,106 +162,213 @@ module Interpreters
     end
 
     def self.dichotomous_heuristic(service_vrp, job = nil, &block)
+      solution = nil
       if dichotomous_candidate?(service_vrp)
         vrp = service_vrp.vrp
-        log_message = "dicho - level(#{service_vrp.dicho_level}) "\
+        level = service_vrp.dicho_level
+        dicho_data = service_vrp.dicho_data
+        log_message = "dicho - level(#{level}) "\
                   "activities: #{vrp.services.size} "\
                   "vehicles (limit): #{vrp.vehicles.size}(#{vrp.configuration.resolution.vehicle_limit})"\
                   "duration [min, max]: [#{vrp.configuration.resolution.minimum_duration&.round},"\
                   "#{vrp.configuration.resolution.duration&.round}]"
         log log_message, level: :info
 
+        DichoConstructionTimings.ensure!(dicho_data)
+        DichoResolutionTimings.ensure!(dicho_data)
+        DichoLevelTimings.ensure!(dicho_data)
+        DichoLevelTimings.record_context!(dicho_data, level, vrp)
         set_config(service_vrp)
+        ensure_time_budget!(service_vrp)
 
-        # Must be called to be sure matrices are complete in vrp and be able to switch vehicles between sub_vrp
-        if service_vrp.dicho_level.zero?
-          service_vrp.vrp.compute_matrix(job)
-          service_vrp.vrp.calculate_service_exclusion_costs(:time, true)
-          update_exclusion_cost(service_vrp)
-        # Do not solve if vrp has too many vehicles or services - init_duration is set in set_config()
-        elsif service_vrp.vrp.configuration.resolution.init_duration.nil?
-          service_vrp.vrp.calculate_service_exclusion_costs(:time, true)
-          update_exclusion_cost(service_vrp)
-          solution = Core::Strategies::Orchestration.solve(service_vrp, job, block)
-        else
-          service_vrp.vrp.calculate_service_exclusion_costs(:time, true)
-          update_exclusion_cost(service_vrp)
-        end
+        solution =
+          DichoLevelTimings.measure(dicho_data, level, :node_total_ms) {
+            build_dicho_node_solution(service_vrp, job, dicho_data, level, vrp, &block)
+          }
 
-        if (solution.nil? || solution.unassigned_stops.size >= 0.7 * service_vrp.vrp.services.size) &&
-           feasible_vrp(solution, service_vrp) &&
-           service_vrp.vrp.vehicles.size > service_vrp.vrp.configuration.resolution.dicho_division_vehicle_limit &&
-           service_vrp.vrp.services.size > service_vrp.vrp.configuration.resolution.dicho_division_service_limit
-          sub_service_vrps = []
-
-          3.times do # TODO: move this logic inside the split function
-            sub_service_vrps = split(service_vrp, job)
-
-            break if sub_service_vrps.size == 2 && sub_service_vrps.none?{ |s_vrp| s_vrp.vrp.services.empty? }
-          end
-
-          if sub_service_vrps.size != 2 || sub_service_vrps.any?{ |s_vrp| s_vrp.vrp.services.empty? }
-            sub_service_vrps.each{ |s_vrp| s_vrp.dicho_data[:cannot_split_further] = true }
-            log 'dichotomous_heuristic cannot split the problem into two clusters', level: :warn
-          end
-
-          solutions =
-            sub_service_vrps.map.with_index{ |sub_service_vrp, index|
-              solution =
-                Core::Strategies::Orchestration.define_process(
-                  sub_service_vrp,
-                  job
-                ) { |wrapper, avancement, total, message, cost, time, sol|
-                  avc = service_vrp.dicho_denominators.map.with_index{ |lvl, idx|
-                    Rational(service_vrp.dicho_sides[idx], lvl)
-                  }.sum
-
-                  msg =
-                    if message.include?('dichotomous process')
-                      message
-                    else
-                      add = "dichotomous process #{(service_vrp.dicho_denominators.last * avc).to_i}"\
-                            "/#{service_vrp.dicho_denominators.last}"
-                      Core::Strategies::Orchestration.concat_avancement(add, message)
-                    end
-                  block&.call(wrapper, avancement, total, msg, cost, time, sol)
-                }
-
-              transfer_unused_vehicles(solution, sub_service_vrps) if index.zero? && solution
-
-              solution
-            }
-          solution = solutions.reduce(&:+)
-          log "dicho - level(#{service_vrp.dicho_level}) before remove_bad_skills unassigned rate " \
-              "#{solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
-              "#{(solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
-
-          remove_bad_skills(service_vrp, solution)
-          Interpreters::SplitClustering.remove_empty_routes(solution)
-          solution.parse(vrp)
-          log "dicho - level(#{service_vrp.dicho_level}) before end_stage_insert  unassigned rate " \
-              "#{solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
-              "#{(solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
-
-          solution = end_stage_insert_unassigned(service_vrp, solution, job)
-          Interpreters::SplitClustering.remove_empty_routes(solution)
-
-          if service_vrp.dicho_level.zero?
-            # Remove vehicles which are half empty
-            log "dicho - before remove_poorly_populated_routes: #{solution.routes.size}"
-            Interpreters::SplitClustering.remove_poorly_populated_routes(service_vrp.vrp, solution, 0.5)
-            log "dicho - after remove_poorly_populated_routes: #{solution.routes.size}"
-          end
-          solution.parse(vrp)
-
-          log "dicho - level(#{service_vrp.dicho_level}) unassigned rate " \
-              "#{solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
-              "#{(solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
+        if level.zero?
+          DichoConstructionTimings.log_summary!(service_vrp)
+          OrtoolsTimings.log_summary!(service_vrp)
+          DichoResolutionTimings.log_summary!(service_vrp)
+          DichoLevelTimings.log_summary!(service_vrp)
         end
       else
         service_vrp.vrp.configuration.resolution.init_duration = nil
       end
       solution
+    end
+
+    def self.build_dicho_node_solution(service_vrp, job, dicho_data, level, vrp, &block)
+      node_solution = nil
+
+      # Must be called to be sure matrices are complete in vrp and be able to switch vehicles between sub_vrp
+      if level.zero?
+        DichoLevelTimings.measure(dicho_data, level, :matrix_ms) {
+          DichoResolutionTimings.measure(dicho_data, :compute_matrix_ms) {
+            DichoResolutionTimings.increment!(dicho_data, :compute_matrix_calls)
+            service_vrp.vrp.compute_matrix(job)
+          }
+        }
+        DichoLevelTimings.measure(dicho_data, level, :exclusion_ms) {
+          DichoConstructionTimings.measure(dicho_data, :exclusion_costs_ms) {
+            service_vrp.vrp.calculate_service_exclusion_costs(:time, true)
+          }
+        }
+        update_exclusion_cost(service_vrp)
+      # Do not solve if vrp has too many vehicles or services - init_duration is set in set_config()
+      elsif service_vrp.vrp.configuration.resolution.init_duration.nil?
+        DichoLevelTimings.measure(dicho_data, level, :exclusion_ms) {
+          DichoConstructionTimings.measure(dicho_data, :exclusion_costs_ms) {
+            service_vrp.vrp.calculate_service_exclusion_costs(:time, false)
+          }
+        }
+        update_exclusion_cost(service_vrp)
+        Interpreters::SeveralSolutions.ensure_dicho_first_solution_strategy!(service_vrp, block)
+        if apply_solve_duration_cap!(service_vrp)
+          node_solution =
+            DichoLevelTimings.measure(dicho_data, level, :pre_split_solve_ms) {
+              Core::Strategies::Orchestration.solve(service_vrp, job, block)
+            }
+        end
+      else
+        update_exclusion_cost(service_vrp)
+      end
+
+      if (node_solution.nil? || node_solution.unassigned_stops.size >= 0.7 * service_vrp.vrp.services.size) &&
+         feasible_vrp(node_solution, service_vrp) &&
+         service_vrp.vrp.vehicles.size > service_vrp.vrp.configuration.resolution.dicho_division_vehicle_limit &&
+         service_vrp.vrp.services.size > service_vrp.vrp.configuration.resolution.dicho_division_service_limit
+        node_solution = merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, node_solution, &block)
+      end
+
+      node_solution
+    end
+
+    def self.merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, node_solution, &block)
+      sub_service_vrps =
+        DichoLevelTimings.measure(dicho_data, level, :split_ms) {
+          split_results = []
+          3.times do |retry_index|
+            DichoConstructionTimings.increment!(dicho_data, :split_retries) if retry_index.positive?
+            split_results = split(service_vrp, job)
+            break if split_results.size == 2 && split_results.none?{ |s_vrp| s_vrp.vrp.services.empty? }
+          end
+          split_results
+        }
+
+      if sub_service_vrps.size != 2 || sub_service_vrps.any?{ |s_vrp| s_vrp.vrp.services.empty? }
+        sub_service_vrps.each{ |s_vrp| s_vrp.dicho_data[:cannot_split_further] = true }
+        log 'dichotomous_heuristic cannot split the problem into two clusters', level: :warn
+      end
+
+      allocate_children_time_budget!(service_vrp, sub_service_vrps) if dicho_time_budget_active?(service_vrp)
+
+      solutions = []
+      DichoLevelTimings.measure(dicho_data, level, :children_ms) {
+        sub_service_vrps.each_with_index{ |sub_service_vrp, index|
+          if DichoEndStageSolver.resolution_deadline_reached?(service_vrp)
+            log 'dicho - resolution deadline reached, skipping remaining child', level: :warn
+            break
+          end
+
+          if index.positive? && dicho_time_budget_active?(service_vrp)
+            child_budget = sub_service_vrp.resolution_time_budget_ms
+            parent_remaining = remaining_time_budget(service_vrp)
+            if child_budget && parent_remaining.positive?
+              sub_service_vrp.resolution_time_budget_ms = [child_budget, parent_remaining].min
+              apply_time_budget_to_vrp!(sub_service_vrp)
+            end
+          end
+
+          if service_vrp.selected_first_solution_strategy && sub_service_vrp.selected_first_solution_strategy.nil?
+            sub_service_vrp.selected_first_solution_strategy = service_vrp.selected_first_solution_strategy
+            Interpreters::SeveralSolutions.apply_propagated_first_solution_strategy!(
+              sub_service_vrp.vrp, service_vrp.selected_first_solution_strategy
+            )
+          end
+
+          end_stage_wall_before = DichoEndStageSolver.end_stage_wall_consumed_ms(dicho_data)
+          subtree_wall_ms, child_solution =
+            measure_wall_ms {
+              Core::Strategies::Orchestration.define_process(
+                sub_service_vrp,
+                job
+              ) { |wrapper, avancement, total, message, cost, time, sol|
+                avc = service_vrp.dicho_denominators.map.with_index{ |lvl, idx|
+                  Rational(service_vrp.dicho_sides[idx], lvl)
+                }.sum
+
+                msg =
+                  if message.include?('dichotomous process')
+                    message
+                  else
+                    add = "dichotomous process #{(service_vrp.dicho_denominators.last * avc).to_i}"\
+                          "/#{service_vrp.dicho_denominators.last}"
+                    Core::Strategies::Orchestration.concat_avancement(add, message)
+                  end
+                block&.call(wrapper, avancement, total, msg, cost, time, sol)
+              }
+            }
+
+          if child_solution
+            consume_subtree_time_budget!(
+              service_vrp,
+              subtree_wall_ms,
+              end_stage_wall_before: end_stage_wall_before
+            )
+          end
+
+          if sub_service_vrp.selected_first_solution_strategy && !service_vrp.selected_first_solution_strategy
+            service_vrp.selected_first_solution_strategy = sub_service_vrp.selected_first_solution_strategy
+          end
+
+          transfer_unused_vehicles(child_solution, sub_service_vrps) if index.zero? && child_solution
+
+          solutions << child_solution
+        }
+      }
+      node_solution = solutions.reduce(&:+)
+      log "dicho - level(#{level}) before remove_bad_skills unassigned rate " \
+          "#{node_solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
+          "#{(node_solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
+
+      node_solution =
+        DichoLevelTimings.measure(dicho_data, level, :postprocess_ms) {
+          DichoResolutionTimings.measure(dicho_data, :dicho_postprocess_ms) {
+            DichoResolutionTimings.increment!(dicho_data, :dicho_postprocess_calls)
+            remove_bad_skills(service_vrp, node_solution)
+            Interpreters::SplitClustering.remove_empty_routes(node_solution)
+            node_solution.parse(vrp)
+            log "dicho - level(#{level}) before end_stage_insert  unassigned rate " \
+                "#{node_solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
+                "#{(node_solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
+
+            merged =
+              if DichoEndStageSolver.end_stage_active?(service_vrp, node_solution)
+                DichoLevelTimings.measure(dicho_data, level, :end_stage_ms) {
+                  DichoResolutionTimings.measure(dicho_data, :end_stage_insert_ms) {
+                    DichoResolutionTimings.increment!(dicho_data, :end_stage_insert_calls)
+                    end_stage_insert_unassigned(service_vrp, node_solution, job)
+                  }
+                }
+              else
+                node_solution
+              end
+            Interpreters::SplitClustering.remove_empty_routes(merged)
+
+            if level.zero?
+              log "dicho - before remove_poorly_populated_routes: #{merged.routes.size}"
+              Interpreters::SplitClustering.remove_poorly_populated_routes(service_vrp.vrp, merged, 0.5)
+              log "dicho - after remove_poorly_populated_routes: #{merged.routes.size}"
+            end
+            merged.parse(vrp)
+          }
+        }
+
+      log "dicho - level(#{level}) unassigned rate " \
+          "#{node_solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
+          "#{(node_solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
+      node_solution
     end
 
     def self.transfer_unused_vehicles(solution, sub_service_vrps)
@@ -286,7 +505,7 @@ module Interpreters
     end
 
     def self.insert_unassigned_by_skills(service_vrp, unassigned_services, unassigned_with_skills,
-                                         skills, solution, transfer_unused_time_limit)
+                                         skills, solution)
       vrp = service_vrp.vrp
       log "try to insert #{unassigned_with_skills.size} unassigned from #{vrp.services.size} services"
       vrp.routes = build_initial_routes([solution])
@@ -319,61 +538,115 @@ module Interpreters
 
       sub_solutions = []
       vehicle_count = (skills.empty? && !vrp.routes.empty?) ? [vrp.routes.size, 6].min : 3
+      solve_count = 0
+      sorted_unassigned_with_skills =
+        unassigned_with_skills.sort_by{ |service| -service.exclusion_cost.to_f }
       impacted_routes = []
+      end_stage_budget_active = DichoEndStageSolver.dedicated_time_budget?(service_vrp)
       vehicles_with_skills.each_slice(vehicle_count) do |vehicles_indices|
-        remaining_service_ids = solution.unassigned_stops.map(&:service_id) & unassigned_with_skills.map(&:id)
+        break if DichoEndStageSolver.resolution_deadline_reached?(service_vrp)
+        if end_stage_budget_active &&
+           DichoEndStageSolver.remaining_end_stage_time_budget(service_vrp) <= MIN_DICHO_SOLVE_DURATION_MS
+          break
+        end
+
+        remaining_service_ids =
+          (
+            solution.unassigned_stops.map(&:service_id) & sorted_unassigned_with_skills.map(&:id)
+          ).sort_by{ |service_id|
+            service = sorted_unassigned_with_skills.find{ |s| s.id == service_id }
+            - service&.exclusion_cost.to_f
+          }
         next if remaining_service_ids.empty?
+
+        before_remaining_unassigned = remaining_service_ids.size
 
         rate_vehicles = vehicles_indices.size / vehicles_with_skills.size.to_f
         rate_services = unassigned_services.empty? ? 1 : unassigned_with_skills.size / unassigned_services.size.to_f
 
-        sub_vrp_configuration_resolution_duration = [
-          150,
-          vrp.configuration.resolution.duration.to_f / 3.99 * rate_vehicles * rate_services + transfer_unused_time_limit
-        ].max.to_i
-        sub_vrp_configuration_resolution_minimum_duration =
-          [(vrp.configuration.resolution.minimum_duration.to_f / 3.99 * rate_vehicles * rate_services).to_i, 100].max
-
         used_vehicle_count = vehicles_indices.count{ |_v_id, r_index, _v_index| r_index }
+
+        solve_duration_ms =
+          [
+            MIN_DICHO_SOLVE_DURATION_MS,
+            vrp.configuration.resolution.duration.to_f / 3.99 * rate_vehicles * rate_services
+          ].max.to_i
+
+        if end_stage_budget_active
+          solve_duration_ms = DichoEndStageSolver.cap_end_stage_solve_duration!(service_vrp, solve_duration_ms)
+          break unless solve_duration_ms
+        end
 
         if vrp.configuration.resolution.vehicle_limit
           sub_vrp_vehicle_limit = @leftover_vehicle_limit + used_vehicle_count
-          if sub_vrp_vehicle_limit&.zero? # The vehicle limit is hit cannot use more new vehicles...
-            transfer_unused_time_limit = sub_vrp_configuration_resolution_duration
-            next
-          end
+          next if sub_vrp_vehicle_limit&.zero? # vehicle limit hit, cannot use more new vehicles
         end
 
         assigned_service_ids = vehicles_indices.map{ |_v, r_i, _v_i| r_i }.compact.flat_map{ |r_i|
           solution.routes[r_i].stops.map(&:service_id)
         }.compact
 
-        sub_service_vrp = SplitClustering.build_partial_service_vrp(service_vrp,
-                                                                    remaining_service_ids + assigned_service_ids,
-                                                                    vehicles_indices.map{ |_v, _r_i, v_i| v_i })
-        sub_vrp = sub_service_vrp.vrp
-        sub_vrp.vehicles.each{ |vehicle|
-          impacted_routes << vehicle.id
-          vehicle.cost_fixed = vehicle.cost_fixed&.positive? ? vehicle.cost_fixed : 1e6
-          vehicle.cost_distance_multiplier = 0.05 if vehicle.cost_distance_multiplier.zero?
-        }
+        solve_count += 1
+        DichoEndStageSolver.record_insert_attempt!(service_vrp.dicho_data)
 
-        resolution = sub_vrp.configuration.resolution
-        resolution.minimum_duration = sub_vrp_configuration_resolution_minimum_duration if resolution.minimum_duration
-        resolution.duration = sub_vrp_configuration_resolution_duration if resolution.duration
-        resolution.vehicle_limit = sub_vrp_vehicle_limit if vrp.configuration.resolution.vehicle_limit
+        slice_wall_ms, slice_result =
+          measure_wall_ms {
+            sub_service_vrp = SplitClustering.build_partial_service_vrp(service_vrp,
+                                                                        remaining_service_ids + assigned_service_ids,
+                                                                        vehicles_indices.map{ |_v, _r_i, v_i| v_i })
+            sub_vrp = sub_service_vrp.vrp
+            sub_vrp.vehicles.each{ |vehicle|
+              impacted_routes << vehicle.id
+              vehicle.cost_fixed = vehicle.cost_fixed&.positive? ? vehicle.cost_fixed : 1e6
+              vehicle.cost_distance_multiplier = 0.05 if vehicle.cost_distance_multiplier.zero?
+            }
 
-        sub_vrp.configuration.restitution.allow_empty_result = true
-        solution_loop = Core::Strategies::Orchestration.solve(sub_service_vrp)
+            resolution = sub_vrp.configuration.resolution
+            resolution.vehicle_limit = sub_vrp_vehicle_limit if vrp.configuration.resolution.vehicle_limit
 
-        next unless solution_loop
+            resolution.minimum_duration =
+              if resolution.minimum_duration
+                [(vrp.configuration.resolution.minimum_duration.to_f / 3.99 * rate_vehicles * rate_services).to_i,
+                 100].max
+              end
+            resolution.duration = solve_duration_ms
+
+            sub_vrp.configuration.restitution.allow_empty_result = true
+
+            if service_vrp.selected_first_solution_strategy && sub_service_vrp.selected_first_solution_strategy.nil?
+              sub_service_vrp.selected_first_solution_strategy = service_vrp.selected_first_solution_strategy
+              SeveralSolutions.apply_propagated_first_solution_strategy!(
+                sub_service_vrp.vrp, service_vrp.selected_first_solution_strategy
+              )
+            end
+
+            solution_loop = Core::Strategies::Orchestration.solve(sub_service_vrp)
+            [sub_service_vrp, solution_loop]
+          }
+
+        sub_service_vrp, solution_loop = slice_result
+
+        if end_stage_budget_active
+          DichoEndStageSolver.consume_end_stage_elapsed!(service_vrp, slice_wall_ms)
+        end
+
+        unless solution_loop
+          DichoEndStageSolver.record_insert_no_result!(service_vrp.dicho_data)
+          next
+        end
 
         solution.elapsed += solution_loop.elapsed.to_f
-        transfer_unused_time_limit = resolution.duration - solution_loop.elapsed.to_f
 
-        # TODO: Remove unnecessary if conditions and .nil? checks
-        # Initial routes can be refused... check unassigned size before take into account solution
-        next if remaining_service_ids.size < solution_loop.unassigned_stops.size
+        if remaining_service_ids.size < solution_loop.unassigned_stops.size
+          DichoEndStageSolver.record_insert_rejected!(service_vrp.dicho_data)
+          next
+        end
+
+        after_remaining_unassigned =
+          (solution_loop.unassigned_stops.map(&:service_id) & remaining_service_ids).size
+        inserted_count = before_remaining_unassigned - after_remaining_unassigned
+        DichoEndStageSolver.record_insert_success!(service_vrp.dicho_data)
+        DichoEndStageSolver.record_inserted!(service_vrp.dicho_data, inserted_count)
 
         if vrp.configuration.resolution.vehicle_limit # correct the lefover vehicle limit count
           @leftover_vehicle_limit -=
@@ -396,13 +669,17 @@ module Interpreters
       return solution if solution.unassigned_stops.empty?
 
       vrp = service_vrp.vrp
-      log "try to insert #{solution.unassigned_stops.size} unassigned from #{vrp.services.size} services"
-      transfer_unused_time_limit = 0
+      dicho_data = service_vrp.dicho_data
+      before_unassigned = solution.unassigned_stops.size
+      end_stage_before = DichoResolutionTimings.end_stage_counter_snapshot(dicho_data)
+      log "try to insert #{before_unassigned} unassigned from #{vrp.services.size} services"
       vrp.routes = build_initial_routes([solution])
       vrp.configuration.resolution.init_duration = nil
       unassigned_service_ids = solution.unassigned_stops.map(&:service_id).compact
       unassigned_services = vrp.services.select{ |s| unassigned_service_ids.include?(s.id) }
-      unassigned_services_by_skills = unassigned_services.group_by(&:skills)
+      unassigned_services_by_skills =
+        unassigned_services.sort_by{ |service| -service.exclusion_cost.to_f }
+                           .group_by(&:skills)
 
       @leftover_vehicle_limit = vrp.configuration.resolution.vehicle_limit - solution.routes.size
 
@@ -413,8 +690,21 @@ module Interpreters
         next if solution.unassigned_stops.empty?
 
         insert_unassigned_by_skills(service_vrp, unassigned_services, un_w_services,
-                                    skills, solution, transfer_unused_time_limit)
+                                    skills, solution)
       }
+      after_unassigned = solution.unassigned_stops.size
+      net_inserted = before_unassigned - after_unassigned
+      end_stage_delta = DichoResolutionTimings.end_stage_counter_delta(
+        end_stage_before,
+        DichoResolutionTimings.end_stage_counter_snapshot(dicho_data)
+      )
+      log "dicho end_stage level(#{service_vrp.dicho_level}): unassigned #{before_unassigned}->#{after_unassigned} " \
+          "(net -#{net_inserted}) attempts=#{end_stage_delta[:end_stage_insert_attempts]} " \
+          "successes=#{end_stage_delta[:end_stage_insert_successes]} " \
+          "rejected=#{end_stage_delta[:end_stage_insert_rejected]} " \
+          "no_result=#{end_stage_delta[:end_stage_insert_no_result]} " \
+          "inserted=#{end_stage_delta[:end_stage_services_inserted]}",
+          level: :info
       solution
     ensure
       log "<--- dicho::end_stage - level(#{service_vrp.dicho_level})"
@@ -423,18 +713,24 @@ module Interpreters
     def self.split(service_vrp, job = nil)
       log "---> dicho::split - level(#{service_vrp.dicho_level})"
 
-      if service_vrp.dicho_data.empty?
+      unless service_vrp.dicho_data[:service_vehicle_assignments]
         service_vrp.dicho_data, _empties_or_fills = SplitClustering.initialize_split_data(service_vrp, job)
       end
       dicho_data = service_vrp.dicho_data
+      DichoConstructionTimings.increment!(dicho_data, :splits_count)
+      DichoLevelTimings.increment!(dicho_data, service_vrp.dicho_level, :splits_count)
 
       enum_current_vehicles = dicho_data[:current_vehicles].select
 
+      representative_sub_vrp = SplitClustering.create_representative_sub_vrp(dicho_data)
+
       sides =
-        SplitClustering.split_balanced_kmeans(
-          Models::ResolutionContext.new({ vrp: SplitClustering.create_representative_sub_vrp(dicho_data) }), 2,
-          cut_symbol: :duration, restarts: 1, build_sub_vrps: false, basic_split: true, group_points: false
-        ).sort_by!{ |side|
+        DichoConstructionTimings.measure(dicho_data, :split_kmeans_ms) {
+          SplitClustering.split_balanced_kmeans(
+            Models::ResolutionContext.new({ vrp: representative_sub_vrp }), 2,
+            SplitClustering.representative_split_kmeans_options(dicho_data)
+          )
+        }.sort_by!{ |side|
           [side.size, side.sum(&:visits_number)] # [number_of_vehicles, number_of_visits]
         }.reverse!.collect!{ |side|
           enum_current_vehicles.select{ |v| side.any?{ |s| s.id == "0_representative_vrp_s_#{v.id}" } }
@@ -447,13 +743,18 @@ module Interpreters
 
         split_service_vrps << Models::ResolutionContext.new(
           service: service_vrp.service,
-          vrp: SplitClustering.create_sub_vrp(local_dicho_data),
+          vrp: DichoConstructionTimings.measure(dicho_data, :create_sub_vrp_ms) {
+            SplitClustering.create_sub_vrp(local_dicho_data)
+          },
           dicho_data: local_dicho_data,
           dicho_level: service_vrp.dicho_level + 1,
           # dicho_denominators and dicho_sides logic comes from
           # https://github.com/braktar/optimizer-api/commit/1abb786365b4582c7279540c46e541a80f76a489
           dicho_denominators: service_vrp.dicho_denominators + [2**(service_vrp.dicho_level + 1)],
           dicho_sides: service_vrp.dicho_sides + [i],
+          original_duration_ms: service_vrp.original_duration_ms,
+          selected_first_solution_strategy:
+            service_vrp.selected_first_solution_strategy || service_vrp.dicho_data[:selected_first_solution_strategy],
         )
       }
 
