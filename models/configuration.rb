@@ -74,6 +74,7 @@ module Models
     field :same_point_day, default: false
     field :minimize_days_worked, default: false
     field :allow_partial_assignment, default: true
+    field :remove_poorly_populated_routes, default: false
     field :evaluate_only, default: false
     field :several_solutions, default: 1
     field :variation_ratio, default: nil
