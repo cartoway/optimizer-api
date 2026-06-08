@@ -33,6 +33,7 @@ module Wrappers
       # heuristic parameters
       @schedule_end = vrp.configuration.schedule.range_indices[:end]
       @allow_partial_assignment = vrp.configuration.resolution.allow_partial_assignment
+      @remove_poorly_populated_routes = vrp.configuration.resolution.remove_poorly_populated_routes
       @same_point_day = vrp.configuration.resolution.same_point_day
       @relaxed_same_point_day = false
       @duration_in_tw = false # TODO: create parameter for this

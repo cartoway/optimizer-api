@@ -713,6 +713,17 @@ class SplitClusteringTest < Minitest::Test
                                           solutions[0].routes.sum{ |r| r.stops.count(&:service_id) }
     end
 
+    def test_remove_poorly_populated_routes_skipped_when_disabled
+      vrp = TestHelper.create(VRP.toy)
+      vrp.configuration.resolution.remove_poorly_populated_routes = false
+      solution = vrp.empty_solution(:ortools)
+      route_count = solution.routes.size
+
+      Interpreters::SplitClustering.remove_poorly_populated_routes(vrp, solution, 0.1)
+
+      assert_equal route_count, solution.routes.size
+    end
+
     def test_max_split_poorly_populated_route_limit_result
       vrp = TestHelper.load_vrp(self, fixture_file: 'max_split_functionality')
       result = JSON.parse(
