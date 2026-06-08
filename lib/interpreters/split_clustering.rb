@@ -672,6 +672,8 @@ module Interpreters
     end
 
     def self.remove_poorly_populated_routes(vrp, solution, limit)
+      return unless vrp.configuration.resolution.remove_poorly_populated_routes
+
       forcing_relation_vehicle_ids = vrp.relations.flat_map{ |relation|
         Models::Relation::FORCING_RELATIONS.include?(relation.type) ? relation.linked_vehicle_ids.to_a : []
       }.uniq

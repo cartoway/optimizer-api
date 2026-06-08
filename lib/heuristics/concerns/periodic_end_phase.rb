@@ -147,6 +147,8 @@ module PeriodicEndPhase
   #### CORRECT POORLY POPULATED ROUTES PROCESS ####
 
   def correct_poorly_populated_routes
+    return unless @remove_poorly_populated_routes
+
     @output_tool&.add_comment('REMOVE_POORLY_POPULATED_ROUTES PHASE')
     @still_removed = {}
 
