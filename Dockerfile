@@ -32,8 +32,10 @@ RUN git clone "$VROOM_GIT_URL" vroom && \
     git submodule update --init --recursive && \
     cd src && \
     CC=gcc-13 CXX=g++-13 \
-    make -j"$(nproc)" && \
+    make -j"$(nproc)" \
+      CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DASIO_STANDALONE -DUSE_ROUTING=true' && \
     cp ../bin/vroom /usr/local/bin/vroom && \
+    strip /usr/local/bin/vroom && \
     cd /
 
 RUN apt update -y && apt install -y \
