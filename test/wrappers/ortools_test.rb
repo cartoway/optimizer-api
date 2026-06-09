@@ -3682,7 +3682,7 @@ class Wrappers::OrtoolsTest < Minitest::Test
 
     OptimizerWrapper.config[:services][:ortools].stub(
       :run_ortools,
-      lambda { |problem, _, _|
+      lambda { |problem, _, _ = nil, **|
         # check no service has been filtered :
         assert_equal expecting, (problem.routes.collect{ |r| r.service_ids.size })
 
@@ -4218,7 +4218,7 @@ class Wrappers::OrtoolsTest < Minitest::Test
 
     call_to_solve = 0
     OptimizerWrapper.config[:services][:ortools].stub(
-      :solve, lambda{ |vrp_in, _job|
+      :solve, lambda{ |vrp_in, _job, _thread_proc = nil, **|
         call_to_solve += 1
 
         # force to prefer solution provided by routes :
@@ -4983,7 +4983,10 @@ class Wrappers::OrtoolsTest < Minitest::Test
   end
 
   def test_no_nil_in_corresponding_mission_ids
-    assert_empty OptimizerWrapper.config[:services][:ortools].send(:corresponding_mission_ids, ['only_id'], ['non_id'])
+    mission = Struct.new(:id)
+    available = [mission.new('only_id')]
+    unknown = [mission.new('non_id')]
+    assert_empty OptimizerWrapper.config[:services][:ortools].send(:corresponding_mission_ids, available, unknown)
   end
 
   def test_self_selection_should_not_change_vehicle_ids
@@ -4992,7 +4995,7 @@ class Wrappers::OrtoolsTest < Minitest::Test
     vrp = TestHelper.create(problem)
     heuristic_counter = 0
     OptimizerWrapper.config[:services][:ortools].stub(
-      :solve, lambda{ |_vrp_in, _job|
+      :solve, lambda{ |_vrp_in, _job, _thread_proc = nil, **|
         heuristic_counter += 1
         if heuristic_counter == 1
           Models::Solution.new(solvers: [:ortools],
@@ -5130,7 +5133,7 @@ class Wrappers::OrtoolsTest < Minitest::Test
       end
       OptimizerWrapper.config[:services][:ortools].stub(
         :run_ortools,
-        lambda { |ortools_problem, _, _|
+        lambda { |ortools_problem, _, _ = nil, **|
           # check number of relations sent to ortools
           assert_equal expected_number_of_relations[pb_index], ortools_problem.relations.size
 
@@ -5152,7 +5155,7 @@ class Wrappers::OrtoolsTest < Minitest::Test
     [[], [{ start: 2, end: 3 }]].each{ |rest_tws|
       OptimizerWrapper.config[:services][:ortools].stub(
         :run_ortools,
-        lambda { |pb, _, _|
+        lambda { |pb, _, _ = nil, **|
           assert_equal rest_tws.any? ? rest_tws[0][:start] : 0,
                        pb.vehicles.first.rests.first.time_window.start
           assert_equal rest_tws.any? ? rest_tws[0][:end] : 2**31 - 1,

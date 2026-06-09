@@ -249,7 +249,7 @@ class FiltersTest < Minitest::Test
     begin
       OptimizerWrapper.config[:services][:ortools].stub(
         :solve, # (cluster_vrp, job, proc)
-        lambda { |cluster_vrp, _, _,|
+        lambda { |cluster_vrp, _job, _thread_proc = nil, **|
           assert_equal 0, cluster_vrp.services.size
           raise OptimizerWrapper::JobKilledError
         }
@@ -268,7 +268,7 @@ class FiltersTest < Minitest::Test
     begin
       OptimizerWrapper.config[:services][:ortools].stub(
         :solve, # (cluster_vrp, job, proc)
-        lambda { |cluster_vrp, _, _,|
+        lambda { |cluster_vrp, _job, _thread_proc = nil, **|
           assert_equal 3, cluster_vrp.services.size
           raise OptimizerWrapper::JobKilledError
         }
@@ -304,7 +304,7 @@ class FiltersTest < Minitest::Test
     begin
       OptimizerWrapper.config[:services][:ortools].stub(
         :solve, # (cluster_vrp, job, proc)
-        lambda { |cluster_vrp, _, _,|
+        lambda { |cluster_vrp, _job, _thread_proc = nil, **|
           assert_equal 3, cluster_vrp.services.size
           raise OptimizerWrapper::JobKilledError
         }

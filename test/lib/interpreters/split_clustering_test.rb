@@ -1240,10 +1240,12 @@ class SplitClusteringTest < Minitest::Test
       assert_same parent_time_matrix, sub_vrp.matrices.first.time
     end
 
-    def test_build_partial_slices_matrices_for_proper_sub_problems
+    def test_build_partial_shares_parent_matrices_for_partial_sub_problems
       problem = VRP.lat_lon_two_vehicles
       vrp = TestHelper.create(problem)
-      parent_matrix_size = vrp.matrices.first.time.size
+      parent_time_matrix = vrp.matrices.first.time
+      service = vrp.services.first
+      original_index = service.activity.point.matrix_index
 
       sub_vrp =
         Interpreters::SplitClustering.build_partial_service_vrp(
@@ -1252,9 +1254,9 @@ class SplitClusteringTest < Minitest::Test
           [0]
         ).vrp
 
-      assert_operator sub_vrp.matrices.first.time.size, :<, parent_matrix_size
-      assert_equal sub_vrp.points.size, sub_vrp.matrices.first.time.size
-      sub_vrp.points.each_with_index{ |point, index| assert_equal index, point.matrix_index }
+      assert_same parent_time_matrix, sub_vrp.matrices.first.time
+      assert_operator sub_vrp.points.size, :<, sub_vrp.matrices.first.time.size
+      assert_equal original_index, sub_vrp.services.first.activity.point.matrix_index
     end
 
     def test_initialize_split_data_assigns_all_services_to_vehicle_zones
@@ -1278,9 +1280,12 @@ class SplitClusteringTest < Minitest::Test
       assert_equal :duration, options[:cut_symbol]
       assert_equal 2, options[:restarts]
       refute options[:build_sub_vrps]
-      refute options[:use_matrix_distances]
+      assert options[:use_matrix_distances]
 
-      vrp.compute_matrix
+      saved_times = vrp.matrices.map(&:time)
+      vrp.matrices.each{ |matrix| matrix.time = [] }
+      refute Interpreters::SplitClustering.init_split_kmeans_options(vrp)[:use_matrix_distances]
+      vrp.matrices.each_with_index{ |matrix, index| matrix.time = saved_times[index] }
       assert Interpreters::SplitClustering.init_split_kmeans_options(vrp)[:use_matrix_distances]
       refute options.key?(:max_iterations)
       refute options.key?(:basic_split)

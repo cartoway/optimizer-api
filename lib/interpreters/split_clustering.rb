@@ -277,7 +277,7 @@ module Interpreters
         # SPLIT current_vehicles list (by-vehicle-centroids) to create two "sides"
         sides =
           split_balanced_kmeans(
-            Models::ResolutionContext.new(vrp: create_representative_sub_vrp(ss_data, job: job)), 2,
+            Models::ResolutionContext.new(vrp: create_representative_sub_vrp(ss_data)), 2,
             representative_split_kmeans_options(ss_data)
           ).sort_by!{ |side|
             [side.size, side.sum(&:visits_number)] # [number_of_vehicles, number_of_visits]
@@ -898,6 +898,17 @@ module Interpreters
       vrp
     end
 
+    def self.dup_kmeans_plain(value)
+      case value
+      when Hash
+        value.transform_values { |v| dup_kmeans_plain(v) }
+      when Array
+        value.map { |v| dup_kmeans_plain(v) }
+      else
+        value
+      end
+    end
+
     # TODO: private method, reduce params
     def self.kmeans_process(nb_clusters, data_items, related_item_indices, limits, options = {}, &block)
       biggest_cluster_size = 0
@@ -906,6 +917,8 @@ module Interpreters
       best_limit_score = nil
       c = nil
       score_hash = {}
+      baseline_data_items = dup_kmeans_plain(data_items)
+      baseline_related_item_indices = dup_kmeans_plain(related_item_indices)
       while restart < options[:restarts]
         block&.call() # in case job is killed during restarts
         log "Restart #{restart}/#{options[:restarts]}", level: :debug
@@ -923,12 +936,20 @@ module Interpreters
         options[:seed] ||= rand(1234567890) # gem does not initialise the seed randomly
         options[:seed] += restart
         log "BalancedVRPClustering is launched with seed #{options[:seed]}"
-        restart_data_items = restart.zero? ? data_items : Oj.load(Oj.dump(data_items))
-        c.build(Ai4r::Data::DataSet.new(data_items: restart_data_items),
-                options[:cut_symbol],
-                Oj.load(Oj.dump(related_item_indices)),
-                ratio,
-                options)
+        restart_data_items = restart.zero? ? data_items : dup_kmeans_plain(baseline_data_items)
+        restart_related_item_indices =
+          restart.zero? ? related_item_indices : dup_kmeans_plain(baseline_related_item_indices)
+        begin
+          c.build(Ai4r::Data::DataSet.new(data_items: restart_data_items),
+                  options[:cut_symbol],
+                  restart_related_item_indices,
+                  ratio,
+                  options)
+        rescue Exception => e # rubocop:disable Lint/RescueException -- Rust engine raises fatal on invalid centroids
+          raise ArgumentError.new(e.message) if e.message.to_s.include?('Incompatible centroid init')
+
+          raise
+        end
 
         c.clusters.delete([])
         values = c.clusters.collect{ |cluster| cluster.data_items.collect{ |i| i[3][options[:cut_symbol]] }.sum.to_i }
@@ -1021,6 +1042,9 @@ module Interpreters
 
             data_items, cumulated_metrics, grouped_objects, related_item_indices =
               collect_data_items_metrics(vrp, cumulated_metrics, options)
+            if options[:entity] == :work_day
+              related_item_indices = related_item_indices.reject{ |relation_type, _| relation_type == :same_vehicle }
+            end
 
             # TODO: remove because this is computed in gem.
             # But it is also needed to compute score here.

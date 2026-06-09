@@ -147,7 +147,8 @@ module PeriodicEndPhase
   #### CORRECT POORLY POPULATED ROUTES PROCESS ####
 
   def correct_poorly_populated_routes
-    return unless @remove_poorly_populated_routes
+    has_exclusion_costs = @services_data.any?{ |_id, data| data[:raw].exclusion_cost.to_f.positive? }
+    return unless @remove_poorly_populated_routes || has_exclusion_costs
 
     @output_tool&.add_comment('REMOVE_POORLY_POPULATED_ROUTES PHASE')
     @still_removed = {}

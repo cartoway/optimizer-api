@@ -549,13 +549,16 @@ module Interpreters
     def get_original_values(original, options)
       # Except the following keys (which do not have a non-id version) skip the id version to crete a shallow copy
       fields_without_a_non_id_method = %i[original_id matrix_id value_matrix_id].freeze
-      [original.attributes.keys + options.keys].flatten.each_with_object({}) { |key, data|
-        next if (key[-3..-1] == '_id' || key[-4..-1] == '_ids') && fields_without_a_non_id_method.exclude?(key)
+      options = options.transform_keys(&:to_sym)
+      (original.class.field_names + options.keys).uniq.each_with_object({}) { |key, data|
+        key = key.to_sym
+        next if (key.to_s[-3..-1] == '_id' || key.to_s[-4..-1] == '_ids') &&
+                fields_without_a_non_id_method.exclude?(key)
 
         # if a key is supplied in the options manually as nil, this means removing the key
         next if options.key?(key) && options[key].nil?
 
-        data[key] = options[key] || original[key]
+        data[key] = options.fetch(key){ original[key] }
       }
     end
 
