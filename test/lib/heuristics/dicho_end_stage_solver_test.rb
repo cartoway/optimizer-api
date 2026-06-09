@@ -1,7 +1,7 @@
 # Copyright © Cartoway, 2026
 #
 require './test/test_helper'
-require './lib/heuristics/dicho_end_stage_solver.rb'
+require './lib/heuristics/dicho_end_stage_solver'
 
 module Interpreters
   class DichoEndStageSolverTest < Minitest::Test

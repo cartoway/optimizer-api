@@ -3,7 +3,7 @@
 # Accumulates monotonic wall-clock timings for dicho resolution phases outside
 # construction (split/build) and OR-Tools wrapper detail.
 
-require './lib/heuristics/dicho_end_stage_solver.rb'
+require './lib/heuristics/dicho_end_stage_solver'
 
 module Interpreters
   module DichoResolutionTimings

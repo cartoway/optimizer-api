@@ -221,8 +221,8 @@ module Core
                     timings_target = Interpreters::OrtoolsTimings.dicho_data_target(service_vrp)
                     if timings_target
                       solve_options[:timings] = timings_target
-                      if timings_target[:level_timings]
-                        solve_options[:timings_level] = service_vrp.dicho_level unless service_vrp.dicho_level.nil?
+                      if timings_target[:level_timings] && !service_vrp.dicho_level.nil?
+                        solve_options[:timings_level] = service_vrp.dicho_level
                       end
                     end
                   end

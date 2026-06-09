@@ -226,14 +226,15 @@ class DichotomousTest < Minitest::Test
       recorded_durations = []
       service_vrp = Models::ResolutionContext.new(vrp: problem, service: :ortools, dicho_level: 0)
 
-      stub_solve = lambda{ |svrp, _job = nil, _block = nil|
-        recorded_durations << svrp.vrp.configuration.resolution.duration.to_i
-        solution = problem.empty_solution(:ortools, [], false)
-        solution.elapsed = [svrp.vrp.configuration.resolution.duration.to_i / 2, 50].max
-        Interpreters::Dichotomous.consume_time_budget!(svrp, solution.elapsed) if
-          Interpreters::Dichotomous.dicho_time_budget_active?(svrp)
-        solution
-      }
+      stub_solve =
+        lambda{ |svrp, _job = nil, _block = nil|
+          recorded_durations << svrp.vrp.configuration.resolution.duration.to_i
+          solution = problem.empty_solution(:ortools, [], false)
+          solution.elapsed = [svrp.vrp.configuration.resolution.duration.to_i / 2, 50].max
+          Interpreters::Dichotomous.consume_time_budget!(svrp, solution.elapsed) if
+            Interpreters::Dichotomous.dicho_time_budget_active?(svrp)
+          solution
+        }
 
       Core::Strategies::Orchestration.stub(:solve, stub_solve) do
         Interpreters::Dichotomous.dichotomous_heuristic(service_vrp, nil)
@@ -241,7 +242,7 @@ class DichotomousTest < Minitest::Test
 
       assert recorded_durations.any?, 'Expected at least one dichotomous solve call'
       assert_operator recorded_durations.sum, :<=, max_duration * 1.05,
-                       "Sum of solve durations (#{recorded_durations.sum}) exceeds budget (#{max_duration})"
+                      "Sum of solve durations (#{recorded_durations.sum}) exceeds budget (#{max_duration})"
     end
 
     def test_dichotomous_self_selection_runs_once_on_first_viable_sub_vrp
@@ -259,16 +260,18 @@ class DichotomousTest < Minitest::Test
       problem.configuration.resolution.dicho_division_service_limit = 5
 
       find_best_calls = 0
-      stub_find_best = lambda{ |service_vrp_in|
-        find_best_calls += 1
-        service_vrp_in.vrp.configuration.preprocessing.first_solution_strategy = ['savings']
-        Interpreters::SeveralSolutions.store_selected_first_solution_strategy!(service_vrp_in)
-        service_vrp_in
-      }
+      stub_find_best =
+        lambda{ |service_vrp_in|
+          find_best_calls += 1
+          service_vrp_in.vrp.configuration.preprocessing.first_solution_strategy = ['savings']
+          Interpreters::SeveralSolutions.store_selected_first_solution_strategy!(service_vrp_in)
+          service_vrp_in
+        }
 
-      stub_solve = lambda{ |_svrp, _job = nil, _block = nil|
-        problem.empty_solution(:ortools, [], false).tap{ |s| s.elapsed = 100 }
-      }
+      stub_solve =
+        lambda{ |_svrp, _job = nil, _block = nil|
+          problem.empty_solution(:ortools, [], false).tap{ |s| s.elapsed = 100 }
+        }
 
       service_vrp = Models::ResolutionContext.new(vrp: problem, service: :ortools, dicho_level: 0)
       Interpreters::SeveralSolutions.stub(:find_best_heuristic, stub_find_best) do
@@ -298,9 +301,10 @@ class DichotomousTest < Minitest::Test
       problem.configuration.resolution.dicho_algorithm_service_limit = 5
       problem.configuration.resolution.dicho_division_service_limit = 5
 
-      stub_solve = lambda{ |_svrp, _job = nil, _block = nil|
-        problem.empty_solution(:ortools, [], false).tap{ |s| s.elapsed = 100 }
-      }
+      stub_solve =
+        lambda{ |_svrp, _job = nil, _block = nil|
+          problem.empty_solution(:ortools, [], false).tap{ |s| s.elapsed = 100 }
+        }
 
       service_vrp = Models::ResolutionContext.new(vrp: problem, service: :ortools, dicho_level: 0)
       Core::Strategies::Orchestration.stub(:solve, stub_solve) do
