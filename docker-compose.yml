@@ -13,7 +13,8 @@ x-default-service: &default-service
     ROUTER_API_KEY: ${ROUTER_API_KEY:-demo}
     SENTRY_DSN: ${SENTRY_DSN:-}
   depends_on:
-    - redis-resque
+    redis-resque:
+      condition: service_healthy
     # - redis-cache
   volumes:
     - .:/srv/app
@@ -34,10 +35,15 @@ services:
     environment:
       <<: *default-environment
       COUNT: 5
-      QUEUES: DEFAULT
+      QUEUE: DEFAULT
     command: bundle exec rake resque:workers --trace
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "pgrep -f 'resque:work' >/dev/null || exit 1"]
+      start_interval: 1s
+      start_period: 60s
+      interval: 30s
+      timeout: 10s
+      retries: 5
     restart: unless-stopped
 
   redis-resque:
