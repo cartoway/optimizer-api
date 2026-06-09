@@ -220,7 +220,7 @@ module Interpreters
       }
     end
 
-    def self.initialize_split_data(service_vrp, job = nil)
+    def self.initialize_split_data(service_vrp, _job = nil)
       dicho_data = service_vrp.dicho_data
       dicho_data = {} unless dicho_data.is_a?(Hash)
       service_vrp.dicho_data = dicho_data
@@ -724,7 +724,7 @@ module Interpreters
 
     # Extract a square sub-matrix without values_at splat (faster for large index lists).
     def self.extract_sub_matrix(source_matrix, row_indices, column_indices = row_indices)
-      row_indices.each_with_index.map{ |row_index, row_offset|
+      row_indices.each_with_index.map{ |row_index, _row_offset|
         source_row = source_matrix[row_index]
         column_indices.each_with_index.map{ |column_index, _column_offset|
           source_row[column_index]

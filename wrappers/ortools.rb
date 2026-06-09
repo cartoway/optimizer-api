@@ -434,7 +434,8 @@ module Wrappers
     end
 
     def write_instance_file!(problem)
-      @ortools_instance_path ||= Tempfile.new(['optimize-or-tools-input', '.pb'], @tmp_dir, binmode: true).tap(&:close).path
+      @ortools_instance_path ||= Tempfile.new(['optimize-or-tools-input', '.pb'], @tmp_dir,
+                                              binmode: true).tap(&:close).path
       File.binwrite(@ortools_instance_path, OrtoolsVrp::Problem.encode(problem))
       @ortools_instance_path
     end
@@ -793,9 +794,10 @@ module Wrappers
       available_counts = available_ids.each_with_object(Hash.new(0)){ |id, counts| counts[id] += 1 }
 
       missions.map(&:id).filter_map{ |mission_id|
-        correct_id = [mission_id, "#{mission_id}pickup", "#{mission_id}delivery"].find{ |candidate|
-          available_counts[candidate].positive?
-        }
+        correct_id =
+          [mission_id, "#{mission_id}pickup", "#{mission_id}delivery"].find{ |candidate|
+            available_counts[candidate].positive?
+          }
         next unless correct_id
 
         idx = available_ids.index(correct_id)

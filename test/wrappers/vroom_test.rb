@@ -577,7 +577,7 @@ class Wrappers::VroomTest < Minitest::Test
     vroom.instance_variable_set(:@total_quantities, Hash.new(0))
     vehicles_payload = vroom.send(:collect_vehicles, vrp, [], [])
     assert_equal 55, vehicles_payload.first[:departure],
-                  'String shift_preference must set VROOM departure (e.g. after dicho partial VRP rebuild)'
+                 'String shift_preference must set VROOM departure (e.g. after dicho partial VRP rebuild)'
     vrp.vehicles.first[:shift_preference] = :force_start
     vehicles_payload_sym = vroom.send(:collect_vehicles, vrp, [], [])
     assert_equal 55, vehicles_payload_sym.first[:departure]

@@ -158,7 +158,8 @@ class Wrappers::PyVRPTest < Minitest::Test
     assert_equal @minimal_problem[:services].size + 1, solution.routes.first.stops.size
   end
 
-  # API sends shift_preference as a string; build_depots must match :force_start so depots are not dropped from the PyVRP JSON.
+  # API sends shift_preference as a string; build_depots must match :force_start
+  # so depots are not dropped from the PyVRP JSON.
   def test_shift_preference_force_start_string_builds_depots
     vehicle = @minimal_problem[:vehicles][0].dup
     vehicle[:shift_preference] = 'force_start'

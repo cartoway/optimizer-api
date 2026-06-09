@@ -106,7 +106,7 @@ module Interpreters
 
     def self.level_line(prefix, level, bucket)
       fields = [
-        format('%s%-3s', prefix, level.to_s),
+        format('%<prefix>s%-3<level>s', prefix: prefix, level: level),
         format('%4s', bucket[:services] || '-'),
         format('%3s', bucket[:vehicles] || '-'),
         bucket[:node_total_ms].round(1),

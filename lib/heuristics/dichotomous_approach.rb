@@ -238,13 +238,13 @@ module Interpreters
          feasible_vrp(node_solution, service_vrp) &&
          service_vrp.vrp.vehicles.size > service_vrp.vrp.configuration.resolution.dicho_division_vehicle_limit &&
          service_vrp.vrp.services.size > service_vrp.vrp.configuration.resolution.dicho_division_service_limit
-        node_solution = merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, node_solution, &block)
+        node_solution = merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, &block)
       end
 
       node_solution
     end
 
-    def self.merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, node_solution, &block)
+    def self.merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, &block)
       sub_service_vrps =
         DichoLevelTimings.measure(dicho_data, level, :split_ms) {
           split_results = []
