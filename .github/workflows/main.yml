@@ -103,9 +103,14 @@ jobs:
       - name: Load Docker image
         run: docker load --input /tmp/optimizer-api.tar
       - name: Launch Stack
-        run: timeout 4m docker compose -f ./docker/docker-compose.test.yml up --wait
+        run: timeout 4m docker compose -f ./docker/docker-compose.test.yml up --wait api resque-default redis-resque
+      - name: Verify async stack
+        run: |
+          docker compose -f ./docker/docker-compose.test.yml ps
+          docker compose -f ./docker/docker-compose.test.yml exec -T redis-resque redis-cli ping
+          docker compose -f ./docker/docker-compose.test.yml exec -T resque-default pgrep -af resque:work
       - name: Starting tests
-        run: timeout ${TIMEOUT} docker compose -f ./docker/docker-compose.test.yml exec api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
+        run: timeout ${TIMEOUT} docker compose -f ./docker/docker-compose.test.yml exec -T api rake test TESTOPTS="${TESTOPTS}" ${OPTIONS}
 
   test_dicho:
     needs: build
