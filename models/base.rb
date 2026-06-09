@@ -52,6 +52,14 @@ module Models
     end
 
     class << self
+      def create(attributes = {})
+        record = new(attributes)
+        validate_unique_id(record) if dirty
+        record.save
+        mark_dirty
+        record
+      end
+
       # Override active_hash to improve performances
       def insert(record)
         @records ||= []

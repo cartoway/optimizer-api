@@ -190,6 +190,7 @@ class RealCasesTest < Minitest::Test
       # vroom performance
       vrp.vehicles.each{ |v|
         v.cost_late_multiplier = 0
+        v.cost_waiting_time_multiplier = 0
         v.timewindow&.end += 5 * 60 * 60
       }
       solutions = OptimizerWrapper.wrapper_vrp('vroom', { services: { vrp: [:vroom] }},

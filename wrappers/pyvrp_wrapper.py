@@ -30,13 +30,14 @@ def _route_from_dict(route_dict: dict, data: ProblemData):
     """
     trips = []
     for trip_dict in route_dict.get("visits", []):
-        trip = Trip(
-            data,
-            visits=trip_dict.get("visits", []),
-            vehicle_type=trip_dict.get("vehicle_type", 0),
-            start_depot=trip_dict.get("start_depot"),
-            end_depot=trip_dict.get("end_depot")
-        )
+        trip_kwargs = {
+            "visits": trip_dict.get("visits", []),
+            "vehicle_type": trip_dict.get("vehicle_type", 0),
+            "start_depot": trip_dict.get("start_depot", 0),
+        }
+        if trip_dict.get("end_depot") is not None:
+            trip_kwargs["end_depot"] = trip_dict["end_depot"]
+        trip = Trip(data, **trip_kwargs)
         trips.append(trip)
 
     return Route(

@@ -55,7 +55,8 @@ module Interpreters
     end
 
     def test_reserve_time_budget_skipped_when_share_nil
-      @vrp.configuration.resolution.dicho_end_stage_time_share = nil
+      # ActiveHash keeps field defaults when assigned nil; zero share matches time_share guard.
+      @vrp.configuration.resolution.dicho_end_stage_time_share = 0
       @service_vrp.resolution_time_budget_ms = 2_100_000
 
       DichoEndStageSolver.reserve_time_budget!(@service_vrp)

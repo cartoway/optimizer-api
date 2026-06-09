@@ -57,7 +57,7 @@ module Wrappers
       problem = pyvrp_problem(vrp)
       result = run_pyvrp(problem, [1, vrp.configuration.resolution.duration.to_f / 1000].max.to_i)
 
-      raise 'No feasible solution found' unless result[:feasible]
+      raise 'No feasible solution found' if !result[:feasible] && result[:routes].blank?
 
       elapsed_time = result[:runtime]
       @index_hash = @service_index_map.map.with_index{ |service, index|
@@ -77,6 +77,7 @@ module Wrappers
 
       return if !result
 
+      filter_capacity = !result[:feasible]
       routes =
         result[:routes].map{ |route|
           vehicle = vrp.vehicles[route[:vehicle_type]]
@@ -88,9 +89,17 @@ module Wrappers
           end
 
           vehicle = vrp.vehicles[route[:vehicle_type]]
+          route_loads = Hash.new(0)
           route[:trips].each.with_index { |trip, idx|
             stops +=
-              trip[:visits].map{ |visit_index|
+              trip[:visits].filter_map{ |visit_index|
+                service = @service_index_map[visit_index]
+                next unless service
+                if filter_capacity && !visit_fits_capacity?(vehicle, service, route_loads)
+                  next
+                end
+
+                apply_visit_load!(vehicle, service, route_loads) if filter_capacity
                 read_visit(vrp, vehicle, visit_index)
               }
             next if idx == route[:trips].size - 1
@@ -308,7 +317,7 @@ module Wrappers
         capacity_hash = all_units.map{ |id, _unit| [id, MAX_INT64] }.to_h
         veh.capacities.each do |capacity|
           capacity_hash[capacity.unit_id] =
-            (capacity.limit && (capacity.limit * CUSTOM_QUANTITY_BIGNUM).to_i || MAX_INT_UNITS)
+            (capacity.limit && (capacity.limit * CUSTOM_QUANTITY_BIGNUM).round || MAX_INT_UNITS)
         end
 
         capacity_skills = Array.new(@skills_index_hash.size, 0)
@@ -320,7 +329,6 @@ module Wrappers
           num_available: 1,
           capacity: capacity_hash.values + capacity_skills,
           start_depot: @vehicle_start_point_index_hash[veh.id],
-          end_depot: @vehicle_end_point_index_hash[veh.id],
           fixed_cost: veh.cost_fixed.to_i,
           tw_early: veh.timewindow&.start || 0,
           tw_late: veh.timewindow&.end || MAX_INT64,
@@ -333,7 +341,7 @@ module Wrappers
           reload_depots: veh.reload_depots.map{ |depot| @reload_depot_hash[depot.id] },
           max_reloads: veh.maximum_reloads || 0,
           name: veh.id.to_s
-        }
+        }.merge(optional_end_depot_hash(veh.id))
       }
     end
 
@@ -389,8 +397,8 @@ module Wrappers
             tw_early: tw.start || 0,
             tw_late: tw.end || MAX_INT64,
             release_time: 0,
-            prize: service.exclusion_cost || (MAX_PENALTY / (service.priority + 1)).round,
-            required: false,
+            prize: client_prize(service),
+            required: mandatory_client?(service),
             name: "#{service.id}_tw#{tw_idx}"
           }
           service_to_client_indices[service.id] ||= []
@@ -406,6 +414,72 @@ module Wrappers
       end
 
       [client_list, groups]
+    end
+
+    def mandatory_client?(service)
+      service.exclusion_cost.nil? && service.activity.timewindows.size <= 1
+    end
+
+    def client_prize(service)
+      return service.exclusion_cost.round if service.exclusion_cost
+
+      mandatory_client?(service) ? 0 : (MAX_PENALTY / (service.priority + 1)).round
+    end
+
+    def scaled_capacity_limits(vehicle)
+      vehicle.capacities.each_with_object({}) do |capacity, limits|
+        limits[capacity.unit_id] = (capacity.limit * CUSTOM_QUANTITY_BIGNUM).round if capacity.limit
+      end
+    end
+
+    def scaled_pickup_delivery(service)
+      pickup = Hash.new(0)
+      delivery = Hash.new(0)
+      service.quantities.each do |quantity|
+        delivery[quantity.unit_id] = (quantity.delivery * CUSTOM_QUANTITY_BIGNUM).round if quantity.delivery
+        pickup[quantity.unit_id] = (quantity.pickup * CUSTOM_QUANTITY_BIGNUM).round if quantity.pickup
+
+        next if quantity.value.zero?
+
+        if quantity.value < 0
+          delivery[quantity.unit_id] = (quantity.value.abs * CUSTOM_QUANTITY_BIGNUM).round
+        else
+          pickup[quantity.unit_id] = (quantity.value * CUSTOM_QUANTITY_BIGNUM).round
+        end
+      end
+      [pickup, delivery]
+    end
+
+    def visit_fits_capacity?(vehicle, service, route_loads)
+      limits = scaled_capacity_limits(vehicle)
+      return true if limits.empty?
+
+      pickup, delivery = scaled_pickup_delivery(service)
+      limits.all? do |unit_id, limit|
+        if delivery[unit_id].positive? && pickup[unit_id].zero?
+          (route_loads["delivery_sum:#{unit_id}"] || 0) + delivery[unit_id] <= limit
+        else
+          (route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id] <= limit &&
+            (route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id] >= 0
+        end
+      end
+    end
+
+    def apply_visit_load!(vehicle, service, route_loads)
+      pickup, delivery = scaled_pickup_delivery(service)
+      scaled_capacity_limits(vehicle).each_key do |unit_id|
+        if delivery[unit_id].positive? && pickup[unit_id].zero?
+          route_loads["delivery_sum:#{unit_id}"] = (route_loads["delivery_sum:#{unit_id}"] || 0) + delivery[unit_id]
+        else
+          route_loads[unit_id] = (route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id]
+        end
+      end
+    end
+
+    # Open routes have no end_point: omit end_depot and let PyVRP apply its default.
+    def optional_end_depot_hash(vehicle_id)
+      end_depot = @vehicle_end_point_index_hash[vehicle_id]
+      end_depot.nil? ? {} : { end_depot: end_depot }
     end
 
     def add_depot_point(point, index_hash, criteria = nil)
@@ -560,13 +634,11 @@ module Wrappers
     def build_trips(vrp, route, vehicle_type)
       trips = []
       vehicle = vrp.vehicles[vehicle_type]
-      end_depot = @vehicle_end_point_index_hash[vehicle.id]
       current_trip = {
         visits: [],
         vehicle_type: vehicle_type,
-        start_depot: @vehicle_start_point_index_hash[vehicle.id],
-        end_depot: end_depot
-      }
+        start_depot: @vehicle_start_point_index_hash[vehicle.id]
+      }.merge(optional_end_depot_hash(vehicle.id))
       route.missions.each do |mission|
         if mission.is_a?(Models::Service)
           current_trip[:visits] << @service_index_map.find_index{ |service| service && service.id == mission.id }
@@ -577,9 +649,8 @@ module Wrappers
           current_trip = {
             visits: [],
             vehicle_type: vehicle_type,
-            start_depot: reload_depot,
-            end_depot: end_depot
-          }
+            start_depot: reload_depot
+          }.merge(optional_end_depot_hash(vehicle.id))
         end
       end
       trips << current_trip

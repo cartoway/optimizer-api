@@ -19,5 +19,17 @@
 require './models/base'
 
 module Models
-  class Mission < Base; end
+  class Mission < Base
+    field :id
+    field :original_id, default: nil
+
+    belongs_to :activity, class_name: 'Models::Activity'
+    has_many :quantities, class_name: 'Models::Quantity'
+
+    def initialize(hash)
+      hash[:original_id] ||= hash[:id]
+
+      super(hash)
+    end
+  end
 end

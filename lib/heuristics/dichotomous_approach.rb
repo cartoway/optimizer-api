@@ -238,13 +238,13 @@ module Interpreters
          feasible_vrp(node_solution, service_vrp) &&
          service_vrp.vrp.vehicles.size > service_vrp.vrp.configuration.resolution.dicho_division_vehicle_limit &&
          service_vrp.vrp.services.size > service_vrp.vrp.configuration.resolution.dicho_division_service_limit
-        node_solution = merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, &block)
+        node_solution = merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, node_solution, &block)
       end
 
       node_solution
     end
 
-    def self.merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, &block)
+    def self.merge_split_dicho_children(service_vrp, job, dicho_data, level, vrp, parent_node_solution = nil, &block)
       sub_service_vrps =
         DichoLevelTimings.measure(dicho_data, level, :split_ms) {
           split_results = []
@@ -327,7 +327,15 @@ module Interpreters
           solutions << child_solution
         }
       }
-      node_solution = solutions.reduce(&:+)
+      valid_solutions = solutions.compact
+      node_solution =
+        case valid_solutions.size
+        when 0 then parent_node_solution
+        when 1 then valid_solutions.first
+        else valid_solutions.reduce(&:+)
+        end
+      return parent_node_solution unless node_solution
+
       log "dicho - level(#{level}) before remove_bad_skills unassigned rate " \
           "#{node_solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
           "#{(node_solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"

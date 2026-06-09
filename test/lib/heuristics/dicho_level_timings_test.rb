@@ -11,7 +11,7 @@ module Interpreters
 
       DichoLevelTimings.add!(dicho_data, 0, :split_ms, 100)
       DichoLevelTimings.add!(dicho_data, 1, :children_ms, 200)
-      DichoLevelTimings.record_call!(
+      DichoLevelTimings.record_ortools_call!(
         dicho_data, 1, total_ms: 50, ruby_ms: 30, solver_ms: 20
       )
 

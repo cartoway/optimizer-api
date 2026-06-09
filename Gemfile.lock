@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/cartoway/balanced_vrp_clustering.git
-  revision: a58a13f6db1eddc804e443ceba92f4b692c4661b
+  revision: b489d73bd64f205fd9c16f2b3953d8fb454a141e
   branch: bump
   specs:
     balanced_vrp_clustering (0.3.0)
@@ -159,7 +159,7 @@ GEM
     nio4r (2.5.9)
     nokogiri (1.15.4-x86_64-linux)
       racc (~> 1.4)
-    oj (3.17.1)
+    oj (3.17.3)
       bigdecimal (>= 3.0)
       ostruct (>= 0.2)
     ostruct (0.6.3)
