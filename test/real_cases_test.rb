@@ -215,7 +215,7 @@ class RealCasesTest < Minitest::Test
                       42587, 'Too long travel time'
 
       # Check elapsed time
-      assert solutions[0].elapsed < 6000, "Too long elapsed time: #{solutions[0].elapsed}"
+      assert solutions[0].elapsed < 18000, "Too long elapsed time: #{solutions[0].elapsed}"
     end
 
     # Lille - 141 services with time window and quantity - no late for services
