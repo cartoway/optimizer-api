@@ -406,13 +406,23 @@ module Interpreters
       return if skipped_service_ids.empty?
 
       reason = RESOLUTION_DEADLINE_UNASSIGNED_REASON
+      already_handled_service_ids =
+        node_solution.routes.flat_map{ |route| route.stops.filter_map(&:service_id) } |
+        node_solution.unassigned_stops.filter_map(&:service_id)
+
       unassigned_with_reason =
-        vrp.services.select{ |service| skipped_service_ids.include?(service.id) }.map{ |service|
+        vrp.services.select{ |service|
+          skipped_service_ids.include?(service.id) && already_handled_service_ids.exclude?(service.id)
+        }.map{ |service|
           Struct.new(:id, :reason).new(service.id, reason)
         }
-      node_solution.unassigned_stops += vrp.unassigned_visits(unassigned_with_reason)
+      return if unassigned_with_reason.empty?
 
-      log "dicho - #{skipped_service_ids.size} services from #{skipped_sub_service_vrps.size} skipped child " \
+      # unassigned_visits returns a stop for every service on the VRP; keep only explicit skips.
+      node_solution.unassigned_stops +=
+        vrp.unassigned_visits(unassigned_with_reason).select(&:reason)
+
+      log "dicho - #{unassigned_with_reason.size} services from #{skipped_sub_service_vrps.size} skipped child " \
           'sub problem(s) marked unassigned (resolution deadline)',
           level: :warn
     end
