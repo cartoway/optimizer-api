@@ -30,6 +30,8 @@ require './util/job_manager.rb'
 module Interpreters
   class Dichotomous
     MIN_DICHO_SOLVE_DURATION_MS = 150
+    RESOLUTION_DEADLINE_UNASSIGNED_REASON =
+      'Resolution time budget exhausted before this sub problem could be solved'.freeze
 
     def self.dicho_time_budget_active?(service_vrp)
       !service_vrp.resolution_time_budget_ms.nil?
@@ -264,10 +266,12 @@ module Interpreters
       allocate_children_time_budget!(service_vrp, sub_service_vrps) if dicho_time_budget_active?(service_vrp)
 
       solutions = []
+      skipped_sub_service_vrps = []
       DichoLevelTimings.measure(dicho_data, level, :children_ms) {
         sub_service_vrps.each_with_index{ |sub_service_vrp, index|
           if DichoEndStageSolver.resolution_deadline_reached?(service_vrp)
             log 'dicho - resolution deadline reached, skipping remaining child', level: :warn
+            skipped_sub_service_vrps = sub_service_vrps[index..]
             break
           end
 
@@ -324,7 +328,7 @@ module Interpreters
 
           transfer_unused_vehicles(child_solution, sub_service_vrps) if index.zero? && child_solution
 
-          solutions << child_solution
+          solutions << child_solution if child_solution
         }
       }
       valid_solutions = solutions.compact
@@ -334,6 +338,7 @@ module Interpreters
         when 1 then valid_solutions.first
         else valid_solutions.reduce(&:+)
         end
+      append_skipped_children_as_unassigned!(node_solution, service_vrp, skipped_sub_service_vrps) if node_solution
       return parent_node_solution unless node_solution
 
       log "dicho - level(#{level}) before remove_bad_skills unassigned rate " \
@@ -377,6 +382,39 @@ module Interpreters
           "#{node_solution.unassigned_stops.size}/#{service_vrp.vrp.services.size}: " \
           "#{(node_solution.unassigned_stops.size.to_f / service_vrp.vrp.services.size * 100).round(1)}%"
       node_solution
+    end
+
+    def self.merge_dicho_children_solutions(service_vrp, solutions, skipped_sub_service_vrps = [])
+      partial_solutions = solutions.compact
+      node_solution =
+        if partial_solutions.empty?
+          service_vrp.vrp.empty_solution(service_vrp.service)
+        else
+          partial_solutions.reduce(&:+)
+        end
+
+      append_skipped_children_as_unassigned!(node_solution, service_vrp, skipped_sub_service_vrps)
+      node_solution
+    end
+
+    def self.append_skipped_children_as_unassigned!(node_solution, service_vrp, skipped_sub_service_vrps)
+      return if skipped_sub_service_vrps.empty?
+
+      vrp = service_vrp.vrp
+      skipped_service_ids =
+        skipped_sub_service_vrps.flat_map{ |sub_service_vrp| sub_service_vrp.vrp.services.map(&:id) }.uniq
+      return if skipped_service_ids.empty?
+
+      reason = RESOLUTION_DEADLINE_UNASSIGNED_REASON
+      unassigned_with_reason =
+        vrp.services.select{ |service| skipped_service_ids.include?(service.id) }.map{ |service|
+          Struct.new(:id, :reason).new(service.id, reason)
+        }
+      node_solution.unassigned_stops += vrp.unassigned_visits(unassigned_with_reason)
+
+      log "dicho - #{skipped_service_ids.size} services from #{skipped_sub_service_vrps.size} skipped child " \
+          'sub problem(s) marked unassigned (resolution deadline)',
+          level: :warn
     end
 
     def self.transfer_unused_vehicles(solution, sub_service_vrps)
