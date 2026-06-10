@@ -257,8 +257,6 @@ module Wrappers
     end
 
     def collect_jobs(vrp, vrp_skills, vrp_units)
-      all_units = vrp.units.index_by(&:id)
-
       @object_id_map ||= {}
       # ignore the services with a shipment relation
       vrp.services.select{ |s| s.relations.none?{ |r| r.type == :shipment } }.map{ |service|
@@ -266,10 +264,12 @@ module Wrappers
         index = @object_id_map.size
         @object_id_map[index] = service
 
-        delivery_hash = all_units.map { |id, _| [id, 0] }.to_h
-        pickup_hash = all_units.map { |id, _| [id, 0] }.to_h
+        delivery_hash = vrp_units.map { |unit| [unit.id, 0] }.to_h
+        pickup_hash = vrp_units.map { |unit| [unit.id, 0] }.to_h
 
         service.quantities.each { |quantity|
+          next unless delivery_hash.key?(quantity.unit_id)
+
           delivery_hash[quantity.unit_id] = (quantity.delivery * CUSTOM_QUANTITY_BIGNUM).round if quantity.delivery
           pickup_hash[quantity.unit_id] = (quantity.pickup * CUSTOM_QUANTITY_BIGNUM).round if quantity.pickup
 
@@ -293,8 +293,8 @@ module Wrappers
             [timewindow.start - service.activity.setup_duration,
              (timewindow.end || 2**30) - service.activity.setup_duration]
           },
-          delivery: delivery_hash.values,
-          pickup: pickup_hash.values
+          delivery: vrp_units.map { |unit| delivery_hash[unit.id] },
+          pickup: vrp_units.map { |unit| pickup_hash[unit.id] }
         }.delete_if{ |_k, v|
           v.nil? || v.is_a?(Array) && v.empty?
         }
