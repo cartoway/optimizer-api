@@ -317,6 +317,34 @@ class Wrappers::PyVRPTest < Minitest::Test
     OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
   end
 
+  def test_clients_pickup_delivery_aligned_with_vehicle_capacity
+    problem = VRP.basic
+    problem[:units] << { id: 'l' }
+    problem[:services].each{ |service|
+      service[:quantities] = [
+        { unit_id: 'kg', delivery: 1 },
+        { unit_id: 'l', pickup: 2 }
+      ]
+    }
+    problem[:vehicles].each{ |vehicle|
+      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3 }, { unit_id: 'l', limit: 0 }]
+    }
+
+    pyvrp = Wrappers::PyVRP.new
+    pyvrp.stub(
+      :run_pyvrp, lambda{ |pyvrp_vrp, _timeout|
+        capacity_size = pyvrp_vrp[:vehicle_types].first[:capacity].size
+        pyvrp_vrp[:clients].each{ |client|
+          assert_equal capacity_size, client[:delivery].size
+          assert_equal capacity_size, client[:pickup].size
+        }
+        nil
+      }
+    ) do
+      @pyvrp.solve(TestHelper.create(problem))
+    end
+  end
+
   def test_partially_nil_capacities
     problem = VRP.basic
     problem[:services].each{ |service|

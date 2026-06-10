@@ -583,6 +583,35 @@ class Wrappers::VroomTest < Minitest::Test
     assert_equal 55, vehicles_payload_sym.first[:departure]
   end
 
+  def test_jobs_pickup_delivery_aligned_with_vehicle_capacity
+    problem = VRP.basic
+    problem[:units] << { id: 'l' }
+    problem[:services].each{ |service|
+      service[:quantities] = [
+        { unit_id: 'kg', delivery: 1 },
+        { unit_id: 'l', pickup: 2 }
+      ]
+    }
+    # Only kg has a vehicle capacity; l is declared on services but excluded from vrp_units.
+    problem[:vehicles].each{ |vehicle|
+      vehicle[:capacities] = [{ unit_id: 'kg', limit: 3 }]
+    }
+
+    vroom = Wrappers::Vroom.new
+    vroom.stub(
+      :run_vroom, lambda{ |vroom_vrp, _job|
+        capacity_size = vroom_vrp[:vehicles].first[:capacity].size
+        vroom_vrp[:jobs].each{ |job|
+          assert_equal capacity_size, job[:delivery].size
+          assert_equal capacity_size, job[:pickup].size
+        }
+        nil
+      }
+    ) do
+      @vroom.solve(TestHelper.create(problem))
+    end
+  end
+
   def test_partially_nil_capacities
     problem = VRP.basic
     problem[:services].each{ |service|
