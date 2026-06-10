@@ -498,6 +498,54 @@ class DichotomousTest < Minitest::Test
                    Interpreters::DichoResolutionTimings.for_dicho_data(service_vrp.dicho_data)[:end_stage_skipped_count]
     end
 
+    def test_skipped_child_on_deadline_preserves_visit_count
+      vrp_data = VRP.lat_lon
+      vrp_data[:configuration][:resolution][:duration] = 60_000
+      vrp_data[:services] = vrp_data[:services].first(8)
+      vrp_data[:vehicles] << vrp_data[:vehicles].first.dup
+      vrp_data[:vehicles].last[:id] = 'v_1'
+
+      problem = TestHelper.create(vrp_data)
+      assert_operator problem.vehicles.size, :>, 1, 'Dicho split requires at least two vehicles'
+      assert_operator problem.services.size, :>, 5, 'Dicho split requires more services than dicho_division_service_limit'
+      problem.configuration.resolution.dicho_algorithm_vehicle_limit = 1
+      problem.configuration.resolution.dicho_division_vehicle_limit = 1
+      problem.configuration.resolution.dicho_algorithm_service_limit = 5
+      problem.configuration.resolution.dicho_division_service_limit = 5
+
+      parent = Models::ResolutionContext.new(
+        vrp: problem,
+        service: :ortools,
+        dicho_level: 0,
+        dicho_sides: [],
+        dicho_denominators: []
+      )
+      children = Interpreters::Dichotomous.send(:split, parent)
+      assert_equal 2, children.size
+      assert_equal problem.services.size, (children.sum{ |child| child.vrp.services.size })
+
+      first_child = children.first.vrp
+      route = problem.empty_route(first_child.vehicles.first)
+      first_child.services.each{ |service| route.stops << Models::Solution::Stop.new(service) }
+      first_child_solution = Models::Solution.new(routes: [route], unassigned_stops: [])
+
+      merged =
+        Interpreters::Dichotomous.send(
+          :merge_dicho_children_solutions,
+          parent,
+          [first_child_solution],
+          [children.last]
+        )
+
+      Core::Components::Solution.check_solutions_consistency(problem.visits, [merged])
+      assert_equal children.last.vrp.services.size, merged.count_unassigned_services
+      assert(
+        merged.unassigned_stops.all?{ |stop|
+          stop.reason == Interpreters::Dichotomous::RESOLUTION_DEADLINE_UNASSIGNED_REASON
+        }
+      )
+    end
+
     def test_dichotomous_approach_transfer_unused_vehicles_transfers_points_correctly
       vrp = VRP.lat_lon
       vrp[:configuration][:resolution][:duration] = 6
