@@ -289,7 +289,7 @@ module Wrappers
           setup: service.activity.setup_duration,
           skills: collect_skills(service, vrp_skills),
           priority: job_priority_for(service),
-          time_windows: service.activity.timewindows[0..0].map{ |timewindow|
+          time_windows: service.activity.timewindows.map{ |timewindow|
             [timewindow.start - service.activity.setup_duration,
              (timewindow.end || 2**30) - service.activity.setup_duration]
           },
