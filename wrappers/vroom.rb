@@ -185,6 +185,7 @@ module Wrappers
 
       times = {
         begin_time: begin_time,
+        waiting_time: step['waiting_time'],
         end_time: begin_time && (begin_time + step['service']),
         departure_time: begin_time && (begin_time + step['service'])
       }
@@ -216,6 +217,7 @@ module Wrappers
       times = {
         begin_time: begin_time,
         end_time: begin_time && (begin_time + act_step['service']),
+        waiting_time: act_step['waiting_time'],
         departure_time: begin_time && (begin_time + act_step['service'])
       }.merge(route_data)
       loads =
