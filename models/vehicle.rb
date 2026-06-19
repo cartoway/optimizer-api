@@ -198,6 +198,8 @@ module Models
         track: track,
         motorway: motorway,
         toll: toll,
+        low_emission_zone: low_emission_zone,
+        large_light_vehicle: large_light_vehicle,
         trailers: trailers,
         weight: weight,
         weight_per_axle: weight_per_axle,
