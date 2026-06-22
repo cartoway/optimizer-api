@@ -230,6 +230,14 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
     Models::Vrp.create(coerce(Oj.load(Oj.dump(problem), symbol_keys: true)))
   end
 
+  # Matrix dumps key on router options; merge with current Vehicle defaults so older
+  # dumps remain valid when router_options gains new fields (e.g. low_emission_zone).
+  def self.retrocompatible_matrix_dump_options(options)
+    Models::Vehicle.new(id: '_matrix_dump_template').router_options.merge(
+      options.transform_keys(&:to_sym)
+    )
+  end
+
   def self.matrices_required(vrps, filename)
     return if vrps.all?{ |vrp| vrp.matrices.any? }
 
@@ -272,13 +280,17 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
 
             corresponding_data =
               { column: uniq_column, dimensions: dimensions,
-                matrices: matrices, mode: mode, options: options, row: uniq_row, url: url }
+                matrices: matrices, mode: mode,
+                options: TestHelper.retrocompatible_matrix_dump_options(options), row: uniq_row, url: url }
 
             write_in_dump << corresponding_data
           else
+            normalized_options = TestHelper.retrocompatible_matrix_dump_options(options)
             corresponding_data =
               dumped_data.find{ |dumped|
-                dumped[:mode] == mode && dumped[:options] == options && (dimensions - dumped[:dimensions]).empty? &&
+                dumped[:mode] == mode &&
+                  TestHelper.retrocompatible_matrix_dump_options(dumped[:options]) == normalized_options &&
+                  (dimensions - dumped[:dimensions]).empty? &&
                   (uniq_row - dumped[:row]).empty? && (uniq_column - dumped[:column]).empty?
               }
             raise 'Could not find matrix in the dump' unless corresponding_data
