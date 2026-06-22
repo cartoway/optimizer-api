@@ -120,5 +120,25 @@ module Models
       assert v1.skills.first.first.is_a?(Symbol)
       assert v1.as_json[:skills].first.first.is_a?(Symbol)
     end
+
+    def test_router_options_matches_router_api_matrix_params
+      vehicle = Models::Vehicle.create(
+        id: 'vehicle_0',
+        low_emission_zone: false,
+        large_light_vehicle: false
+      )
+
+      router_api_options = %i[
+        traffic departure speed_multiplier area speed_multiplier_area
+        track motorway toll low_emission_zone large_light_vehicle
+        trailers weight weight_per_axle height width length
+        hazardous_goods max_walk_distance approach snap strict_restriction
+      ]
+
+      assert_equal router_api_options.sort, vehicle.router_options.keys.sort
+      refute vehicle.router_options[:low_emission_zone]
+      refute vehicle.router_options[:large_light_vehicle]
+      assert_nil vehicle.router_options[:approach]
+    end
   end
 end
