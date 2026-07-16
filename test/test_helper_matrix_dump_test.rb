@@ -1,4 +1,4 @@
-# Copyright © Mapotempo, 2026
+# Copyright © Cartoway, 2026
 require './test/test_helper'
 
 class TestHelperMatrixDumpTest < Minitest::Test
