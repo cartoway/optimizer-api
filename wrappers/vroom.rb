@@ -46,7 +46,7 @@ module Wrappers
         :assert_points_same_definition,
 
         # Vehicle/route constraints
-        :assert_no_ride_constraint,
+        :assert_possible_to_get_distances_if_maximum_ride_distance,
         :assert_no_service_duration_modifiers,
         :assert_vehicles_no_capacity_initial,
         :assert_vehicles_no_force_start,
@@ -356,12 +356,16 @@ module Wrappers
       }
     end
 
+    def vroom_profile_for(vehicle)
+      (@vehicle_profile_by_id || {}).fetch(vehicle.id){ "m#{vehicle.matrix_id}" }
+    end
+
     def collect_vehicles(vrp, vrp_skills, vrp_units)
       vrp.vehicles.map.with_index{ |vehicle, index|
         vehicle_payload =
           {
             id: index,
-            profile: "m#{vehicle.matrix_id}",
+            profile: vroom_profile_for(vehicle),
             start_index: vehicle.start_point&.matrix_index,
             end_index: vehicle.end_point&.matrix_index,
             capacity: vrp_units.map{ |unit|
@@ -401,6 +405,7 @@ module Wrappers
       problem = { vehicles: [], jobs: [], matrices: [] }
       @object_id_map = {}
       @total_quantities = Hash.new { 0 }
+      @vehicle_profile_by_id = {}
       # WARNING: only first alternative set of skills is used
       vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
       vrp_units =
@@ -412,20 +417,121 @@ module Wrappers
           }&.compact&.max&.positive?
         }
       problem[:jobs] = collect_jobs(vrp, vrp_skills, vrp_units)
-      problem[:vehicles] = collect_vehicles(vrp, vrp_skills, vrp_units)
       problem[:shipments] = collect_shipments(vrp, vrp_skills, vrp_units)
-      problem[:matrices] = {}
 
       # Reduce the unreachable value in the matrices to avoid VROOM overflow
-      max_end = problem[:vehicles].map{ |vehicle| vehicle[:time_window]&.last || 2**20 }.max + 1
-      vrp.matrices.each{ |m|
-        problem[:matrices]["m#{m.id}"] = {
-          durations: m.integer_time(max_end),
-          distances: m.integer_distance(max_end)
-        }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
-      }
+      max_end = vrp.vehicles.map{ |vehicle| vehicle.timewindow&.end || 2**20 }.max + 1
+      problem[:matrices] = build_vroom_matrix_profiles(vrp, max_end)
+      problem[:vehicles] = collect_vehicles(vrp, vrp_skills, vrp_units)
       problem.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       problem
+    end
+
+    # Approximate maximum_ride_time / maximum_ride_distance for VROOM by inflating
+    # inter-job matrix cells. Original matrices are kept for solution restitution.
+    def vehicle_needs_ride_matrix_deformation?(vehicle)
+      vehicle.maximum_ride_time&.positive? || vehicle.maximum_ride_distance&.positive?
+    end
+
+    def depot_matrix_indices(vehicles)
+      vehicles.flat_map{ |vehicle|
+        [vehicle.start_point, vehicle.end_point].compact
+      }.filter_map(&:matrix_index).to_set
+    end
+
+    def ride_time_penalty(vehicle, max_end)
+      tw_start = vehicle.timewindow&.start || 0
+      tw_end = vehicle.timewindow&.end || 2**30
+      amplitude = tw_end - tw_start
+      cap = vehicle.duration ? [amplitude, vehicle.duration].min : amplitude
+      [cap, max_end].max + 1
+    end
+
+    def matrix_max_cell_value(matrix)
+      return 0 if matrix.nil?
+
+      matrix.flatten.compact.max || 0
+    end
+
+    def ride_distance_penalty(vehicle, matrix, max_end)
+      max_cell = matrix_max_cell_value(matrix.distance)
+      base = [vehicle.distance || 0, max_cell * 10].max
+      [base, max_end].max + 1
+    end
+
+    def ride_matrix_group_key(vehicle, matrix, max_end)
+      {
+        matrix_id: vehicle.matrix_id,
+        maximum_ride_time: vehicle.maximum_ride_time,
+        maximum_ride_distance: vehicle.maximum_ride_distance,
+        ride_time_penalty: vehicle.maximum_ride_time&.positive? ? ride_time_penalty(vehicle, max_end) : nil,
+        ride_distance_penalty:
+          vehicle.maximum_ride_distance&.positive? ? ride_distance_penalty(vehicle, matrix, max_end) : nil
+      }
+    end
+
+    def deform_matrix_for_ride_constraints(matrix, group)
+      time = matrix.time&.map(&:dup)
+      distance = matrix.distance&.map(&:dup)
+      size = time&.size || distance&.size || 0
+      depot_indices = group[:depot_indices]
+
+      (0...size).each{ |i|
+        (0...size).each{ |j|
+          next if i == j
+          next if depot_indices.include?(i) || depot_indices.include?(j)
+
+          if time && group[:maximum_ride_time]&.positive? && time[i][j] > group[:maximum_ride_time]
+            time[i][j] = group[:ride_time_penalty]
+          end
+          if distance && group[:maximum_ride_distance]&.positive? &&
+             distance[i][j] > group[:maximum_ride_distance]
+            distance[i][j] = group[:ride_distance_penalty]
+          end
+        }
+      }
+
+      Models::Matrix.new(
+        time: time,
+        distance: distance,
+        value: matrix.value
+      )
+    end
+
+    def matrix_to_vroom_payload(matrix, max_end)
+      {
+        durations: matrix.integer_time(max_end),
+        distances: matrix.integer_distance(max_end)
+      }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
+    end
+
+    def build_vroom_matrix_profiles(vrp, max_end)
+      profiles = {}
+      matrices_by_id = vrp.matrices.index_by(&:id)
+
+      vrp.matrices.each{ |matrix|
+        profiles["m#{matrix.id}"] = matrix_to_vroom_payload(matrix, max_end)
+      }
+
+      vrp.vehicles.each{ |vehicle|
+        @vehicle_profile_by_id[vehicle.id] = "m#{vehicle.matrix_id}"
+      }
+
+      ride_vehicles = vrp.vehicles.select{ |vehicle| vehicle_needs_ride_matrix_deformation?(vehicle) }
+      ride_vehicles.group_by{ |vehicle|
+        ride_matrix_group_key(vehicle, matrices_by_id[vehicle.matrix_id], max_end)
+      }.each{ |group_key, vehicles|
+        matrix = matrices_by_id[group_key[:matrix_id]]
+        next unless matrix
+
+        group = group_key.merge(depot_indices: depot_matrix_indices(vehicles))
+        deformed = deform_matrix_for_ride_constraints(matrix, group)
+        profile_id = "m#{matrix.id}_ride_#{Digest::MD5.hexdigest(Oj.dump(group_key))[0, 8]}"
+        profiles[profile_id] = matrix_to_vroom_payload(deformed, max_end)
+        vehicles.each{ |vehicle| @vehicle_profile_by_id[vehicle.id] = profile_id }
+      }
+
+      profiles
     end
 
     def run_vroom(problem, _job, level = 0, timeout = nil)

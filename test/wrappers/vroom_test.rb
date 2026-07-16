@@ -696,4 +696,160 @@ class Wrappers::VroomTest < Minitest::Test
                  solution.routes.find{ |r| r[:vehicle_id] == problem[:vehicles].last[:id] }.stops.size
     assert_equal 0, solution.unassigned_stops.size
   end
+
+  def test_deform_matrix_skips_depot_legs
+    matrix = Models::Matrix.new(
+      time: [
+        [0, 10, 20],
+        [10, 0, 30],
+        [20, 30, 0]
+      ]
+    )
+    group = {
+      maximum_ride_time: 5,
+      maximum_ride_distance: nil,
+      ride_time_penalty: 100,
+      ride_distance_penalty: nil,
+      depot_indices: Set[0]
+    }
+
+    deformed = @vroom.send(:deform_matrix_for_ride_constraints, matrix, group)
+
+    assert_equal 10, deformed.time[0][1]
+    assert_equal 100, deformed.time[1][2]
+  end
+
+  def test_deform_matrix_inflates_inter_job_leg
+    matrix = Models::Matrix.new(
+      distance: [
+        [0, 100, 200],
+        [100, 0, 300],
+        [200, 300, 0]
+      ]
+    )
+    group = {
+      maximum_ride_time: nil,
+      maximum_ride_distance: 150,
+      ride_time_penalty: nil,
+      ride_distance_penalty: 1_000,
+      depot_indices: Set[0]
+    }
+
+    deformed = @vroom.send(:deform_matrix_for_ride_constraints, matrix, group)
+
+    assert_equal 200, deformed.distance[0][2]
+    assert_equal 1_000, deformed.distance[1][2]
+  end
+
+  def test_ride_matrix_profiles_shared_across_vehicles
+    problem = VRP.lat_lon_two_vehicles
+    problem[:vehicles].each{ |vehicle|
+      vehicle[:maximum_ride_time] = 600
+      vehicle[:matrix_id] = 'm1'
+    }
+    vrp = TestHelper.create(problem)
+    profiles = @vroom.send(:build_vroom_matrix_profiles, vrp, 2**20)
+
+    profile_ids = vrp.vehicles.map{ |vehicle| @vroom.instance_variable_get(:@vehicle_profile_by_id)[vehicle.id] }
+
+    assert_equal 1, profile_ids.uniq.size
+    refute_equal 'mm1', profile_ids.first
+    assert profiles[profile_ids.first][:durations]
+  end
+
+  def test_ride_matrix_profiles_split_on_different_max_ride
+    problem = VRP.lat_lon_two_vehicles
+    problem[:vehicles].first[:maximum_ride_time] = 600
+    problem[:vehicles].last[:maximum_ride_time] = 1_200
+    problem[:vehicles].each{ |vehicle| vehicle[:matrix_id] = 'm1' }
+    vrp = TestHelper.create(problem)
+    @vroom.send(:build_vroom_matrix_profiles, vrp, 2**20)
+
+    profile_ids = vrp.vehicles.map{ |vehicle| @vroom.instance_variable_get(:@vehicle_profile_by_id)[vehicle.id] }
+
+    assert_equal 2, profile_ids.uniq.size
+  end
+
+  def test_vroom_problem_deforms_matrix_for_maximum_ride_time
+    problem = VRP.basic
+    problem[:vehicles].first[:maximum_ride_time] = 3
+    vrp = TestHelper.create(problem)
+    problem_json = @vroom.send(:vroom_problem, vrp, [:time, :distance])
+    profile = problem_json[:vehicles].first[:profile]
+    durations = problem_json[:matrices][profile][:durations]
+
+    assert_equal 1, durations[1][2]
+    assert_operator durations[2][3], :>, 5
+    assert_equal 6, durations[1][0]
+  end
+
+  def test_maximum_ride_time_with_vroom_solver
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 4, 5],
+          [4, 0, 3],
+          [5, 3, 0]
+        ]
+      }],
+      points: [{
+        id: 'point_0',
+        matrix_index: 0
+      }, {
+        id: 'point_1',
+        matrix_index: 1
+      }, {
+        id: 'point_2',
+        matrix_index: 2
+      }],
+      vehicles: [{
+        id: 'vehicle_0',
+        matrix_id: 'matrix_0',
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        cost_time_multiplier: 1,
+        maximum_ride_time: 3
+      }],
+      services: [{
+        id: 'service_1',
+        activity: {
+          point_id: 'point_1'
+        }
+      }, {
+        id: 'service_2',
+        activity: {
+          point_id: 'point_2'
+        }
+      }],
+      configuration: {
+        resolution: {
+          duration: 100
+        }
+      }
+    }
+    vrp = TestHelper.create(problem)
+
+    refute_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+
+    solution = @vroom.solve(vrp)
+    assert solution
+
+    route = solution.routes.first
+    service_stops = route.stops.select(&:service_id)
+    assert_equal 2, service_stops.size
+
+    previous_index = nil
+    matrix = vrp.matrices.first.time
+
+    service_stops.each{ |stop|
+      current_index = stop.activity.point.matrix_index
+      if previous_index
+        assert_operator matrix[previous_index][current_index], :<=, 3,
+                        'Consecutive services should respect maximum_ride_time when feasible'
+      end
+      previous_index = current_index
+    }
+  end
 end
