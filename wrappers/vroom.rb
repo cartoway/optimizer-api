@@ -47,7 +47,6 @@ module Wrappers
 
         # Vehicle/route constraints
         :assert_possible_to_get_distances_if_maximum_ride_distance,
-        :assert_no_service_duration_modifiers,
         :assert_vehicles_no_capacity_initial,
         :assert_vehicles_no_force_start,
         :assert_vehicles_no_late_multiplier,
@@ -60,7 +59,6 @@ module Wrappers
         :assert_no_activity_with_position,
         :assert_no_empty_or_fill,
         :assert_no_exclusion_cost,
-        :assert_no_complex_setup_durations,
         :assert_services_no_late_multiplier,
         :assert_only_one_visit,
 
@@ -258,6 +256,58 @@ module Wrappers
         end
     end
 
+    def duration_modifier_signature(vehicle)
+      [
+        vehicle.coef_service || 1,
+        vehicle.additional_service.to_i,
+        vehicle.coef_setup || 1,
+        vehicle.additional_setup.to_i
+      ]
+    end
+
+    def default_duration_modifier_signature?(signature)
+      coef_service, additional_service, coef_setup, additional_setup = signature
+      coef_service == 1 && additional_service.zero? && coef_setup == 1 && additional_setup.zero?
+    end
+
+    def init_duration_types(vrp)
+      @duration_type_by_signature = {}
+      @vehicle_by_duration_signature = {}
+      signatures = vrp.vehicles.map{ |vehicle| duration_modifier_signature(vehicle) }.uniq
+      return if signatures.all?{ |signature| default_duration_modifier_signature?(signature) }
+
+      signatures.each_with_index{ |signature, index|
+        @duration_type_by_signature[signature] = "t#{index}"
+      }
+      vrp.vehicles.each{ |vehicle|
+        signature = duration_modifier_signature(vehicle)
+        @vehicle_by_duration_signature[signature] ||= vehicle
+      }
+    end
+
+    def duration_type_for(vehicle)
+      return nil if @duration_type_by_signature.nil? || @duration_type_by_signature.empty?
+
+      @duration_type_by_signature[duration_modifier_signature(vehicle)]
+    end
+
+    def activity_durations(activity)
+      durations = {
+        service: activity.duration,
+        setup: activity.setup_duration
+      }
+      return durations if @duration_type_by_signature.nil? || @duration_type_by_signature.empty?
+
+      service_per_type = {}
+      setup_per_type = {}
+      @duration_type_by_signature.each{ |signature, type|
+        vehicle = @vehicle_by_duration_signature[signature]
+        service_per_type[type] = activity.duration_on(vehicle).round
+        setup_per_type[type] = activity.setup_duration_on(vehicle).round
+      }
+      durations.merge(service_per_type: service_per_type, setup_per_type: setup_per_type)
+    end
+
     def collect_jobs(vrp, vrp_skills, vrp_units)
       @object_id_map ||= {}
       # ignore the services with a shipment relation
@@ -287,8 +337,6 @@ module Wrappers
         {
           id: index,
           location_index: service.activity.point.matrix_index,
-          service: service.activity.duration,
-          setup: service.activity.setup_duration,
           skills: collect_skills(service, vrp_skills),
           priority: job_priority_for(service),
           time_windows: service.activity.timewindows.map{ |timewindow|
@@ -297,7 +345,7 @@ module Wrappers
           },
           delivery: vrp_units.map { |unit| delivery_hash[unit.id] },
           pickup: vrp_units.map { |unit| pickup_hash[unit.id] }
-        }.delete_if{ |_k, v|
+        }.merge(activity_durations(service.activity)).delete_if{ |_k, v|
           v.nil? || v.is_a?(Array) && v.empty?
         }
       }
@@ -333,24 +381,22 @@ module Wrappers
         priority: (100 * (8 - pickup_service.priority).to_f / 8).to_i,
         pickup: {
           id: pickup_index,
-          service: pickup_service.activity.duration,
-          setup: pickup_service.activity.setup_duration,
           location_index: pickup_service.activity.point.matrix_index,
           time_windows: pickup_service.activity.timewindows.map{ |tw|
             [tw.start - pickup_service.activity.setup_duration,
              (tw.end || 2**30) - pickup_service.activity.setup_duration]
           }
-        }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? },
+        }.merge(activity_durations(pickup_service.activity))
+          .delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? },
         delivery: {
           id: delivery_index,
-          service: delivery_service.activity.duration,
-          setup: delivery_service.activity.setup_duration,
           location_index: delivery_service.activity.point.matrix_index,
           time_windows: delivery_service.activity.timewindows.map{ |tw|
             [tw.start - delivery_service.activity.setup_duration,
              (tw.end || 2**30) - delivery_service.activity.setup_duration]
           }
-        }.delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
+        }.merge(activity_durations(delivery_service.activity))
+          .delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       }.delete_if{ |_k, v|
         v.nil? || v.is_a?(Array) && v.empty?
       }
@@ -365,6 +411,7 @@ module Wrappers
         vehicle_payload =
           {
             id: index,
+            type: duration_type_for(vehicle),
             profile: vroom_profile_for(vehicle),
             start_index: vehicle.start_point&.matrix_index,
             end_index: vehicle.end_point&.matrix_index,
@@ -406,6 +453,7 @@ module Wrappers
       @object_id_map = {}
       @total_quantities = Hash.new { 0 }
       @vehicle_profile_by_id = {}
+      init_duration_types(vrp)
       # WARNING: only first alternative set of skills is used
       vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
       vrp_units =

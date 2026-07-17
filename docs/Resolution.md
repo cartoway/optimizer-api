@@ -58,11 +58,11 @@ In order to select which solver will be used, we have created several assert. If
 * **assert_services_no_priority**:
  *Vroom*. The Services have no priority or a priority equal to 4 (which is the value by default).
 * **assert_no_service_duration_modifiers**
- *Vroom*. The `duration` and `setup_duration` should not have coefficient or additionnal duration relative to the vehicles.
+ *PyVRP*. The `duration` and `setup_duration` should not have coefficient or additionnal duration relative to the vehicles. *(VROOM supports these via `service_per_type` / `setup_per_type`.)*
 * **assert_no_exclusion_cost**
  *Vroom*. The exclusion cost of services should not be provided.
 * **assert_no_complex_setup_durations**
- *Vroom*. The `setup_duration` should not be different for multiple services at the same point. Neither the coefficient and additionnal setup duration should not be provided.
+ *PyVRP*. The `setup_duration` should not be different for multiple services at the same point. Neither the coefficient and additionnal setup duration should not be provided. *(VROOM supports setup natively and via `setup_per_type`.)*
 
 #### Points
 * **assert_points_same_definition**:

@@ -852,4 +852,57 @@ class Wrappers::VroomTest < Minitest::Test
       previous_index = current_index
     }
   end
+
+  def test_duration_modifiers_via_service_and_setup_per_type
+    problem = VRP.basic
+    problem[:vehicles] << problem[:vehicles].first.dup
+    problem[:vehicles].last[:id] = 'vehicle_1'
+    problem[:vehicles].first[:coef_service] = 2
+    problem[:vehicles].first[:coef_setup] = 2
+    problem[:vehicles].first[:additional_service] = 10
+    problem[:vehicles].first[:additional_setup] = 5
+    problem[:vehicles].last[:coef_service] = 1.5
+    problem[:vehicles].last[:coef_setup] = 3
+    problem[:services].each{ |service|
+      service[:activity][:duration] = 100
+      service[:activity][:setup_duration] = 20
+    }
+
+    vrp = TestHelper.create(problem)
+    refute_includes @vroom.inapplicable_solve?(vrp), :assert_no_service_duration_modifiers
+    refute_includes @vroom.inapplicable_solve?(vrp), :assert_no_complex_setup_durations
+
+    vroom_vrp = Wrappers::Vroom.new.send(:vroom_problem, vrp, [:time, :distance])
+
+    types = vroom_vrp[:vehicles].map{ |vehicle| vehicle[:type] }
+    assert_equal 2, types.uniq.size
+    assert(types.all?)
+
+    job = vroom_vrp[:jobs].first
+    assert_equal 100, job[:service]
+    assert_equal 20, job[:setup]
+
+    vehicle0 = vrp.vehicles.first
+    vehicle1 = vrp.vehicles.last
+    type0 = vroom_vrp[:vehicles].first[:type]
+    type1 = vroom_vrp[:vehicles].last[:type]
+    activity = vrp.services.first.activity
+
+    assert_equal activity.duration_on(vehicle0).round, job[:service_per_type][type0]
+    assert_equal activity.duration_on(vehicle1).round, job[:service_per_type][type1]
+    assert_equal activity.setup_duration_on(vehicle0).round, job[:setup_per_type][type0]
+    assert_equal activity.setup_duration_on(vehicle1).round, job[:setup_per_type][type1]
+    assert_equal 210, job[:service_per_type][type0]
+    assert_equal 150, job[:service_per_type][type1]
+    assert_equal 45, job[:setup_per_type][type0]
+    assert_equal 60, job[:setup_per_type][type1]
+  end
+
+  def test_no_duration_per_type_without_modifiers
+    vrp = TestHelper.create(VRP.basic)
+    vroom_vrp = Wrappers::Vroom.new.send(:vroom_problem, vrp, [:time, :distance])
+
+    assert(vroom_vrp[:vehicles].none?{ |vehicle| vehicle.key?(:type) })
+    assert(vroom_vrp[:jobs].none?{ |job| job.key?(:service_per_type) || job.key?(:setup_per_type) })
+  end
 end
