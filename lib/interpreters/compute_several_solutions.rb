@@ -255,6 +255,17 @@ module Interpreters
       several_service_vrps
     end
 
+    def self.unassigned_priority_penalty(vrp, solution)
+      solution.unassigned_stops.sum do |stop|
+        next 0 unless stop.service_id
+
+        service = vrp.services.find{ |s| s.id == stop.service_id }
+        priority = service&.priority || 4
+        # Same scaling as OR-Tools disjunction penalties in optimizer-ortools missions_builder.
+        2**(4 - priority)
+      end
+    end
+
     def self.find_best_heuristic(service_vrp)
       vrp = service_vrp.vrp
       custom_heuristics = collect_heuristics(vrp, vrp.configuration.preprocessing.first_solution_strategy)
@@ -309,12 +320,15 @@ module Interpreters
 
         synthesis = []
         first_results.each_with_index{ |solution, i|
+          priority_penalty = solution.nil? ? Float::MAX : unassigned_priority_penalty(vrp, solution)
           synthesis << {
             heuristic: custom_heuristics[i],
-            # If the cost is 0 we might want to set it to Float::MAX because 0 cost is not possible.
+            # Weight unassigned services by priority (lower priority value = higher penalty),
+            # then break ties on raw unassigned count, solver cost, and elapsed time.
             quality: solution.nil? ?
                       [Float::MAX] :
-                      [solution.unassigned_stops&.size.to_i, solution.cost.to_i, elapsed_times[i]],
+                      [priority_penalty, solution.unassigned_stops&.size.to_i, solution.cost.to_i, elapsed_times[i]],
+            priority_penalty: priority_penalty,
             used: false,
             cost: solution ? solution.cost : nil,
             time_spent: elapsed_times[i],
@@ -390,11 +404,6 @@ module Interpreters
       # TODO: The conditions below should be reworked
       if vehicles.any?(&:overall_duration)
         verified('christofides')
-      elsif vehicles.any?{ |vehicle|
-              vehicle.force_start ||
-              vehicle.shift_preference && vehicle.shift_preference == 'force_start'
-            }
-        verified('path_cheapest_arc')
       elsif loop_route && unique_configuration &&
             (vehicles.any?(&:duration) && vehicles.size == 1 ||
             size_mtws.to_f / services.map(&:visits_number).sum > 0.2 && size_rest.zero?)
