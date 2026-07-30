@@ -721,6 +721,11 @@ class Wrappers::VroomTest < Minitest::Test
 
   def test_deform_matrix_inflates_inter_job_leg
     matrix = Models::Matrix.new(
+      time: [
+        [0, 10, 20],
+        [10, 0, 30],
+        [20, 30, 0]
+      ],
       distance: [
         [0, 100, 200],
         [100, 0, 300],
@@ -730,15 +735,48 @@ class Wrappers::VroomTest < Minitest::Test
     group = {
       maximum_ride_time: nil,
       maximum_ride_distance: 150,
-      ride_time_penalty: nil,
+      deform_distance: false,
+      ride_time_penalty: 100,
       ride_distance_penalty: 1_000,
-      depot_indices: Set[0]
+      depot_indices: Set[0],
+      max_end: 1_000
     }
 
     deformed = @vroom.send(:deform_matrix_for_ride_constraints, matrix, group)
 
     assert_equal 200, deformed.distance[0][2]
+    assert_equal 300, deformed.distance[1][2]
+    assert_equal 10, deformed.time[0][1]
+    assert_equal 1_000, deformed.time[1][2]
+  end
+
+  def test_deform_matrix_inflates_distance_when_distance_cost
+    matrix = Models::Matrix.new(
+      time: [
+        [0, 10, 20],
+        [10, 0, 30],
+        [20, 30, 0]
+      ],
+      distance: [
+        [0, 100, 200],
+        [100, 0, 300],
+        [200, 300, 0]
+      ]
+    )
+    group = {
+      maximum_ride_time: nil,
+      maximum_ride_distance: 150,
+      deform_distance: true,
+      ride_time_penalty: 100,
+      ride_distance_penalty: 1_000,
+      depot_indices: Set[0],
+      max_end: 1_000
+    }
+
+    deformed = @vroom.send(:deform_matrix_for_ride_constraints, matrix, group)
+
     assert_equal 1_000, deformed.distance[1][2]
+    assert_equal 1_000, deformed.time[1][2]
   end
 
   def test_ride_matrix_profiles_shared_across_vehicles
@@ -781,6 +819,168 @@ class Wrappers::VroomTest < Minitest::Test
     assert_equal 1, durations[1][2]
     assert_operator durations[2][3], :>, 5
     assert_equal 6, durations[1][0]
+  end
+
+  def test_vroom_problem_deforms_matrix_for_maximum_ride_distance
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 4, 5, 5],
+          [6, 0, 1, 5],
+          [1, 2, 0, 5],
+          [5, 5, 5, 0]
+        ],
+        distance: [
+          [0, 100, 3, 3],
+          [100, 0, 1000, 1000],
+          [3, 1000, 0, 3],
+          [3, 1000, 3, 0]
+        ]
+      }],
+      points: (0..3).map { |i| { id: "point_#{i}", matrix_index: i } },
+      vehicles: [{
+        id: 'vehicle_0',
+        matrix_id: 'matrix_0',
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        cost_time_multiplier: 1,
+        cost_distance_multiplier: 0,
+        maximum_ride_distance: 4
+      }],
+      services: (1..3).map { |i|
+        { id: "service_#{i}", activity: { point_id: "point_#{i}" } }
+      },
+      configuration: {
+        resolution: { duration: 100 },
+        restitution: { intermediate_solutions: false }
+      }
+    }
+    vrp = TestHelper.create(problem)
+    problem_json = @vroom.send(:vroom_problem, vrp, [:time, :distance])
+    profile = problem_json[:vehicles].first[:profile]
+    durations = problem_json[:matrices][profile][:durations]
+    distances = problem_json[:matrices][profile][:distances]
+
+    assert_equal 6, durations[1][0]
+    assert_operator durations[1][2], :>, 5
+    assert_equal 1000, distances[1][2]
+  end
+
+  def test_vroom_problem_deforms_distance_for_maximum_ride_distance_when_distance_cost
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 4, 5, 5],
+          [6, 0, 1, 5],
+          [1, 2, 0, 5],
+          [5, 5, 5, 0]
+        ],
+        distance: [
+          [0, 100, 3, 3],
+          [100, 0, 1000, 1000],
+          [3, 1000, 0, 3],
+          [3, 1000, 3, 0]
+        ]
+      }],
+      points: (0..3).map { |i| { id: "point_#{i}", matrix_index: i } },
+      vehicles: [{
+        id: 'vehicle_0',
+        matrix_id: 'matrix_0',
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        cost_time_multiplier: 0,
+        cost_distance_multiplier: 1,
+        maximum_ride_distance: 4
+      }],
+      services: (1..3).map { |i|
+        { id: "service_#{i}", activity: { point_id: "point_#{i}" } }
+      },
+      configuration: {
+        resolution: { duration: 100 },
+        restitution: { intermediate_solutions: false }
+      }
+    }
+    vrp = TestHelper.create(problem)
+    problem_json = @vroom.send(:vroom_problem, vrp, [:time, :distance])
+    profile = problem_json[:vehicles].first[:profile]
+    distances = problem_json[:matrices][profile][:distances]
+
+    assert_operator distances[1][2], :>, 100
+  end
+
+  def test_maximum_ride_distance_with_vroom_solver_multi_vehicle
+    problem = {
+      matrices: [{
+        id: 'matrix_0',
+        time: [
+          [0, 1000, 1, 1],
+          [1000, 0, 1000, 1000],
+          [1, 1000, 0, 1],
+          [1, 1000, 1, 0]
+        ],
+        distance: [
+          [0, 1000, 3, 3],
+          [1000, 0, 1000, 1000],
+          [3, 1000, 0, 3],
+          [3, 1000, 3, 0]
+        ]
+      }],
+      points: (0..3).map { |i| { id: "point_#{i}", matrix_index: i } },
+      vehicles: [{
+        id: 'vehicle_0',
+        matrix_id: 'matrix_0',
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        cost_time_multiplier: 1,
+        cost_distance_multiplier: 0,
+        maximum_ride_distance: 4
+      }, {
+        id: 'vehicle_1',
+        matrix_id: 'matrix_0',
+        start_point_id: 'point_0',
+        end_point_id: 'point_0',
+        cost_time_multiplier: 1,
+        cost_distance_multiplier: 0,
+        maximum_ride_distance: 4
+      }],
+      services: (1..3).map { |i|
+        { id: "service_#{i}", activity: { point_id: "point_#{i}" } }
+      },
+      configuration: {
+        resolution: { duration: 30_000 },
+        restitution: { intermediate_solutions: false }
+      }
+    }
+    vrp = TestHelper.create(problem)
+
+    refute_includes OptimizerWrapper.config[:services][:vroom].inapplicable_solve?(vrp),
+                    :assert_no_ride_constraint
+
+    problem_json = @vroom.send(:vroom_problem, vrp, [:time, :distance])
+    profile = problem_json[:vehicles].first[:profile]
+    assert_operator problem_json[:matrices][profile][:durations][1][2], :>, 1000
+    refute problem_json[:vehicles].first[:costs].key?(:per_km)
+
+    solution = @vroom.solve(vrp)
+    assert solution
+
+    distance_matrix = vrp.matrices.first.distance
+    max_ride = problem[:vehicles].first[:maximum_ride_distance]
+
+    solution.routes.each do |route|
+      service_stops = route.stops.select(&:service_id)
+      previous_index = nil
+      service_stops.each do |stop|
+        current_index = stop.activity.point.matrix_index
+        if previous_index
+          assert_operator distance_matrix[previous_index][current_index], :<=, max_ride,
+                          'Consecutive services should respect maximum_ride_distance when feasible'
+        end
+        previous_index = current_index
+      end
+    end
   end
 
   def test_maximum_ride_time_with_vroom_solver

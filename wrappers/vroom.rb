@@ -508,13 +508,19 @@ module Wrappers
     end
 
     def ride_matrix_group_key(vehicle, matrix, max_end)
+      needs_time_penalty =
+        vehicle.maximum_ride_time&.positive? || vehicle.maximum_ride_distance&.positive?
+      deform_distance = vehicle.cost_distance_multiplier.to_f.positive?
       {
         matrix_id: vehicle.matrix_id,
         maximum_ride_time: vehicle.maximum_ride_time,
         maximum_ride_distance: vehicle.maximum_ride_distance,
-        ride_time_penalty: vehicle.maximum_ride_time&.positive? ? ride_time_penalty(vehicle, max_end) : nil,
+        deform_distance: deform_distance,
+        ride_time_penalty: needs_time_penalty ? ride_time_penalty(vehicle, max_end) : nil,
         ride_distance_penalty:
-          vehicle.maximum_ride_distance&.positive? ? ride_distance_penalty(vehicle, matrix, max_end) : nil
+          if vehicle.maximum_ride_distance&.positive? && deform_distance
+            ride_distance_penalty(vehicle, matrix, max_end)
+          end
       }
     end
 
@@ -532,10 +538,12 @@ module Wrappers
           if time && group[:maximum_ride_time]&.positive? && time[i][j] > group[:maximum_ride_time]
             time[i][j] = group[:ride_time_penalty]
           end
-          if distance && group[:maximum_ride_distance]&.positive? &&
-             distance[i][j] > group[:maximum_ride_distance]
-            distance[i][j] = group[:ride_distance_penalty]
-          end
+          next unless distance && group[:maximum_ride_distance]&.positive? &&
+                      distance[i][j] > group[:maximum_ride_distance]
+
+          # VROOM optimizes on durations when cost_distance_multiplier is zero.
+          time[i][j] = group[:max_end] if time && group[:max_end]
+          distance[i][j] = group[:ride_distance_penalty] if group[:deform_distance]
         }
       }
 
@@ -572,7 +580,7 @@ module Wrappers
         matrix = matrices_by_id[group_key[:matrix_id]]
         next unless matrix
 
-        group = group_key.merge(depot_indices: depot_matrix_indices(vehicles))
+        group = group_key.merge(depot_indices: depot_matrix_indices(vehicles), max_end: max_end)
         deformed = deform_matrix_for_ride_constraints(matrix, group)
         profile_id = "m#{matrix.id}_ride_#{Digest::MD5.hexdigest(Oj.dump(group_key))[0, 8]}"
         profiles[profile_id] = matrix_to_vroom_payload(deformed, max_end)
