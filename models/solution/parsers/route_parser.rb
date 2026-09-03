@@ -27,7 +27,7 @@ module Parsers
       compute_missing_dimensions(matrix) if options[:compute_dimensions]
       route_data = compute_route_travel_distances(vrp, matrix)
       compute_total_time
-      compute_route_waiting_times unless @route.stops.empty?
+      compute_route_waiting_times unless options[:preserve_solver_waiting_times]
       compute_route_total_dimensions(matrix)
       route.stops.each{ |stop| stop.info.set_schedule(vrp, route.vehicle) }
       return unless ([:polylines, :encoded_polylines] & vrp.configuration.restitution.geometry).any? &&
@@ -80,9 +80,7 @@ module Parsers
       @route.info.total_distance = total[:distance].round if dimensions.include?(:distance)
       @route.info.total_travel_value = total[:value].round if dimensions.include?(:value)
 
-      return unless @route.stops.all?{ |a| a.info.waiting_time }
-
-      @route.info.total_waiting_time = @route.stops.collect{ |a| a.info.waiting_time }.sum.round
+      @route.info.total_waiting_time = @route.stops.sum{ |stop| stop.info.waiting_time.to_i }.round
     end
 
     def self.compute_missing_dimensions(matrix)

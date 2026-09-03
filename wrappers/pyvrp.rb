@@ -3,9 +3,7 @@ require './wrappers/wrapper'
 module Wrappers
   class PyVRP < Wrapper
     CUSTOM_QUANTITY_BIGNUM = 1e3
-    MAX_PENALTY = 1e10
     MAX_INT64 = 2**63 - 1
-    MAX_INT_UNITS = 2**60 - 1
 
     def solver_constraints
       super + [
@@ -37,7 +35,7 @@ module Wrappers
         :assert_no_activity_with_position,
         :assert_no_empty_or_fill,
         :assert_services_no_late_multiplier,
-        :assert_no_complex_setup_durations,
+        :assert_no_complex_setup_durations, # Assume that a sinlge point always have the same setup_duration
         :assert_only_one_visit,
 
         # Solver
@@ -83,41 +81,49 @@ module Wrappers
           vehicle = vrp.vehicles[route[:vehicle_type]]
           stops = []
           @previous = nil
-          if route[:start_depot]
-            start_stop = read_depot_start(vrp, vehicle)
+          # Depot index 0 is a valid PyVRP depot; `if start_depot` would skip it.
+          unless route[:start_depot].nil?
+            start_stop = read_depot_start(vrp, vehicle, depot_schedule(route[:start_schedule], route[:start_time]))
             stops << start_stop if start_stop
           end
 
           vehicle = vrp.vehicles[route[:vehicle_type]]
+          # Reloads empty the vehicle: capacity must be checked between
+          # intermediate depots, not accumulated across the whole route.
           route_loads = Hash.new(0)
-          route[:trips].each.with_index { |trip, idx|
-            stops +=
-              trip[:visits].filter_map{ |visit_index|
-                service = @service_index_map[visit_index]
-                next unless service
-                if filter_capacity && !visit_fits_capacity?(vehicle, service, route_loads)
-                  next
-                end
+          Array(route[:activities]).each { |activity|
+            kind = activity[:type].to_s.downcase
+            if kind == 'depot'
+              route_loads = Hash.new(0)
+              reload_stop = read_reload_depot(vrp, vehicle, activity[:idx], activity)
+              stops << reload_stop if reload_stop
+              next
+            end
+            next unless %w[client pickup delivery].include?(kind)
 
-                apply_visit_load!(vehicle, service, route_loads) if filter_capacity
-                read_visit(vrp, vehicle, visit_index)
-              }
-            next if idx == route[:trips].size - 1
+            visit_index = activity[:idx]
+            service = @service_index_map[visit_index]
+            next unless service
+            if filter_capacity && !visit_fits_capacity?(vehicle, service, route_loads)
+              next
+            end
 
-            stops << read_reload_depot_trip(vrp, vehicle, trip[:end_depot])
+            apply_visit_load!(vehicle, service, route_loads) if filter_capacity
+            stops << read_visit(vrp, vehicle, visit_index, activity)
           }
 
-          if route[:end_depot]
-            end_stop = read_depot_end(vrp, vehicle)
+          unless route[:end_depot].nil?
+            end_stop = read_depot_end(vrp, vehicle, depot_schedule(route[:end_schedule], route[:end_time]))
             stops << end_stop if end_stop
           end
 
+          complete_pyvrp_route_times!(stops, vehicle)
           Models::Solution::Route.new(
             stops: stops,
             vehicle: vehicle,
             info: Models::Solution::Route::Info.new(
-              start_time: route[:start_time],
-              end_time: route[:end_time]
+              start_time: stops.first&.info&.begin_time || route[:start_time],
+              end_time: stops.last&.info&.end_time || stops.last&.info&.begin_time || route[:end_time]
             )
           )
         }
@@ -129,20 +135,62 @@ module Wrappers
 
       log "Solution cost: #{result[:cost]} & unassigned: #{unassigneds.size}", level: :info
 
-      solution =
+      pyvrp_solution =
         Models::Solution.new(
           elapsed: elapsed_time,
-          solvers: [:pryvrp],
+          solvers: [:pyvrp],
           routes: routes,
           unassigned_stops: unassigneds
         )
-      solution.parse(vrp)
+      pyvrp_solution.parse(vrp, preserve_solver_waiting_times: true)
+    end
+
+    def self.seed_vrp_routes_from_solution(vrp, solution)
+      new.send(:seed_vrp_routes_from_solution, vrp, solution)
     end
 
     private
 
-    def read_visit(vrp, vehicle, visit_index)
-      read_activity(vrp, vehicle, visit_index)
+    def depot_schedule(schedule, fallback_time)
+      return schedule if schedule.is_a?(Hash) && !schedule[:start_time].nil?
+
+      { start_time: fallback_time, end_time: fallback_time, wait_duration: 0 }
+    end
+
+    def solver_schedule(activity)
+      start_time = activity && activity[:start_time]
+      return {} if start_time.nil?
+
+      end_time = activity[:end_time] || start_time
+      {
+        begin_time: start_time,
+        waiting_time: activity[:wait_duration].to_i,
+        end_time: end_time,
+        departure_time: end_time
+      }
+    end
+
+    def complete_pyvrp_route_times!(stops, vehicle)
+      stops.each do |stop|
+        info = stop.info
+        info.waiting_time = 0 if info.waiting_time.nil?
+        next unless info.begin_time
+
+        if stop.is_a?(Models::Solution::StopDepot)
+          info.end_time ||= info.begin_time
+          info.departure_time ||= info.begin_time
+          next
+        end
+
+        service_duration =
+          info.end_time ? info.end_time - info.begin_time : stop.activity.duration_on(vehicle)
+        info.end_time ||= info.begin_time + service_duration.to_i
+        info.departure_time ||= info.end_time
+      end
+    end
+
+    def read_visit(vrp, vehicle, visit_index, activity = nil)
+      read_activity(vrp, vehicle, visit_index, activity)
     end
 
     def read_unassigned(vrp, visit_index)
@@ -161,44 +209,53 @@ module Wrappers
       Models::Solution::Stop.new(original_rest, info: Models::Solution::Stop::Info.new(times))
     end
 
-    def read_depot_start(_vrp, vehicle)
+    def read_depot_start(_vrp, vehicle, schedule = nil)
       point = vehicle&.start_point
       return nil if point.nil?
 
       route_data = {}
       @previous = point
 
-      Models::Solution::StopDepot.new(point, info: Models::Solution::Stop::Info.new(route_data))
+      Models::Solution::StopDepot.new(
+        point,
+        info: Models::Solution::Stop::Info.new(route_data.merge(solver_schedule(schedule)))
+      )
     end
 
-    def read_depot_end(vrp, vehicle)
+    def read_depot_end(vrp, vehicle, schedule = nil)
       point = vehicle&.end_point
       return nil if point.nil?
 
       route_data = compute_route_data(vrp, vehicle, point)
       @previous = point
 
-      Models::Solution::StopDepot.new(point, info: Models::Solution::Stop::Info.new(route_data))
+      Models::Solution::StopDepot.new(
+        point,
+        info: Models::Solution::Stop::Info.new(route_data.merge(solver_schedule(schedule)))
+      )
     end
 
-    def read_reload_depot_trip(vrp, vehicle, reload_depot_index)
-      reload_depot = @reload_depots[@depots.size - reload_depot_index]
+    def read_reload_depot(vrp, vehicle, reload_depot_index, activity = nil)
+      reload_depot = @reload_depots[reload_depot_index - @depots.size]
       return nil if reload_depot.nil?
 
       route_data = compute_route_data(vrp, vehicle, reload_depot.point)
 
       @previous = reload_depot.point
-      Models::Solution::Stop.new(reload_depot, info: Models::Solution::Stop::Info.new(route_data), loads: nil)
+      Models::Solution::Stop.new(
+        reload_depot,
+        info: Models::Solution::Stop::Info.new(route_data.merge(solver_schedule(activity))),
+        loads: nil
+      )
     end
 
-    def read_activity(vrp, vehicle, visit_index)
+    def read_activity(vrp, vehicle, visit_index, activity = nil)
       service = @service_index_map[visit_index]
       @service_hash.delete(service.id)
 
       point = service.activity.point
       route_data = compute_route_data(vrp, vehicle, point)
-      # begin_time = act_step['arrival'] && (act_step['arrival'] + act_step['waiting_time'] + act_step['setup'])
-      times = route_data
+      times = route_data.merge(solver_schedule(activity))
       job_data = Models::Solution::Stop.new(service, info: Models::Solution::Stop::Info.new(times), loads: nil)
       @previous = point
       job_data
@@ -214,6 +271,94 @@ module Wrappers
         travel_distance: (matrix && matrix[:distance]) ? matrix[:distance][@previous.matrix_index][point.matrix_index] : 0,
         travel_value: (matrix && matrix[:value]) ? matrix[:value][@previous.matrix_index][point.matrix_index] : 0
       }
+    end
+
+    # Bounded substitutes for MAX_INT64 so PenaltyManager magnitudes stay comparable.
+    def max_matrix_cell(vrp, dimension)
+      vrp.matrices.filter_map{ |matrix| matrix.send(dimension) }.flat_map(&:flatten).compact.max
+    end
+
+    def time_horizon(vrp)
+      tw_ends = []
+      vrp.vehicles.each{ |vehicle|
+        tw_ends << vehicle.timewindow.end if vehicle.timewindow&.end
+        tw_ends << vehicle.duration if vehicle.duration
+      }
+      vrp.services.each{ |service|
+        service.activity.timewindows.each{ |tw| tw_ends << tw.end if tw.end }
+      }
+      vrp.reload_depots.each{ |depot|
+        depot.timewindows.each{ |tw| tw_ends << tw.end if tw.end }
+      }
+      return [tw_ends.max, 1].max if tw_ends.any?
+
+      matrix_bound = max_matrix_cell(vrp, :time)
+      service_time =
+        vrp.services.sum{ |service|
+          service.activity.duration.to_i + service.activity.setup_duration.to_i
+        }
+      computed = matrix_bound && ((matrix_bound * (vrp.services.size + 2)) + service_time)
+      [computed || 86_400, 1].max
+    end
+
+    def distance_horizon(vrp)
+      vehicle_max = vrp.vehicles.map(&:distance).compact.max
+      matrix_bound = max_matrix_cell(vrp, :distance) || max_matrix_cell(vrp, :time)
+      # n_services hops is 10^8–10^9 m on large instances. A per-vehicle hop
+      # count still leaves slack for unbalanced *and* random infeasible routes
+      # (tight hop caps make excess_distance the first PenaltyManager term to
+      # saturate on road matrices in metres).
+      hops = [(vrp.services.size / [vrp.vehicles.size, 1].max) + 2, 50].max
+      computed = [
+        vehicle_max,
+        matrix_bound && (matrix_bound * hops)
+      ].compact.max
+      [computed || 1, 1].max
+    end
+
+    def unit_demand_totals(vrp)
+      totals = Hash.new(0)
+      vrp.services.each{ |service|
+        pickup, delivery = scaled_pickup_delivery(service)
+        (pickup.keys | delivery.keys).each{ |unit_id|
+          totals[unit_id] += pickup[unit_id] + delivery[unit_id]
+        }
+      }
+      totals
+    end
+
+    def unbounded_unit_capacity(unit_id)
+      demand = @unit_demand_totals[unit_id].to_i
+      demand.positive? ? demand : 1
+    end
+
+    # Load dimensions for skills that actually restrict assignment. Universal
+    # tags (every vehicle has them) only inflate PenaltyManager.
+    def skill_dimension_index(vrp)
+      vehicle_sets = vrp.vehicles.map{ |vehicle| Array(vehicle.skills&.first).to_set }
+      service_skills = vrp.services.flat_map(&:skills).uniq
+      names =
+        service_skills.select{ |skill|
+          vehicle_sets.any?{ |set| !set.include?(skill) }
+        }
+      names.each_with_index.to_h
+    end
+
+    def skill_demand_quantity
+      CUSTOM_QUANTITY_BIGNUM.round
+    end
+
+    def skill_vehicle_capacity(vrp)
+      [vrp.services.size, 1].max * skill_demand_quantity
+    end
+
+    def service_horizon_past_vehicles?(vrp)
+      max_service_end =
+        vrp.services.flat_map{ |service|
+          service.activity.timewindows.filter_map(&:end)
+        }.max
+      max_vehicle_end = vrp.vehicles.filter_map{ |vehicle| vehicle.timewindow&.end }.max
+      max_service_end && max_vehicle_end && max_service_end > max_vehicle_end
     end
 
     def collect_skills(object, vrp_skills)
@@ -236,23 +381,34 @@ module Wrappers
 
       # to keep the client and depot indices consistent, the depots should be built before the clients and the matrices
       @point_hash = vrp.points.index_by(&:id)
+      @time_horizon = time_horizon(vrp)
+      @service_horizon_past_vehicles = service_horizon_past_vehicles?(vrp)
+      @distance_horizon = distance_horizon(vrp)
+      @unit_demand_totals = unit_demand_totals(vrp)
+      prepare_exclusion_costs(vrp)
+      log "PyVRP horizons time=#{@time_horizon} distance=#{@distance_horizon}", level: :info
+      locations = build_locations(vrp)
       depots = build_depots(vrp)
 
-      vrp.vehicles.map(&:skills).flatten.uniq.each_with_index{ |skill, index| @skills_index_hash[skill] = index }
+      @skills_index_hash = skill_dimension_index(vrp)
       used_matrices = vrp.vehicles.map(&:matrix_id).uniq
       matrices = used_matrices.map { |id| vrp.matrices.find { |m| m.id == id } }
       distance_matrices = matrices.map(&:distance).compact
-      duration_matrices = matrices.map(&:time).compact
-      expand_matrices(vrp, distance_matrices, duration_matrices)
+      duration_matrices = matrices.map { |matrix| matrix.time&.map(&:itself) }.compact
+      apply_setup_to_duration_matrices(vrp, duration_matrices)
 
       distance_matrices = duration_matrices if distance_matrices.empty?
 
       @reload_depot_index_hash = {}
       vrp.reload_depots.each_with_index{ |depot, index| @reload_depot_index_hash[depot.id] = depots.size + index }
       clients, groups = build_clients_and_groups(vrp)
+      log "PyVRP locations=#{locations.size} clients=#{clients.size} groups=#{groups.size} " \
+          "skill_dims=#{@skills_index_hash.size} unit_dims=#{vrp.units.size} ",
+          level: :info
       vehicles = build_vehicles(vrp)
       routes = build_routes(vrp)
       {
+        locations: locations,
         depots: depots,
         clients: clients,
         vehicle_types: vehicles,
@@ -263,50 +419,61 @@ module Wrappers
       }.delete_if { |_, v| v.nil? || v.empty? }
     end
 
-    def expand_matrices(vrp, distance_matrices, duration_matrices)
-      additive_setups = Array.new(@depots.size, 0)
+    def build_locations(vrp)
+      point_by_matrix_index =
+        vrp.points.filter_map{ |point|
+          next if point.matrix_index.nil?
 
-      reload_depot_points =
-        vrp.reload_depots.map(&:point)
-      additive_setups += Array.new(reload_depot_points.size, 0)
-      client_points =
-        vrp.services.flat_map{ |service|
-          points =
-            (service.activity.timewindows.empty? ? [nil] : service.activity.timewindows).map{ |_tw|
-              service.activity.point
-            }
-          points.each{ |_p| additive_setups << service.activity.setup_duration.to_i }
-          points
-        }
+          [point.matrix_index, point]
+        }.to_h
+      matrix_indices = point_by_matrix_index.keys.sort
+      @matrix_indices = matrix_indices
+      @location_by_matrix_index = matrix_indices.each_with_index.to_h
+      @location_by_point_id = {}
+      vrp.points.each{ |point|
+        next if point.matrix_index.nil?
 
-      all_points = (@depots + reload_depot_points + client_points)
-
-      distance_matrices.map! do |matrix|
-        matrix =
-          Array.new(all_points.size) { |i|
-            Array.new(all_points.size) { |j|
-              distance(matrix, all_points[i], all_points[j])
-            }
-          }
-      end
-
-      duration_matrices.map! do |matrix|
-        dist = nil
-        matrix =
-          Array.new(all_points.size) { |i|
-            Array.new(all_points.size) { |j|
-              dist = distance(matrix, all_points[i], all_points[j])
-              dist += additive_setups[j] if i != j && all_points[i]&.matrix_index != all_points[j]&.matrix_index
-              dist
-            }
-          }
-      end
+        @location_by_point_id[point.id] = @location_by_matrix_index[point.matrix_index]
+      }
+      matrix_indices.map{ |matrix_index|
+        point = point_by_matrix_index[matrix_index]
+        { name: point.id.to_s }
+      }
     end
 
-    def distance(matrix, point1, point2)
-      return 0 if point1.nil? || point2.nil?
+    def location_index_for(point)
+      return nil unless point
 
-      matrix[point1.matrix_index][point2.matrix_index]
+      @location_by_point_id[point.id]
+    end
+
+    def setup_duration_by_matrix_index(vrp)
+      setups = {}
+      vrp.services.each{ |service|
+        matrix_index = service.activity.point&.matrix_index
+        next if matrix_index.nil?
+
+        setups[matrix_index] = service.activity.setup_duration.to_i
+      }
+      setups
+    end
+
+    def apply_setup_to_duration_matrices(vrp, duration_matrices)
+      setups = setup_duration_by_matrix_index(vrp)
+      location_count = @matrix_indices.size
+      duration_matrices.map!{ |matrix|
+        Array.new(location_count){ |from_loc|
+          from_matrix_index = @matrix_indices[from_loc]
+          Array.new(location_count){ |to_loc|
+            to_matrix_index = @matrix_indices[to_loc]
+            travel = matrix[from_matrix_index][to_matrix_index]
+            if from_matrix_index != to_matrix_index && setups[to_matrix_index].to_i.positive?
+              travel += setups[to_matrix_index].to_i
+            end
+            travel
+          }
+        }
+      }
     end
 
     def build_vehicles(vrp)
@@ -314,15 +481,21 @@ module Wrappers
       all_units = vrp.units.index_by(&:id)
 
       vrp.vehicles.map { |veh|
-        capacity_hash = all_units.map{ |id, _unit| [id, MAX_INT64] }.to_h
+        capacity_hash = all_units.map{ |id, _unit| [id, unbounded_unit_capacity(id)] }.to_h
         veh.capacities.each do |capacity|
           capacity_hash[capacity.unit_id] =
-            (capacity.limit && (capacity.limit * CUSTOM_QUANTITY_BIGNUM).round || MAX_INT_UNITS)
+            if capacity.limit
+              (capacity.limit * CUSTOM_QUANTITY_BIGNUM).round
+            else
+              unbounded_unit_capacity(capacity.unit_id)
+            end
         end
 
         capacity_skills = Array.new(@skills_index_hash.size, 0)
-        veh.skills.first.each do |skill|
-          capacity_skills[@skills_index_hash[skill]] = vrp.services.size
+        Array(veh.skills&.first).each do |skill|
+          next unless @skills_index_hash.key?(skill)
+
+          capacity_skills[@skills_index_hash[skill]] = skill_vehicle_capacity(vrp)
         end
 
         {
@@ -331,9 +504,9 @@ module Wrappers
           start_depot: @vehicle_start_point_index_hash[veh.id],
           fixed_cost: veh.cost_fixed.to_i,
           tw_early: veh.timewindow&.start || 0,
-          tw_late: veh.timewindow&.end || MAX_INT64,
-          shift_duration: veh.duration || MAX_INT64,
-          max_distance: veh.distance || MAX_INT64,
+          tw_late: veh.timewindow&.end || @time_horizon,
+          shift_duration: veh.duration || @time_horizon,
+          max_distance: veh.distance || @distance_horizon,
           unit_distance_cost: veh.cost_distance_multiplier.to_i,
           unit_duration_cost: veh.cost_time_multiplier.to_i,
           profile: used_matrices.index(veh.matrix_id),
@@ -350,12 +523,10 @@ module Wrappers
       client_list = []
       groups = []
       service_to_client_indices = {}
-      depot_size = @service_index_map.size
 
       vrp.services.each do |service|
         activity = service.activity
         point = activity.point
-        location = point.location
 
         delivery_hash = all_units.map { |id, _| [id, 0] }.to_h
         pickup_hash = all_units.map { |id, _| [id, 0] }.to_h
@@ -375,13 +546,15 @@ module Wrappers
 
         quantity_skills = Array.new(@skills_index_hash.size, 0)
         service.skills.each do |skill|
-          quantity_skills[@skills_index_hash[skill]] = 1
+          next unless @skills_index_hash.key?(skill)
+
+          quantity_skills[@skills_index_hash[skill]] = skill_demand_quantity
         end
         null_quantity_skills = Array.new(@skills_index_hash.size, 0)
 
         timewindows =
           if activity.timewindows.empty?
-            [Models::Timewindow.new(start: 0, end: MAX_INT64)]
+            [Models::Timewindow.new(start: 0, end: @time_horizon)]
           else
             activity.timewindows
           end
@@ -389,16 +562,15 @@ module Wrappers
           client_index = @service_index_map.size
           @service_index_map << service
           client_list << {
-            x: location&.lon || 0,
-            y: location&.lat || 0,
+            location: location_index_for(point),
             delivery: delivery_hash.values + null_quantity_skills,
             pickup: pickup_hash.values + quantity_skills,
             service_duration: activity.duration.to_i,
             tw_early: tw.start || 0,
-            tw_late: tw.end || MAX_INT64,
+            tw_late: tw.end || @time_horizon,
             release_time: 0,
             prize: client_prize(service),
-            required: mandatory_client?(service),
+            required: mandatory_service?(service) && timewindows.size <= 1,
             name: "#{service.id}_tw#{tw_idx}"
           }
           service_to_client_indices[service.id] ||= []
@@ -409,21 +581,98 @@ module Wrappers
       service_to_client_indices.each do |_service_id, indices|
         next unless indices.size > 1
 
-        indices.each { |idx| client_list[idx - depot_size][:group] = groups.size }
-        groups << { clients: indices, required: false }
+        service = @service_index_map[indices.first]
+        indices.each { |idx| client_list[idx][:group] = groups.size }
+        groups << { clients: indices, required: mandatory_service?(service) }
       end
 
       [client_list, groups]
     end
 
-    def mandatory_client?(service)
-      service.exclusion_cost.nil? && service.activity.timewindows.size <= 1
+    def mandatory_service?(service)
+      service.priority == 0
     end
 
     def client_prize(service)
-      return service.exclusion_cost.round if service.exclusion_cost
+      exclusion_cost_for(service)&.round || 0
+    end
 
-      mandatory_client?(service) ? 0 : (MAX_PENALTY / (service.priority + 1)).round
+    def exclusion_cost_for(service)
+      return service.exclusion_cost if service.exclusion_cost
+      return if mandatory_service?(service)
+
+      @exclusion_costs.fetch(service.id)
+    end
+
+    def prepare_exclusion_costs(vrp)
+      @exclusion_costs = {}
+      soft_services =
+        vrp.services.select{ |service|
+          !mandatory_service?(service) && service.exclusion_cost.nil?
+        }
+      mandatory_count = vrp.services.count{ |service| mandatory_service?(service) }
+      log(
+        "PyVRP client requirement: #{mandatory_count} mandatory, #{soft_services.size} optional",
+        level: :info
+      )
+      return if soft_services.empty?
+
+      max_fixed = [vrp.vehicles.map(&:cost_fixed).max.to_f, 1.0].max
+      unit_time_cost = [vrp.vehicles.map(&:cost_time_multiplier).max.to_f, 1.0].max
+      unit_distance_cost = [vrp.vehicles.map(&:cost_distance_multiplier).max.to_f, 1.0].max
+      avg_service_duration =
+        vrp.services.sum{ |service| service.activity.duration.to_i } /
+        [vrp.services.size, 1].max.to_f
+      avg_travel = average_depot_travel_seconds(vrp)
+      max_roundtrip = max_depot_roundtrip_seconds(vrp)
+      marginal_travel_cost = unit_time_cost * (2 * avg_travel + avg_service_duration)
+      roundtrip_cost = (unit_time_cost + unit_distance_cost) * max_roundtrip
+      density = soft_services.size.to_f / [vrp.vehicles.size, 1].max
+      sqrt_density = Math.sqrt(density)
+      base_prize = [
+        max_fixed * 4 * density,
+        max_fixed * 4 * sqrt_density,
+        roundtrip_cost * 2,
+        roundtrip_cost * density,
+        marginal_travel_cost * 2
+      ].max.ceil
+      priority_four_floor = (max_fixed * 4 * density).ceil
+
+      soft_services.each do |service|
+        priority_factor = 2**(4 - service.priority.clamp(0, 8))
+        timewindow_count = [service.activity.timewindows.size, 1].max
+        prize = (priority_factor * base_prize).ceil
+        prize = [prize, priority_four_floor].max if service.priority >= 4
+        if timewindow_count > 1
+          group_prize = 500_000 * timewindow_count
+          prize = [prize, group_prize].max
+        end
+        @exclusion_costs[service.id] = prize
+      end
+    end
+
+    def max_depot_roundtrip_seconds(vrp)
+      vehicle = vrp.vehicles.first
+      depot = vehicle&.start_point
+      matrix = vrp.matrices.find{ |entry| entry.id == vehicle&.matrix_id } || vrp.matrices.first
+      return 0 unless depot&.matrix_index && matrix&.time
+
+      row = matrix.time[depot.matrix_index]
+      return 0 unless row&.any?
+
+      2 * row.compact.max.to_f
+    end
+
+    def average_depot_travel_seconds(vrp)
+      vehicle = vrp.vehicles.first
+      depot = vehicle&.start_point
+      matrix = vrp.matrices.find{ |entry| entry.id == vehicle&.matrix_id } || vrp.matrices.first
+      return 0 unless depot&.matrix_index && matrix&.time
+
+      row = matrix.time[depot.matrix_index]
+      return 0 unless row&.any?
+
+      row.compact.sum.to_f / row.size
     end
 
     def scaled_capacity_limits(vehicle)
@@ -474,6 +723,45 @@ module Wrappers
           route_loads[unit_id] = (route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id]
         end
       end
+    end
+
+    def seed_vrp_routes_from_solution(vrp, solution)
+      vrp.routes =
+        solution.routes.filter_map{ |route|
+          service_ids = route.stops.filter_map(&:service_id)
+          next if service_ids.empty?
+
+          vehicle = route.vehicle
+          missions = split_missions_with_reloads(vehicle, service_ids, vrp)
+          Models::Route.new(vehicle: vehicle, missions: missions)
+        }
+    end
+
+    def split_missions_with_reloads(vehicle, service_ids, vrp)
+      services_by_id = vrp.services.index_by(&:id)
+      reload_depot = vehicle.reload_depots.first
+      max_reloads = vehicle.maximum_reloads.to_i
+      missions = []
+      route_loads = Hash.new(0)
+      reloads_used = 0
+
+      service_ids.each{ |service_id|
+        service = services_by_id[service_id]
+        next unless service
+
+        needs_reload =
+          reload_depot &&
+          reloads_used < max_reloads &&
+          !visit_fits_capacity?(vehicle, service, route_loads)
+        if needs_reload
+          missions << reload_depot
+          route_loads = Hash.new(0)
+          reloads_used += 1
+        end
+        missions << service
+        apply_visit_load!(vehicle, service, route_loads)
+      }
+      missions
     end
 
     # Open routes have no end_point: omit end_depot and let PyVRP apply its default.
@@ -558,10 +846,9 @@ module Wrappers
       @depot_points_standard_index_hash.map { |point_id, index|
         depots[index] =
           {
-            x: @point_hash[point_id]&.location&.lon || 0,
-            y: @point_hash[point_id]&.location&.lat || 0,
+            location: location_index_for(@point_hash[point_id]),
             tw_early: 0,
-            tw_late: MAX_INT64,
+            tw_late: @time_horizon,
             name: "#{point_id}_standard" || '_null_store'
           }
       }
@@ -569,8 +856,7 @@ module Wrappers
         tw_start_to_index.each do |timewindow_start, point_index|
           depots[point_index] =
             {
-              x: @point_hash[point_id]&.location&.lon || 0,
-              y: @point_hash[point_id]&.location&.lat || 0,
+              location: location_index_for(@point_hash[point_id]),
               tw_early: timewindow_start || 0,
               tw_late: timewindow_start,
               name: "#{point_id}_#{timewindow_start}_force_start" || '_null_store'
@@ -580,10 +866,9 @@ module Wrappers
       @depot_points_force_end_by_timewindow_end_index_hash.each do |point_id, tw_end_to_index|
         tw_end_to_index.each do |timewindow_end, point_index|
           depots[point_index] = {
-            x: @point_hash[point_id]&.location&.lon || 0,
-            y: @point_hash[point_id]&.location&.lat || 0,
+            location: location_index_for(@point_hash[point_id]),
             tw_early: timewindow_end || 0,
-            tw_late: timewindow_end || MAX_INT64,
+            tw_late: timewindow_end || @time_horizon,
             name: "#{point_id}_#{timewindow_end}_force_end" || '_null_store'
           }
         end
@@ -598,10 +883,9 @@ module Wrappers
         @reload_depot_hash[depot.id] = depots.size
         depots <<
           {
-            x: depot.point&.location&.lon || 0,
-            y: depot.point&.location&.lat || 0,
+            location: location_index_for(depot.point),
             tw_early: depot.timewindows.first&.start || 0,
-            tw_late: depot.timewindows.first&.end || MAX_INT64,
+            tw_late: depot.timewindows.first&.end || @time_horizon,
             service_duration: depot.duration.to_i,
             name: "reload_#{depot&.id&.to_s || 'null_store'}"
           }
@@ -613,7 +897,6 @@ module Wrappers
           level: :warn
         )
       end
-      @service_index_map += depots.map{ nil }
       depots
     end
 
@@ -625,36 +908,32 @@ module Wrappers
 
         vehicle_type = vrp.vehicles.find_index{ |v| v.id == route.vehicle.id }
         {
-          visits: build_trips(vrp, route, vehicle_type),
+          activities: build_route_activities(route),
           vehicle_type: vehicle_type
         }
       }.compact
     end
 
-    def build_trips(vrp, route, vehicle_type)
-      trips = []
-      vehicle = vrp.vehicles[vehicle_type]
-      current_trip = {
-        visits: [],
-        vehicle_type: vehicle_type,
-        start_depot: @vehicle_start_point_index_hash[vehicle.id]
-      }.merge(optional_end_depot_hash(vehicle.id))
+    def build_route_activities(route)
+      activities = []
       route.missions.each do |mission|
         if mission.is_a?(Models::Service)
-          current_trip[:visits] << @service_index_map.find_index{ |service| service && service.id == mission.id }
+          visit_index = @service_index_map.find_index{ |service| service && service.id == mission.id }
+          activities << { type: 'client', idx: visit_index } if visit_index
         elsif mission.is_a?(Models::ReloadDepot)
-          reload_depot = @reload_depot_hash[mission.id]
-          current_trip[:end_depot] = reload_depot
-          trips << current_trip
-          current_trip = {
-            visits: [],
-            vehicle_type: vehicle_type,
-            start_depot: reload_depot
-          }.merge(optional_end_depot_hash(vehicle.id))
+          reload_index = @reload_depot_hash[mission.id]
+          activities << { type: 'depot', idx: reload_index } if reload_index
         end
       end
-      trips << current_trip
-      trips
+      activities
+    end
+
+    def pyvrp_python
+      env_python = ENV['PYVRP_PYTHON']
+      return env_python if env_python && !env_python.empty?
+
+      venv_python = '/opt/pyenv/bin/python3'
+      File.executable?(venv_python) ? venv_python : 'python3'
     end
 
     def run_pyvrp(problem, timeout = nil)
@@ -665,7 +944,7 @@ module Wrappers
 
       output = Tempfile.new('optimize-pyvrp-output', @tmp_dir)
       output.close
-      cmd = "python3 wrappers/pyvrp_wrapper.py #{input.path} #{output.path} #{timeout}"
+      cmd = "#{pyvrp_python} wrappers/pyvrp_wrapper.py #{input.path} #{output.path} #{timeout}"
       log cmd
       stdin, stdout_and_stderr, @thread = Open3.popen2e(cmd)
 

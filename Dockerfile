@@ -44,7 +44,7 @@ RUN apt update -y && apt install -y \
         python3-pip \
         python3-venv
 
-ARG PYVRP_VERSION=0.13.1
+ARG PYVRP_VERSION=0.14.0
 # PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
 # ARG PYVRP_BRANCH=
 ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
