@@ -115,7 +115,23 @@ module ValidateData
 
     used_rest_ids.uniq.each{ |rest_id|
       corresponding = @hash[:rests].find{ |r| r[:id] == rest_id }
-      next unless corresponding && corresponding[:timewindows].to_a.size > 1
+      next unless corresponding
+
+      lapse = corresponding[:lapse].to_i
+      if lapse.positive?
+        if corresponding[:duration].to_i <= 0
+          raise OptimizerWrapper::DiscordantProblemError.new(
+            'Rests with lapse require a strictly positive duration'
+          )
+        end
+        if corresponding[:duration].to_i >= lapse
+          raise OptimizerWrapper::DiscordantProblemError.new(
+            'Rest duration must be smaller than lapse'
+          )
+        end
+      end
+
+      next unless corresponding[:timewindows].to_a.size > 1
 
       raise OptimizerWrapper::UnsupportedProblemError.new('Rests can only have one timewindow')
     }
