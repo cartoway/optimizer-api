@@ -109,6 +109,7 @@ module Wrappers
           stops = route['steps'].map{ |step|
             read_step(vrp, vehicle, step)
           }.compact
+          complete_vroom_route_times!(stops, vehicle)
           initial_loads =
             route['steps'].first['load']&.map&.with_index{ |load, l_index|
               Models::Solution::Load.new(quantity: Models::Quantity.new(unit: vrp.units[l_index]), current: load)
@@ -119,7 +120,7 @@ module Wrappers
             vehicle: vehicle,
             info: Models::Solution::Route::Info.new(
               start_time: stops.first.info.begin_time,
-              end_time: stops.last.info.begin_time + stops.last.activity.duration
+              end_time: stops.last.info.end_time || stops.last.info.begin_time
             )
           )
         }
@@ -135,10 +136,35 @@ module Wrappers
           routes: routes,
           unassigned_stops: unassigneds
         )
-      solution.parse(vrp)
+      solution.parse(vrp, preserve_solver_waiting_times: true)
     end
 
     private
+
+    # Fill missing end/departure times so route totals match VROOM waiting/travel/service breakdown.
+    def complete_vroom_route_times!(stops, vehicle)
+      stops.each do |stop|
+        info = stop.info
+        info.waiting_time = 0 if info.waiting_time.nil?
+
+        next unless info.begin_time
+
+        if stop.is_a?(Models::Solution::StopDepot)
+          info.end_time ||= info.begin_time
+          info.departure_time ||= info.begin_time
+          next
+        end
+
+        service_duration =
+          if stop.type == :rest
+            stop.activity.duration
+          else
+            info.end_time ? info.end_time - info.begin_time : stop.activity.duration_on(vehicle)
+          end
+        info.end_time ||= info.begin_time + service_duration
+        info.departure_time ||= info.end_time
+      end
+    end
 
     def job_priority_for(service)
       (100 * (8 - service.priority).to_f / 8).to_i
@@ -198,7 +224,8 @@ module Wrappers
       @previous = point
 
       times = {
-        begin_time: step['arrival']
+        begin_time: step['arrival'],
+        waiting_time: step['waiting_time'] || 0
       }.merge(route_data)
       if step['type'] == 'end'
         Models::Solution::StopDepot.new(vehicle.end_point, info: Models::Solution::Stop::Info.new(times))
