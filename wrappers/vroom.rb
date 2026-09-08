@@ -148,7 +148,7 @@ module Wrappers
       rest_index = 0
       @rest_hash = {}
       vrp.vehicles.each{ |vehicle|
-        vehicle.rests.each{ |rest|
+        Interpreters::RegulatoryRest.solver_rests(vehicle).each{ |rest|
           @rest_hash["#{vehicle.id}_#{rest.id}"] = {
             index: rest_index,
             vehicle: vehicle.id,
@@ -422,7 +422,7 @@ module Wrappers
             time_window: [vehicle.timewindow&.start || 0, vehicle.timewindow&.end || 2**30],
             # VROOM expects a default skill
             skills: collect_skills(vehicle, vrp_skills),
-            breaks: vehicle.rests.map{ |rest|
+            breaks: Interpreters::RegulatoryRest.solver_rests(vehicle).map{ |rest|
               rest_index = @rest_hash["#{vehicle.id}_#{rest.id}"][:index]
               {
                 id: rest_index,

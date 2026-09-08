@@ -319,7 +319,7 @@ module Wrappers
             end: vehicle.timewindow&.end || 2147483647,
             maximum_lateness: vehicle.timewindow&.maximum_lateness || 0,
           ),
-          rests: vehicle.rests.collect{ |rest|
+          rests: Interpreters::RegulatoryRest.solver_rests(vehicle).collect{ |rest|
             OrtoolsVrp::Rest.new(
               time_window:
                 if rest.timewindows.any?
@@ -525,7 +525,7 @@ module Wrappers
     def build_solution(vrp, content)
       problem_services = vrp.services.map{ |service| [service.id, service] }.to_h
       problem_rests = vrp.vehicles.map{ |vehicle|
-        [vehicle.id, vehicle.rests.map{ |rest| [rest.id, rest] }.to_h]
+        [vehicle.id, Interpreters::RegulatoryRest.solver_rests(vehicle).map{ |rest| [rest.id, rest] }.to_h]
       }.to_h
       routes = build_routes(vrp, problem_services, problem_rests, content.routes)
       Models::Solution.new(
