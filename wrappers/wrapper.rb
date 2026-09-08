@@ -484,7 +484,7 @@ module Wrappers
     end
 
     def assert_no_rest(vrp)
-      vrp.vehicles.none?{ |vehicle| vehicle.rests.any? }
+      vrp.vehicles.none?{ |vehicle| Interpreters::RegulatoryRest.solver_rests(vehicle).any? }
     end
 
     def solve_synchronous?(_vrp)

@@ -131,6 +131,8 @@ module Core
         tic = Time.now
 
         optim_solution = nil
+        periodic_heuristic_flag = false
+        regulatory_rest = Interpreters::RegulatoryRest.new
 
         unfeasible_services = {}
 
@@ -177,6 +179,22 @@ module Core
                 services_to_reinject << vrp.services.slice!(index)
               end
             }
+            if services_to_reinject.any?
+              excluded_ids = services_to_reinject.map(&:id)
+              id_summary =
+                if excluded_ids.size <= 20
+                  excluded_ids.join(', ')
+                else
+                  "#{excluded_ids.first(5).join(', ')}, ... (+#{excluded_ids.size - 5} more)"
+                end
+              log "Excluded #{excluded_ids.size} infeasible service(s) before #{service} solve " \
+                  "(#{vrp.services.size} remaining): #{id_summary}",
+                  level: :info
+            else
+              log "Infeasibility check: no services excluded before #{service} solve " \
+                  "(#{vrp.services.size} services)",
+                  level: :info
+            end
 
             # vrp.periodic_heuristic check the first_solution_stategy which may change right after periodic heuristic
             periodic_heuristic_flag = vrp.periodic_heuristic?
@@ -193,6 +211,7 @@ module Core
                 end
               end
             end
+            regulatory_rest.apply!(vrp)
             if vrp.configuration.resolution.solver && (!periodic_heuristic_flag || vrp.services.size < 200)
               if vrp.configuration.preprocessing.cluster_threshold.to_f.positive?
                 block&.call(nil, nil, nil,
@@ -286,6 +305,7 @@ module Core
           optim_solution.configuration.csv = vrp.configuration.restitution.csv
           optim_solution.configuration.geometry = vrp.configuration.restitution.geometry
           optim_solution.unassigned_stops += unfeasible_services.values.flatten
+          regulatory_rest.patch_solution!(vrp, optim_solution)
           Cleanse.cleanse(vrp, optim_solution)
           optim_solution.parse(vrp)
           if vrp.configuration.preprocessing.first_solution_strategy
@@ -297,6 +317,8 @@ module Core
 
         log "<-- optim_wrap::solve elapsed: #{(Time.now - tic).round(2)}sec", level: :debug
         optim_solution
+      ensure
+        regulatory_rest&.rewind!(vrp)
       end
 
       def build_independent_vrps(vrp, skill_sets, vehicle_indices_by_skills, skill_service_ids)

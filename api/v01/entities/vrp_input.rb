@@ -347,8 +347,10 @@ module VrpMissions
     optional(:timewindows, type: Array, desc: 'Time slot while the rest may begin. At most one timewindow per rest is supported.') do
       use :vrp_request_timewindow
     end
+    optional(:lapse, type: Integer, values: ->(v) { v.positive? }, desc: 'Repeating rest after this many seconds of work (travel + service). Exclusive with timewindows. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:late_multiplier, type: Float, desc: 'Late multiplier applied for this rest')
     optional(:exclusion_cost, type: Float, desc: 'Cost induced by non affectation of this rest')
+    mutually_exclusive :timewindows, :lapse
   end
 
   params :vrp_request_service do

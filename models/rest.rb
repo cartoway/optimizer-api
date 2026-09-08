@@ -22,6 +22,7 @@ module Models
     field :id
     field :original_id
     field :duration, default: 0
+    field :lapse, default: nil
     field :late_multiplier, default: 0, vrp_result: :hide
     field :exclusion_cost, default: nil, vrp_result: :hide
 
