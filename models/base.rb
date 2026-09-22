@@ -30,25 +30,16 @@ module Models
 
     include ActiveHash::Associations
 
+    # Only Array/Hash/Set defaults need per-instance isolation (shared mutable state).
+    MUTABLE_DEFAULT_TYPES = [Array, Hash, Set].freeze
+
     def initialize(hash)
-      super(hash.each_with_object({}){ |(k, v), memo|
-        memo[k.to_sym] = convert(k, v)
-      })
-
-      # Make sure default values are not the same object for all
-      self.attributes.each{ |k, v|
-        # If the key doesn't exist in the hash and its relevant substructures then it must be a default value
-        next if hash.key?(k) ||
-                !v.duplicable? ||
-                ["#{k}_id", "#{ActiveSupport::Inflector.singularize(k.to_s)}_ids"].any?{ |key|
-                  hash.key?(key.to_sym)
-                } ||
-                hash[:configuration] && [:preprocessing, :restitution, :schedule, :resolution].any?{ |symbol|
-                  hash[:configuration][symbol]&.key?(k[symbol.size + 1..-1]&.to_sym)
-                }
-
-        self[k] = v.dup # dup to make sure they are different objects
-      }
+      provided =
+        hash.each_with_object({}){ |(k, v), memo|
+          memo[k.to_sym] = convert(k, v)
+        }
+      super(provided)
+      isolate_mutable_defaults!(provided)
     end
 
     class << self
@@ -151,6 +142,21 @@ module Models
         @types ||= {}
       end
 
+      # Precomputed once per class: mutable default key => companion keys that mean "already set".
+      # Avoids ActiveSupport::Inflector.singularize on every Models::Base#initialize (hot path).
+      def mutable_default_keys
+        @mutable_default_keys ||=
+          (default_attributes || {}).each_with_object({}){ |(k, v), memo|
+            next unless MUTABLE_DEFAULT_TYPES.any?{ |type| v.is_a?(type) }
+
+            memo[k] = [:"#{k}_id", :"#{ActiveSupport::Inflector.singularize(k)}_ids"]
+          }
+      end
+
+      def clear_mutable_default_keys_cache
+        @mutable_default_keys = nil
+      end
+
       private :record_index, :reset_record_index, :add_to_record_index, :mark_dirty, :mark_clean, :thread_store
     end
 
@@ -210,6 +216,7 @@ module Models
       if options[:type]
         types[name] = options[:type]
       end
+      clear_mutable_default_keys_cache
       super(name, options)
     end
 
@@ -222,6 +229,7 @@ module Models
 
       add_default_value(name, options[:default] || [])
       add_default_value(ids_function_name, options[:default] || [])
+      clear_mutable_default_keys_cache
 
       case options[:as_json]
       when :ids
@@ -251,18 +259,19 @@ module Models
         self[name] ||= self.class.default_attributes[name]
       end
 
+      assoc_class = nil
       redefine_method("#{name}=") do |vals|
-        c = class_from_string(options[:class_name])
+        assoc_class ||= class_from_string(options[:class_name])
         self[name] = vals&.collect{ |val|
-          if c == Symbol
+          if assoc_class == Symbol
             val&.to_sym
-          elsif val.is_a?(c)
+          elsif val.is_a?(assoc_class)
             val
           elsif !val.empty?
-            c.create(val)
+            assoc_class.create(val)
           end
         }&.compact || []
-        self[ids_function_name] = self[name]&.map(&:id) if c.module_parent == Models
+        self[ids_function_name] = self[name]&.map(&:id) if assoc_class.module_parent == Models
         self[name]
       end
 
@@ -273,8 +282,8 @@ module Models
         end
 
         redefine_method("#{ids_function_name}=") do |vals|
-          c = class_from_string(options[:class_name])
-          self[name] = vals && vals.split(',').flat_map{ |val_id| c.find(val_id) }
+          assoc_class ||= class_from_string(options[:class_name])
+          self[name] = vals && vals.split(',').flat_map{ |val_id| assoc_class.find(val_id) }
           self[ids_function_name] = self[name]&.map(&:id)
         end
       end
@@ -284,6 +293,7 @@ module Models
       field_names << name
 
       id_function_name = "#{name}_id".to_sym
+      clear_mutable_default_keys_cache
 
       case options[:as_json]
       when :id
@@ -309,10 +319,11 @@ module Models
         self[name]
       end
 
+      assoc_class = nil
       redefine_method("#{name}=") do |val|
-        c = class_from_string(options[:class_name])
-        self[name] = val&.is_a?(Hash) ? c.create(val) : val
-        self[id_function_name] = self[name]&.id if c.module_parent == Models
+        assoc_class ||= class_from_string(options[:class_name])
+        self[name] = val&.is_a?(Hash) ? assoc_class.create(val) : val
+        self[id_function_name] = self[name]&.id if assoc_class.module_parent == Models
         self[name]
       end
 
@@ -323,8 +334,8 @@ module Models
         end
 
         redefine_method("#{id_function_name}=") do |val_id|
-          c = class_from_string(options[:class_name])
-          self[name] = val_id && c.find(val_id)
+          assoc_class ||= class_from_string(options[:class_name])
+          self[name] = val_id && assoc_class.find(val_id)
           self[id_function_name] = self[name]&.id
         end
       end
@@ -332,8 +343,29 @@ module Models
 
     private
 
+    def isolate_mutable_defaults!(provided)
+      configuration = provided[:configuration]
+      self.class.mutable_default_keys.each{ |k, companions|
+        next if provided.key?(k)
+        next if companions.any?{ |ck| provided.key?(ck) }
+        next if configuration && config_provides_key?(configuration, k)
+
+        @attributes[k] = self.class.default_attributes[k].dup
+      }
+    end
+
+    def config_provides_key?(configuration, key)
+      %i[preprocessing restitution schedule resolution].any?{ |section|
+        nested = key[section.size + 1..]&.to_sym
+        nested && configuration[section]&.key?(nested)
+      }
+    end
+
     def convert(key, value)
-      convert_type(self.class.types[key].to_s, value)
+      type = self.class.types[key]
+      return value unless type
+
+      convert_type(type.to_s, value)
     end
 
     def convert_type(type, value)
@@ -342,8 +374,6 @@ module Models
       end
 
       case type
-      when ''
-        value
       when 'Symbol'
         value&.to_sym
       when 'Date'
