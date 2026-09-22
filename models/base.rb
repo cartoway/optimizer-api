@@ -52,6 +52,29 @@ module Models
     end
 
     class << self
+      # Thread-local ActiveHash store. Child Thread.new does not inherit the parent
+      # store — keep VRP work on the request/worker thread, or copy Thread.current[:models_active_hash].
+      def thread_store
+        stores = Thread.current[:models_active_hash] ||= {}
+        stores[name] ||= { records: [], record_index: {}, max_id: 0, dirty: false }
+      end
+
+      def records
+        thread_store[:records]
+      end
+
+      def record_index
+        thread_store[:record_index]
+      end
+
+      def dirty
+        thread_store[:dirty]
+      end
+
+      def dirty=(value)
+        thread_store[:dirty] = value
+      end
+
       def create(attributes = {})
         record = new(attributes)
         validate_unique_id(record) if dirty
@@ -60,25 +83,60 @@ module Models
         record
       end
 
-      # Override active_hash to improve performances
+      def all(options = {})
+        relation = ActiveHash::Relation.new(self, records)
+        relation = relation.where!(options[:conditions]) if options[:conditions]
+        relation
+      end
+
+      # Override active_hash to improve performances (+ thread-local store).
+      # ActiveHash::Base#insert uses next_id which scans all records (O(n));
+      # keep a running max_id instead.
       def insert(record)
-        @records ||= []
         record_id(record)
         validate_unique_id(record) if dirty
         mark_dirty
 
-        add_to_record_index({ record.id.to_s => @records.length })
-        @records << record
+        add_to_record_index({ record.id.to_s => records.length })
+        records << record
       end
 
-      # Override active_hash to improve performances
+      def delete_all
+        mark_dirty
+        reset_record_index
+        thread_store[:records] = []
+        thread_store[:max_id] = 0
+      end
+
+      # Override active_hash next_id (avoids scanning all records)
+      def next_id
+        thread_store[:max_id] = thread_store[:max_id].to_i.succ
+      end
+
+      # Override active_hash to improve performances (+ thread-local store)
       def record_id(record)
-        # sets record[:id] to @max_id+1 if it doesn't exist
+        # sets record[:id] to max_id+1 if it doesn't exist
         if record[:id]&.is_a?(Numeric)
-          @max_id = [@max_id || 0, record[:id].ceil].max
+          thread_store[:max_id] = [thread_store[:max_id] || 0, record[:id].ceil].max
         else
-          record[:id] ||= (@max_id = @max_id.to_i.succ)
+          record[:id] ||= next_id
         end
+      end
+
+      def reset_record_index
+        record_index.clear
+      end
+
+      def add_to_record_index(entry)
+        record_index.merge!(entry)
+      end
+
+      def mark_dirty
+        self.dirty = true
+      end
+
+      def mark_clean
+        self.dirty = false
       end
 
       def json_fields
@@ -92,6 +150,8 @@ module Models
       def types
         @types ||= {}
       end
+
+      private :record_index, :reset_record_index, :add_to_record_index, :mark_dirty, :mark_clean, :thread_store
     end
 
     def to_hash
