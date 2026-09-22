@@ -28,7 +28,7 @@ class CacheManager
   end
 
   def read(name, _options = nil)
-    filtered_name = name.to_s.parameterize(separator: '')
+    filtered_name = sanitize_filename(name)
     if File.exist?(File.join(@cache, filtered_name) + '.gz') # Gzip dumps
       Zlib::GzipReader.open(File.join(@cache, filtered_name) + '.gz', &:read)
     elsif File.exist?(File.join(@cache, filtered_name)) # Zlib (and uncompressed) dumps
@@ -49,7 +49,7 @@ class CacheManager
     raise CacheError.new('Stored value is not a String') if !value.is_a? String
 
     if gz
-      File.open(File.join(@cache, name.to_s.parameterize(separator: '')) + '.gz', mode) do |f|
+      File.open(File.join(@cache, sanitize_filename(name)) + '.gz', mode) do |f|
         gz = Zlib::GzipWriter.new(f)
         if value.bytesize < @data_bytesize_limit_in_mb.megabytes
           gz.write value
@@ -73,5 +73,12 @@ class CacheManager
     if !cache.is_a? ActiveSupport::Cache::NullStore
       raise CacheError.new("Got error \"#{e}\" attempting to clean cache.")
     end
+  end
+
+  private
+
+  # ActiveSupport 7.2+ refuses to parameterize ASCII-8BIT strings
+  def sanitize_filename(name)
+    name.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace).parameterize(separator: '')
   end
 end

@@ -58,7 +58,7 @@ module Api
     end
 
     class Vrp < APIBase
-      include Grape::Extensions::Hash::ParamBuilder
+      build_with :hash
 
       parser :csv, CSVParser
 

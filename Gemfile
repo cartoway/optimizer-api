@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-ruby '>= 3'
+ruby '>= 3.2'
 
 gem 'require_all'
 
@@ -12,19 +12,21 @@ gem 'rake'
 gem 'thin'
 
 # API
-gem 'grape'
+# ~> 3.2: ParamScopeTracker (thread-safe validation); keeps mustermann 3.x (sinatra/resque)
+# grape >= 3.2 needs Ruby >= 3.2 (matches Docker/CI)
+gem 'grape', '~> 3.2.0'
 gem 'grape-entity'
-gem 'grape_logging'
-gem 'grape-swagger'
+gem 'grape_logging', '>= 3.0'
+gem 'grape-swagger', '~> 2.1', '>= 2.1.3' # 2.1.3+ allows grape < 4; 2.2 needs Ruby >= 3.1 OK
 gem 'grape-swagger-entity'
 
 # Models
-gem 'actionpack', require: 'action_dispatch'
+gem 'actionpack', '>= 7.2', require: 'action_dispatch'
 # waiting for the following PRs to get merged and "released!"
 # https://github.com/zilkey/active_hash/pull/231 and https://github.com/zilkey/active_hash/pull/233
 gem 'active_hash'
-gem 'activemodel'
-gem 'activesupport', require: 'active_support'
+gem 'activemodel', '>= 7.2'
+gem 'activesupport', '>= 7.2', require: 'active_support'
 gem 'google-protobuf', '>=3', require: 'google/protobuf'
 gem 'oj'
 

@@ -169,24 +169,25 @@ module Api
            e.is_a?(OptimizerWrapper::UnsupportedProblemError) ||
            e.is_a?(OptimizerWrapper::UnsupportedRouterModeError)
           response[:message] += ' ' + e.data.map { |service| service.join(', ') }.join(' | ') if e.is_a?(OptimizerWrapper::UnsupportedProblemError)
-          rack_response(format_message(response, e.backtrace), 400)
+          error!(response, 400, {}, e.backtrace)
         elsif e.is_a?(Grape::Exceptions::MethodNotAllowed)
-          rack_response(format_message(response, e.backtrace), 405)
+          error!(response, 405, {}, e.backtrace)
         elsif e.is_a?(QuotaExceededError)
-          headers = { 'Content-Type' => content_type,
-                      'X-RateLimit-Limit' => e.data[:limit],
-                      'X-RateLimit-Remaining' => e.data[:remaining],
-                      'X-RateLimit-Reset' => if e.data[:reset] == :daily
-                                               count_time.to_date.next_day
-                                             elsif e.data[:reset] == :monthly
-                                               count_time.to_date.next_month
-                                             elsif e.data[:reset] == :yearly
-                                               count_time.to_date.next_year
-                                             end.to_time.to_i }
-          rack_response(format_message(response, nil), 429, headers)
+          headers = {
+            'X-RateLimit-Limit' => e.data[:limit],
+            'X-RateLimit-Remaining' => e.data[:remaining],
+            'X-RateLimit-Reset' => if e.data[:reset] == :daily
+                                     count_time.to_date.next_day
+                                   elsif e.data[:reset] == :monthly
+                                     count_time.to_date.next_month
+                                   elsif e.data[:reset] == :yearly
+                                     count_time.to_date.next_year
+                                   end.to_time.to_i
+          }
+          error!(response, 429, headers)
         else
           Sentry.capture_exception(e)
-          rack_response(format_message(response, e.backtrace), 500)
+          error!(response, 500, {}, e.backtrace)
         end
       end
 
