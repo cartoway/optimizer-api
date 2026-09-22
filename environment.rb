@@ -35,6 +35,11 @@ require 'active_support/time'
 # gems from standard library
 require 'csv'
 require 'date'
+# Preload Digest implementations: Digest::MD5/SHA* use const_missing and race under
+# multi-threaded Puma ("Digest::Base cannot be directly inherited in Ruby").
+require 'digest/md5'
+require 'digest/sha1'
+require 'digest/sha2'
 require 'fileutils'
 require 'json'
 require 'logger'
