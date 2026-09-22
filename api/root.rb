@@ -22,12 +22,21 @@ module Api
   class Root < Grape::API
     mount ApiV01
 
+    # Omit VRP body from access logs (payloads are huge; dumps go to dump_vrp_dir when enabled)
+    VRP_LOG_PARAM_FILTER = %w[
+      vrp points vehicles services matrices shipments routes relations
+      units rests zones subtours quantities capacities timewindows configuration
+    ].freeze
+
     logger.formatter = GrapeLogging::Formatters::Default.new
-    use GrapeLogging::Middleware::RequestLogger, logger: logger
+    use GrapeLogging::Middleware::RequestLogger,
+        logger: logger,
+        include: [GrapeLogging::Loggers::FilterParameters.new(VRP_LOG_PARAM_FILTER)]
+
+    format :json
 
     desc 'Ping hook. Responds by "pong".'
     get '/ping' do
-      content_type 'application/json'
       'pong'
     end
   end
