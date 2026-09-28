@@ -213,7 +213,7 @@ module Interpreters
 
       preprocessing_fss = vrp.configuration.preprocessing.first_solution_strategy
 
-      return service_vrp if service == :vroom || service == :pyvrp ||
+      return service_vrp if service == :vroom || service == :pyvrp || service == :rosomaxa ||
                             preprocessing_fss.empty? ||
                             preprocessing_fss.include?('periodic') ||
                             (preprocessing_fss.size == 1 && !self_selection?(preprocessing_fss))

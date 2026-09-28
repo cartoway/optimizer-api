@@ -19,6 +19,7 @@
 require './wrappers/demo'
 require './wrappers/ortools'
 require './wrappers/pyvrp'
+require './wrappers/rosomaxa'
 require './wrappers/vroom'
 
 require './lib/cache_manager'
@@ -42,6 +43,10 @@ module OptimizerWrapper
   ORTOOLS = Wrappers::Ortools.new(tmp_dir: TMP_DIR, exec_ortools: ORTOOLS_EXEC)
   VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: ENV['VROOM_PATH'] || '/usr/local/bin/vroom')
   PYVRP = Wrappers::PyVRP.new(tmp_dir: TMP_DIR)
+  ROSOMAXA = Wrappers::Rosomaxa.new(
+    tmp_dir: TMP_DIR,
+    exec_rosomaxa: ENV['ROSOMAXA_PATH'] || '/usr/local/bin/vrp-cli'
+  )
 
   PARAMS_LIMIT = { points: 150, vehicles: 10 }.freeze
   QUOTAS = [{ daily: 100000, monthly: 1000000, yearly: 10000000 }].freeze # Only taken into account if REDIS_COUNT
@@ -65,6 +70,7 @@ module OptimizerWrapper
       ortools: ORTOOLS,
       vroom: VROOM,
       pyvrp: PYVRP,
+      rosomaxa: ROSOMAXA,
     },
     profiles: {
       demo: {
@@ -96,6 +102,12 @@ module OptimizerWrapper
         queue: 'DEFAULT',
         services: {
           vrp: [:pyvrp]
+        },
+      },
+      rosomaxa: {
+        queue: 'DEFAULT',
+        services: {
+          vrp: [:rosomaxa]
         },
       },
       vroom: {

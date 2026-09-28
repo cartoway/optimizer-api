@@ -1,5 +1,5 @@
 class SolverType
-  ALL_SOLVERS = %i[demo ortools pyvrp vroom].freeze
+  ALL_SOLVERS = %i[demo ortools pyvrp rosomaxa vroom].freeze
 
   def self.type_cast(value)
     value = value.split(',') if value.is_a?(String)

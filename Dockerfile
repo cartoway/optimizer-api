@@ -1,6 +1,14 @@
+# syntax=docker/dockerfile:1.4
+# Rosomaxa CLI is a musl binary. Pin matches the published GitHub/crates.io release.
+ARG ROSOMAXA_VERSION=1.25.0
 # Global (before first FROM) so --build-arg can select the optimizer-ortools base tag.
 ARG OPTIMIZER_ORTOOLS_VERSION=v2.4.1
+
+FROM ghcr.io/reinterpretcat/vrp/vrp-cli:${ROSOMAXA_VERSION} AS rosomaxa-cli
+
 FROM ghcr.io/cartoway/optimizer-ortools:${OPTIMIZER_ORTOOLS_VERSION}
+
+COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
 ARG BUNDLE_WITHOUT="test development"
 # Install Vroom
