@@ -19,6 +19,7 @@
 require './wrappers/demo'
 require './wrappers/ortools'
 require './wrappers/pyvrp'
+require './wrappers/rosomaxa'
 require './wrappers/vroom'
 
 require './lib/cache_manager'
@@ -39,6 +40,10 @@ module OptimizerWrapper
     'LD_LIBRARY_PATH=../or-tools/dependencies/install/lib/:../or-tools/lib/ ../optimizer-ortools/tsp_simple'.freeze
   ORTOOLS = Wrappers::Ortools.new(tmp_dir: TMP_DIR, exec_ortools: ORTOOLS_EXEC, threads: 4)
   PYVRP = Wrappers::PyVRP.new(tmp_dir: TMP_DIR)
+  ROSOMAXA = Wrappers::Rosomaxa.new(
+    tmp_dir: TMP_DIR,
+    exec_rosomaxa: ENV['ROSOMAXA_PATH'] || '/usr/local/bin/vrp-cli'
+  )
   VROOM = Wrappers::Vroom.new(tmp_dir: TMP_DIR, threads: 1, exec_vroom: '/usr/local/bin/vroom')
 
   PARAMS_LIMIT = { points: 100000, vehicles: 1000 }.freeze
@@ -62,13 +67,22 @@ module OptimizerWrapper
       demo: DEMO,
       ortools: ORTOOLS,
       pyvrp: PYVRP,
+      rosomaxa: ROSOMAXA,
       vroom: VROOM,
     },
     profiles: {
       demo: {
         queue: 'DEFAULT',
         services: {
-          vrp: [:vroom, :ortools, :pyvrp]
+          vrp: [:vroom, :ortools, :pyvrp, :rosomaxa]
+        },
+        params_limit: PARAMS_LIMIT,
+        quotas: QUOTAS, # Only taken into account if REDIS_COUNT
+      },
+      rosomaxa: {
+        queue: 'DEFAULT',
+        services: {
+          vrp: [:rosomaxa]
         },
         params_limit: PARAMS_LIMIT,
         quotas: QUOTAS, # Only taken into account if REDIS_COUNT

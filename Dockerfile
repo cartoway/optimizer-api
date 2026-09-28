@@ -1,4 +1,11 @@
+# syntax=docker/dockerfile:1.4
+# Rosomaxa CLI is a musl binary. Pin matches the published GitHub/crates.io release.
+ARG ROSOMAXA_VERSION=1.25.0
+FROM ghcr.io/reinterpretcat/vrp/vrp-cli:${ROSOMAXA_VERSION} AS rosomaxa-cli
+
 FROM ghcr.io/cartoway/optimizer-ortools:master
+
+COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
 ARG BUNDLE_WITHOUT="test development"
 # Install Vroom
