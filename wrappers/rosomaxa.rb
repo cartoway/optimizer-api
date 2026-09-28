@@ -1,8 +1,6 @@
 require './wrappers/wrapper'
 
 module Wrappers
-  # reinterpretcat/vrp CLI (pragmatic JSON). Times are RFC3339 offsets from 1970-01-01.
-  # API resolution.duration is milliseconds; --max-time is seconds.
   class Rosomaxa < Wrapper
     QUANTITY_SCALE = 1000
     MAX_I32 = (2**31) - 2
@@ -21,7 +19,7 @@ module Wrappers
         :assert_matrix_indices,
         :assert_no_evaluation,
         :assert_no_partitions,
-        :assert_no_relations,
+        :assert_no_relations_except_simple_shipments,
         :assert_no_subtours,
         :assert_points_same_definition,
 
@@ -35,13 +33,12 @@ module Wrappers
         :assert_vehicles_have_start,
         :assert_no_overall_duration,
         :assert_no_value_matrix,
-        :assert_no_rest,
-        :assert_vehicles_no_reload_depots,
+        :assert_only_simple_rests,
+        :assert_reload_depots_indexed,
 
         :assert_no_activity_with_position,
         :assert_no_empty_or_fill,
         :assert_services_no_late_multiplier,
-        :assert_services_no_setup_duration,
         :assert_no_complex_setup_durations,
         :assert_only_one_visit,
         :assert_no_mixed_service_quantity,
@@ -81,6 +78,25 @@ module Wrappers
       vrp.vehicles.all?(&:start_point)
     end
 
+    def assert_only_simple_rests(vrp)
+      vrp.vehicles.all?{ |vehicle|
+        vehicle.rests.all?{ |rest|
+          !Interpreters::RegulatoryRest.lapse_rest?(rest) &&
+            rest.timewindows.size <= 1 &&
+            !rest.late_multiplier.to_f.positive? &&
+            rest.exclusion_cost.nil?
+        }
+      }
+    end
+
+    def assert_reload_depots_indexed(vrp)
+      vrp.reload_depots.all?{ |depot|
+        depot.point&.matrix_index &&
+          depot.exclusion_cost.nil? &&
+          !depot.late_multiplier.to_f.positive?
+      }
+    end
+
     def assert_no_mixed_service_quantity(vrp)
       vrp.services.none?{ |service|
         pickup, delivery = split_quantities(service)
@@ -96,7 +112,7 @@ module Wrappers
       matrices = build_matrices(vrp)
       problem = {
         plan: {
-          jobs: vrp.services.map{ |service| build_job(service) }
+          jobs: build_jobs(vrp)
         },
         fleet: {
           vehicles: vrp.vehicles.map{ |vehicle| build_vehicle(vehicle) },
@@ -107,8 +123,14 @@ module Wrappers
     end
 
     def prepare_locations!(vrp)
-      @matrix_indices = vrp.points.map(&:matrix_index).uniq.sort
+      indices = vrp.points.map(&:matrix_index)
+      indices += vrp.reload_depots.map{ |depot| depot.point&.matrix_index }
+      @matrix_indices = indices.compact.uniq.sort
       @location_by_matrix_index = @matrix_indices.each_with_index.to_h
+      @services_by_tag = {}
+      @services_by_job_id = {}
+      @rests_by_tag = {}
+      @reloads_by_tag = {}
     end
 
     def location_index(point)
@@ -151,9 +173,11 @@ module Wrappers
           raise OptimizerWrapper::UnsupportedProblemError.new("Rosomaxa - matrix #{matrix_id} has no time or distance")
         end
 
+        travel_times = flat_cells(time, @matrix_indices)
+        add_setup!(travel_times, setups_for(vrp, matrix_id))
         {
           profile: matrix_id.to_s,
-          travelTimes: flat_cells(time, @matrix_indices),
+          travelTimes: travel_times,
           distances: flat_cells(distance, @matrix_indices)
         }
       }
@@ -169,6 +193,33 @@ module Wrappers
         row = table[from] || []
         indices.map{ |to| row[to].to_i }
       }
+    end
+
+    def setups_for(vrp, matrix_id)
+      vehicle = vrp.vehicles.find{ |item| item.matrix_id == matrix_id }
+      setups = {}
+      vrp.services.each{ |service|
+        point = service.activity&.point
+        next unless point&.matrix_index
+
+        setups[point.matrix_index] = service.activity.setup_duration_on(vehicle).to_i
+      }
+      setups
+    end
+
+    def add_setup!(flat, setups)
+      count = @matrix_indices.size
+      @matrix_indices.each_with_index{ |to_index, to_loc|
+        extra = setups[to_index].to_i
+        next unless extra.positive?
+
+        count.times{ |from_loc|
+          next if from_loc == to_loc
+
+          flat[(from_loc * count) + to_loc] += extra
+        }
+      }
+      flat
     end
 
     def build_vehicle(vehicle)
@@ -201,6 +252,10 @@ module Wrappers
           location: { index: location_index(vehicle.start_point) }
         }
       }
+      breaks = lunch_breaks(vehicle)
+      shift[:breaks] = breaks if breaks.any?
+      reloads = reload_places(vehicle)
+      shift[:reloads] = reloads if reloads.any?
       return shift unless vehicle.end_point
 
       latest = vehicle.timewindow&.end
@@ -229,15 +284,84 @@ module Wrappers
       }
     end
 
-    def build_job(service)
-      pickup, delivery = split_quantities(service)
-      place = {
-        location: { index: location_index(service.activity.point) },
-        duration: service.activity.duration.to_f
+    def reload_places(vehicle)
+      return [] if vehicle.maximum_reloads == 0
+
+      vehicle.reload_depots.filter_map{ |depot|
+        next unless depot.point
+
+        @reloads_by_tag[depot.id.to_s] = depot
+        place = {
+          location: { index: location_index(depot.point) },
+          duration: depot.duration.to_f,
+          tag: depot.id.to_s
+        }
+        times = windows_for(depot.timewindows)
+        place[:times] = times if times.any?
+        place
       }
-      times = time_windows(service)
-      place[:times] = times if times.any?
-      task = { places: [place] }
+    end
+
+    def lunch_breaks(vehicle)
+      Interpreters::RegulatoryRest.solver_rests(vehicle).map{ |rest|
+        @rests_by_tag[rest.id.to_s] = rest
+        tw = rest.timewindows.first
+        earliest = tw&.start || vehicle.timewindow&.start || 0
+        latest = tw&.end || vehicle.timewindow&.end || (earliest + @horizon)
+        {
+          time: [rfc3339(earliest), rfc3339(latest)],
+          places: [{ duration: rest.duration.to_f, tag: rest.id.to_s }]
+        }
+      }
+    end
+
+    def build_jobs(vrp)
+      shipped = {}
+      jobs = []
+      vrp.relations.each{ |relation|
+        next unless relation.type == :shipment && relation.linked_services.size == 2
+
+        pickup, delivery = relation.linked_services
+        shipped[pickup.id] = true
+        shipped[delivery.id] = true
+        jobs << shipment_job(relation, pickup, delivery)
+      }
+      vrp.services.each{ |service|
+        next if shipped[service.id]
+
+        jobs << build_job(service)
+      }
+      jobs
+    end
+
+    def shipment_job(relation, pickup, delivery)
+      job_id = relation.id.to_s
+      job_id = "shipment_#{pickup.id}_#{delivery.id}" if job_id.empty?
+      @services_by_job_id[job_id] = [pickup, delivery]
+      @services_by_tag[pickup.id.to_s] = pickup
+      @services_by_tag[delivery.id.to_s] = delivery
+      pickup_qty, = split_quantities(pickup)
+      _, delivery_qty = split_quantities(delivery)
+      job = {
+        id: job_id,
+        pickups: [{
+          places: [place_for(pickup.activity, tag: pickup.id)],
+          demand: demand_vector(pickup_qty)
+        }],
+        deliveries: [{
+          places: [place_for(delivery.activity, tag: delivery.id)],
+          demand: demand_vector(delivery_qty)
+        }]
+      }
+      skill_names = (pickup.skills + delivery.skills).map(&:to_s).uniq
+      job[:skills] = { allOf: skill_names } if skill_names.any?
+      job
+    end
+
+    def build_job(service)
+      @services_by_job_id[service.id.to_s] = [service]
+      pickup, delivery = split_quantities(service)
+      task = { places: [place_for(service.activity)] }
       job = { id: service.id.to_s }
       if @unit_ids.any? && delivery.values.any?(&:positive?)
         task[:demand] = demand_vector(delivery)
@@ -257,10 +381,19 @@ module Wrappers
       @unit_ids.map{ |unit_id| by_unit[unit_id].to_i }
     end
 
-    def time_windows(service)
-      return [] unless service.activity
+    def place_for(activity, tag: nil)
+      place = {
+        location: { index: location_index(activity.point) },
+        duration: activity.duration.to_f
+      }
+      times = windows_for(activity.timewindows)
+      place[:times] = times if times.any?
+      place[:tag] = tag.to_s if tag
+      place
+    end
 
-      service.activity.timewindows.filter_map{ |tw|
+    def windows_for(timewindows)
+      timewindows.filter_map{ |tw|
         next if tw.start.nil? && tw.end.nil?
 
         [rfc3339(tw.start || 0), rfc3339(tw.end || @horizon)]
@@ -368,12 +501,29 @@ module Wrappers
                 depot = read_depot(vrp, vehicle, vehicle.end_point, arrival, departure)
                 stops << depot if depot
               when 'delivery', 'pickup', 'service', 'replacement'
-                service = services_by_id[activity[:jobId]]
+                service = service_for_activity(activity, services_by_id)
                 next unless service
                 next if assigned[service.id]
 
                 assigned[service.id] = true
                 stops << read_visit(vrp, vehicle, service, activity, arrival, departure, index.zero?)
+              when 'reload'
+                depot = @reloads_by_tag[activity[:jobTag].to_s]
+                next unless depot
+
+                stops << read_timed_stop(
+                  vrp, vehicle, depot, depot.point, activity,
+                  { arrival: arrival, departure: departure, travel: index.zero? }
+                )
+              when 'break'
+                rest = @rests_by_tag[activity[:jobTag].to_s]
+                next unless rest
+
+                point = index.zero? ? point_at(vrp, raw_stop[:location]) : nil
+                stops << read_timed_stop(
+                  vrp, vehicle, rest, point, activity,
+                  { arrival: arrival, departure: departure, travel: !point.nil? }
+                )
               end
             }
           }
@@ -391,12 +541,13 @@ module Wrappers
 
       unassigned = []
       Array(result[:unassigned]).each{ |job|
-        service = services_by_id[job[:jobId]]
-        next unless service
-        next if assigned[service.id]
+        services = @services_by_job_id[job[:jobId]] || Array(services_by_id[job[:jobId]])
+        services.each{ |service|
+          next if assigned[service.id]
 
-        assigned[service.id] = true
-        unassigned << read_unassigned(service)
+          assigned[service.id] = true
+          unassigned << read_unassigned(service)
+        }
       }
       vrp.services.each{ |service|
         next if assigned[service.id]
@@ -429,6 +580,46 @@ module Wrappers
             end_time: departure,
             departure_time: departure,
             waiting_time: 0
+          )
+        )
+      )
+    end
+
+    def service_for_activity(activity, services_by_id)
+      tagged = @services_by_tag[activity[:jobTag].to_s] if activity[:jobTag]
+      tagged || services_by_id[activity[:jobId]]
+    end
+
+    def point_at(vrp, location)
+      index = location.is_a?(Hash) ? location[:index] : nil
+      return nil if index.nil?
+
+      origin = @matrix_indices[index]
+      vrp.points.find{ |point| point.matrix_index == origin }
+    end
+
+    def read_timed_stop(vrp, vehicle, mission, point, activity, timing)
+      arrival = timing[:arrival]
+      departure = timing[:departure]
+      count_travel = timing[:travel]
+      route_data =
+        if count_travel && point
+          compute_route_data(vrp, vehicle, point)
+        else
+          { travel_time: 0, travel_distance: 0, travel_value: 0 }
+        end
+      @previous = point if count_travel && point
+      begin_time = activity.dig(:time, :start) ? parse_clock(activity[:time][:start]) : arrival
+      end_time = activity.dig(:time, :end) ? parse_clock(activity[:time][:end]) : departure
+      waiting = count_travel && begin_time && arrival ? [begin_time - arrival, 0].max : 0
+      Models::Solution::Stop.new(
+        mission,
+        info: Models::Solution::Stop::Info.new(
+          route_data.merge(
+            begin_time: begin_time,
+            end_time: end_time,
+            departure_time: end_time,
+            waiting_time: waiting
           )
         )
       )
