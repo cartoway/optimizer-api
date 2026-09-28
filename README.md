@@ -5,7 +5,7 @@ Run an optimizer REST API depending of many constraints for a Vehicle Routing Pr
 This project use some solver engines:
 * [Vroom v1.14.0](https://github.com/VROOM-Project/vroom/releases/tag/v1.14.0)
 * [Optimizer-ortools v1.17.1](https://github.com/cartoroute/optimizer-ortools) & [OR-Tools v7.8](https://github.com/google/or-tools/releases/tag/v7.8) (use the version corresponding to your system operator, not source code).
-* [vrp-cli 1.25.0](https://github.com/reinterpretcat/vrp/releases/tag/v1.25.0) (Rosomaxa, Apache-2.0, separate process). Service `:rosomaxa`, appended after the existing solvers. MVP covers matrix problems with single-activity services, a vehicle start, capacities and time windows. Relations, rests, reloads and shipments are skipped.
+* [vrp-cli 1.25.0](https://github.com/reinterpretcat/vrp/releases/tag/v1.25.0) (Rosomaxa, Apache-2.0, separate process). Service `:rosomaxa`, appended after the existing solvers. Covers matrix problems with single-activity services, a vehicle start, an optional end (open route), capacities, time windows, simple shipments, reload depots and lunch breaks. A missing start depot, regulatory rests, and relations other than simple shipments are skipped. `maximum_reloads` is not enforced.
 
 ## API
 
