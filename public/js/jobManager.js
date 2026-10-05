@@ -10,18 +10,60 @@ function buildDownloadLink(jobId, state) {
 
   var url = "/0.1/vrp/jobs/" + jobId + extension + '?api_key=' + getParams()['api_key'];
 
-  return ' <a download="result_' + jobId + ((extension !== '.json' ? '.csv' : extension))
+  return '<a class="job-action" download="result_' + jobId + ((extension !== '.json' ? '.csv' : extension))
     + '" href="' + url + '">' + msg + '</a>';
 }
 
 function buildResultLink(jobId) {
-  return '<a href="/result.html?api_key=' + getParams()['api_key'] + '&job_id=' + jobId + '" target="_blank">' + i18next.t('show_result') + '</a>'
+  return '<a class="job-action" href="/result.html?api_key=' + getParams()['api_key'] + '&job_id=' + encodeURIComponent(jobId) + '" target="_blank">' + i18next.t('show_result') + '</a>'
+}
+
+function escapeJobHtml(value) {
+  return String(value).replace(/[&<>"']/g, function (char) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char];
+  });
+}
+
+function nameSegments(name) {
+  return String(name || '').split('_').filter(function (segment) { return segment.length > 0; });
+}
+
+function jobsMatchingPrefixes(jobs, prefixes) {
+  prefixes = prefixes || [];
+  return (jobs || []).filter(function (job) {
+    var segments = nameSegments(job.name);
+    for (var i = 0; i < prefixes.length; i++) {
+      if (segments[i] !== prefixes[i]) return false;
+    }
+    return true;
+  });
+}
+
+function nextPrefixOptions(jobs, prefixes) {
+  var depth = (prefixes || []).length;
+  var seen = {};
+  var options = [];
+  jobsMatchingPrefixes(jobs, prefixes).forEach(function (job) {
+    var segment = nameSegments(job.name)[depth];
+    if (!segment || seen[segment]) return;
+    seen[segment] = true;
+    options.push(segment);
+  });
+  return options.sort();
+}
+
+function jobsSignature(jobs) {
+  return (jobs || []).map(function (job) {
+    return [job.uuid, job.status, job.name || '', job.avancement || ''].join('|');
+  }).join(';');
 }
 
 var jobsManager = {
   jobs: [],
+  filterPrefixes: [],
   htmlElements: {
     builder: function (jobs) {
+      $('#jobs-list').empty();
       $(jobs).each(function () {
 
         currentJob = this;
@@ -29,7 +71,7 @@ var jobsManager = {
         var startTime = (new Date(currentJob.time)).toLocaleString('fr-FR');
         var completedDate = ''
 
-        if (currentJob.status === 'completed') {
+        if (currentJob.status === 'completed' && currentJob.avancement) {
           var splitedDate = currentJob.avancement
             .replace("Completed at ", '')
             .split(' ');
@@ -38,30 +80,110 @@ var jobsManager = {
         }
 
 
+        var jobId = escapeJobHtml(currentJob.uuid);
+        var status = escapeJobHtml(currentJob.status);
+        var displayName = escapeJobHtml(currentJob.name || currentJob.uuid);
+        var compareBtn = currentJob.status === 'completed'
+          ? '<button type="button" class="job-action" data-role="compare" value="' + jobId + '">' + i18next.t('compare_action') + '</button>'
+          : '';
         var jobDOM =
-          '<div class="job">'
-          + '<span class="optim-start">' + startTime + ' : </span>'
-          + '<span class="job_title">' + 'Job N° <b>' + currentJob.uuid + '</b></span> '
-          + '<button value=' + currentJob.uuid + ' data-role="delete">'
+          '<article class="job-card">'
+          + '<div class="job-card-main">'
+          + '<time class="optim-start">' + escapeJobHtml(startTime) + '</time>'
+          + '<code class="job_title" title="' + jobId + '">' + displayName + '</code>'
+          + '<span class="status-pill status-' + status + '">' + i18next.t('status_' + currentJob.status) + '</span>'
+          + (completedDate ? '<span class="job-when">' + escapeJobHtml(completedDate.trim()) + '</span>' : '')
+          + '</div>'
+          + '<div class="job-card-actions">'
+          + compareBtn
+          + (donwloadBtn ? buildDownloadLink(currentJob.uuid, currentJob.status) : '')
+          + (currentJob.status === 'completed' ? buildResultLink(currentJob.uuid) : '')
+          + '<button type="button" class="job-action job-action-danger" data-role="delete" value="' + jobId + '">'
           + ((currentJob.status === 'queued' || currentJob.status === 'working') ? i18next.t('kill_optim') : i18next.t('delete'))
           + '</button>'
-          + ' (Status: ' + currentJob.status + completedDate + ')'
-          + (donwloadBtn ? buildDownloadLink(currentJob.uuid, currentJob.status) : '')
-          + (currentJob.status === 'completed' ? ' - ' + buildResultLink(currentJob.uuid) : '')
-          + '</div>';
+          + '</div>'
+          + '</article>';
 
         $('#jobs-list').append(jobDOM);
 
       });
-      $('#jobs-list button').on('click', function () {
+      $('#jobs-list button').off('click').on('click', function () {
         jobsManager.roleDispatcher(this);
       });
     }
+  },
+  pruneFilterPrefixes: function () {
+    while (jobsManager.filterPrefixes.length > 0) {
+      var prefixes = jobsManager.filterPrefixes.slice(0, -1);
+      var options = nextPrefixOptions(jobsManager.jobs, prefixes);
+      var selected = jobsManager.filterPrefixes[jobsManager.filterPrefixes.length - 1];
+      if (options.indexOf(selected) !== -1) break;
+      jobsManager.filterPrefixes.pop();
+    }
+  },
+  renderFilters: function () {
+    var root = document.getElementById('jobs-filters');
+    if (!root) return;
+
+    jobsManager.pruneFilterPrefixes();
+    var firstOptions = nextPrefixOptions(jobsManager.jobs, []);
+    if (firstOptions.length === 0) {
+      root.hidden = true;
+      root.innerHTML = '';
+      return;
+    }
+
+    root.hidden = false;
+    var html = '<span class="jobs-filters-label">' + escapeJobHtml(i18next.t('jobs_filter_label')) + '</span>';
+    var depth = 0;
+    while (true) {
+      var prefixes = jobsManager.filterPrefixes.slice(0, depth);
+      var options = nextPrefixOptions(jobsManager.jobs, prefixes);
+      if (options.length === 0) break;
+
+      var selected = jobsManager.filterPrefixes[depth] || '';
+      html += '<select class="jobs-filter-select" data-depth="' + depth + '">'
+        + '<option value="">' + escapeJobHtml(i18next.t('jobs_filter_all')) + '</option>';
+      options.forEach(function (option) {
+        html += '<option value="' + escapeJobHtml(option) + '"'
+          + (option === selected ? ' selected' : '') + '>'
+          + escapeJobHtml(option) + '</option>';
+      });
+      html += '</select>';
+
+      if (!selected) break;
+      depth += 1;
+    }
+
+    if (jobsManager.filterPrefixes.length > 0) {
+      html += '<button type="button" class="job-action" data-role="reset-filters">'
+        + escapeJobHtml(i18next.t('jobs_filter_reset')) + '</button>';
+    }
+
+    root.innerHTML = html;
+    $(root).find('select').on('change', function () {
+      var selectedDepth = Number(this.getAttribute('data-depth'));
+      var value = this.value;
+      jobsManager.filterPrefixes = jobsManager.filterPrefixes.slice(0, selectedDepth);
+      if (value) jobsManager.filterPrefixes.push(value);
+      jobsManager.render();
+    });
+    $(root).find('[data-role="reset-filters"]').on('click', function () {
+      jobsManager.filterPrefixes = [];
+      jobsManager.render();
+    });
+  },
+  render: function () {
+    jobsManager.renderFilters();
+    jobsManager.htmlElements.builder(jobsMatchingPrefixes(jobsManager.jobs, jobsManager.filterPrefixes));
   },
   roleDispatcher: function (object) {
     switch ($(object).data('role')) {
     case 'focus':
       //actually in building, create to apply different behavior to the button object restartJob, actually not set. #TODO
+      break;
+    case 'compare':
+      if (window.planCompare) window.planCompare.add($(object).val());
       break;
     case 'delete':
       if (window.confirm(i18next.t('delete_confirm'))) {
@@ -71,6 +193,7 @@ var jobsManager = {
     }
   },
   ajaxGetJobs: function (timeinterval) {
+    $('#optim-list-legend').text(i18next.t('current_jobs'));
     var ajaxload = function () {
       if (!requestPendingAllJobs) {
         requestPendingAllJobs = true;
@@ -82,6 +205,7 @@ var jobsManager = {
           complete: function () { requestPendingAllJobs = false; }
         }).done(function (data) {
           jobsManager.shouldUpdate(data);
+          if (window.planCompare) window.planCompare.syncJobs(data);
         }).fail(function (jqXHR, textStatus, errorThrown) {
           if (jqXHR.status !== 500) {
             clearInterval(window.AjaxGetRequestInterval);
@@ -110,29 +234,15 @@ var jobsManager = {
       },
     }).done(function (data) {
       if (debug) { console.log("the uuid has been deleted from the jobs queue & the DB"); }
-      $('button[data-role="delete"][value="' + uuid + '"]').fadeOut(500, function () { $(this).closest('.job').remove(); });
+      jobsManager.jobs = jobsManager.jobs.filter(function (job) { return job.uuid !== uuid; });
+      jobsManager.render();
     });
   },
   shouldUpdate: function (data) {
-    // erase list if no job running
-    if (data.length === 0 && jobsManager.jobs.length !== 0) {
-      $('#jobs-list').empty();
-    }
-    //check if chagements occurs in the data api. #TODO, update if more params are needed.
-    $(data).each(function (index, object) {
-      if (jobsManager.jobs.length > 0) {
-        if (object.status != jobsManager.jobs[index].status || jobsManager.jobs.length != data.length) {
-          jobsManager.jobs = data;
-          $('#jobs-list').empty();
-          jobsManager.htmlElements.builder(jobsManager.jobs);
-        }
-      }
-      else {
-        jobsManager.jobs = data;
-        $('#jobs-list').empty();
-        jobsManager.htmlElements.builder(jobsManager.jobs);
-      }
-    });
+    data = data || [];
+    if (jobsSignature(data) === jobsSignature(jobsManager.jobs)) return;
+    jobsManager.jobs = data;
+    jobsManager.render();
   },
   checkJobStatus: function (options, cb) {
     var nbError = 0;
@@ -237,4 +347,12 @@ function downloadButton(jobId, content) {
   a.download = 'result_' + jobId + '.csv';
   document.body.appendChild(a);
   a.click();
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    nameSegments: nameSegments,
+    jobsMatchingPrefixes: jobsMatchingPrefixes,
+    nextPrefixOptions: nextPrefixOptions
+  };
 }

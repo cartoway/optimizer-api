@@ -33,6 +33,13 @@ module Models
     field :name, default: nil
     field :router, default: OptimizerWrapper.router(OptimizerWrapper.config[:router][:api_key]), as_json: :none
 
+    # Keep '_' as segment separator (filterable); turn spaces/punctuation into '_'.
+    def self.normalize_name(name)
+      return if name.nil?
+
+      name.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace).parameterize(separator: '_')
+    end
+
     has_many :matrices, class_name: 'Models::Matrix'
     has_many :points, class_name: 'Models::Point'
     has_many :units, class_name: 'Models::Unit'
@@ -68,6 +75,7 @@ module Models
       self.ensure_retrocompatibility(hash)
       self.filter(hash) if options[:check] # TODO : add filters.rb here
       vrp.check_consistency(hash) if options[:check] # TODO: this check can be directly done on the hash without concern
+      hash[:name] = normalize_name(hash[:name]) if hash[:name]
       [:name, :matrices, :units, :points, :rests, :zones, :capacities, :quantities, :timewindows,
        :reload_depots, :vehicles, :services, :relations, :subtours, :routes, :configuration].each{ |key|
         vrp.send("#{key}=", hash[key]) if hash[key]
@@ -102,6 +110,7 @@ module Models
     def empty_solution(solver, unassigned_with_reason = [], already_expanded = true)
       self.vehicles = expand_vehicles_for_consistent_empty_result if self.schedule? && !already_expanded
       solution = Models::Solution.new(
+        name: self.name,
         solvers: [solver],
         routes: self.vehicles.map{ |v| self.empty_route(v) },
         unassigned_stops: (unassigned_visits(unassigned_with_reason) +

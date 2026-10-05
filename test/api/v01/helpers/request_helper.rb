@@ -143,11 +143,16 @@ module TestHelper
   end
 
   def delete_completed_job(job_id, params)
+    # Completed jobs stay listable for a few hours after retrieval; cleanup may return 202 or 404.
     puts "#{job_id} #{Time.now} sending delete_completed"
     delete "0.1/vrp/jobs/#{job_id}.json", params
-    assert_equal 404, last_response.status, last_response.body
+    assert_includes [202, 404], last_response.status, last_response.body
     puts "#{job_id} #{Time.now} delete_completed done"
-    JSON.parse(last_response.body)
+    begin
+      JSON.parse(last_response.body)
+    rescue JSON::ParserError
+      nil
+    end
   end
 
   def asynchronously(options = {start_worker: false})

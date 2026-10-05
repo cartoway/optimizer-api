@@ -31,6 +31,7 @@ module Interpreters
       vrp = service_vrp.vrp
 
       if vrp.configuration.preprocessing.partitions&.any?
+        service_vrp.mark_interpreter!(:split)
         splited_service_vrps = generate_split_vrps(service_vrp, job, block)
         if OptimizerWrapper.config[:debug][:output_clusters] && splited_service_vrps.size > 1
           OutputHelper::Clustering.generate_files(splited_service_vrps,
@@ -71,9 +72,10 @@ module Interpreters
         vrp.services = splited_service_vrps.flat_map{ |sv| sv.vrp.services }
         vrp.relations = splited_service_vrps.flat_map{ |sv| sv.vrp.relations }
 
-        split_solutions.reduce(&:+) # return
+        split_solutions.reduce(&:+)&.absorb_interpreters!(service_vrp) # return
       elsif split_solve_candidate?(service_vrp)
-        split_solve(service_vrp, &block) # return
+        service_vrp.mark_interpreter!(:split)
+        split_solve(service_vrp, &block)&.absorb_interpreters!(service_vrp) # return
       else
         service_vrp.dicho_level ||= 0
         nil # return
