@@ -16,13 +16,15 @@ module Core
             next
           end
 
+          options = job.options || {}
           {
             time: job.time,
             uuid: job.uuid,
             status: job.status,
             avancement: job.message,
-            checksum: job.options && job.options['checksum'],
-            name: job.options && job.options['vrp_name']
+            checksum: options['checksum'],
+            name: options['vrp_name'],
+            vrp_dump: vrp_dump?(api_key, job)
           }
         }
       end
@@ -38,6 +40,34 @@ module Core
           OptimizerWrapper::Job.dequeue(OptimizerWrapper::Job, id)
           Resque::Plugins::Status::Hash.remove(id)
         end
+      end
+
+      def vrp_dump_key(api_key, vrp_name, checksum)
+        return unless checksum
+
+        key_print = api_key.to_s.rpartition('-')[0]
+        key_print = api_key.to_s[0..3] if key_print.empty?
+        [key_print, vrp_name.presence || 'no_vrp_name', checksum].compact.join('_')
+      end
+
+      def read_vrp_dump(api_key, job)
+        return unless job&.dig('options', 'api_key') == api_key
+
+        options = job.options || {}
+        key = options['vrp_dump_key'].presence || vrp_dump_key(api_key, options['vrp_name'], options['checksum'])
+        return unless key
+
+        OptimizerWrapper.dump_vrp_dir.read(key)
+      end
+
+      def vrp_dump?(api_key, job)
+        return false unless job&.dig('options', 'checksum')
+
+        options = job.options || {}
+        key = options['vrp_dump_key'].presence || vrp_dump_key(api_key, options['vrp_name'], options['checksum'])
+        return false unless key
+
+        OptimizerWrapper.dump_vrp_dir.exist?(key)
       end
 
       def retention_expired?(job)
@@ -60,7 +90,8 @@ module Core
         job.time
       end
 
-      module_function :job_list, :job_kill, :job_remove, :retention_expired?, :completed_at
+      module_function :job_list, :job_kill, :job_remove, :vrp_dump_key, :read_vrp_dump, :vrp_dump?,
+                      :retention_expired?, :completed_at
     end
   end
 end

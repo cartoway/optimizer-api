@@ -115,7 +115,10 @@ module Api
 
             vrp_params = d_params[:points] ? d_params : d_params[:vrp]
             vrp_params[:name] = Models::Vrp.normalize_name(vrp_params[:name]) if vrp_params[:name]
-            APIBase.dump_vrp_dir.write([key_print, vrp_params[:name] || 'no_vrp_name', checksum].compact.join('_'), d_params.to_json) if OptimizerWrapper.config[:dump][:vrp]
+            if OptimizerWrapper.config[:dump][:vrp]
+              dump_key = Core::Services::JobService.vrp_dump_key(api_key, vrp_params[:name], checksum)
+              APIBase.dump_vrp_dir.write(dump_key, d_params.to_json)
+            end
 
             Sentry.set_extras(vrp_name: vrp_params[:name])
 
@@ -198,6 +201,32 @@ module Api
         end
 
         resource :jobs do
+          desc 'Download dumped VRP for a job', {
+            nickname: 'get_job_vrp',
+            failure: [
+              { code: 404, message: 'Not Found', model: ::Api::V01::Status }
+            ],
+            detail: 'Download the VRP JSON dump associated with the job, when dump is enabled.'
+          }
+          params {
+            requires :id, type: String, desc: 'Job id returned by creating VRP problem.'
+          }
+          get ':id/vrp' do
+            id = params[:id]
+            job = Resque::Plugins::Status::Hash.get(id)
+            content = Core::Services::JobService.read_vrp_dump(params[:api_key], job)
+            if content.nil?
+              status 404
+              error!({ message: "VRP dump for job id='#{id}' not found" }, 404)
+            end
+
+            filename = "#{(job.options && job.options['vrp_name']) || id}.json"
+            header 'Content-Disposition', "attachment; filename=\"#{filename}\""
+            content_type 'application/json'
+            env['api.format'] = :binary
+            body content
+          end
+
           desc 'Fetch vrp job status', {
             nickname: 'get_job',
             success: VrpResult,

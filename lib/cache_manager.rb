@@ -27,6 +27,11 @@ class CacheManager
     FileUtils.mkdir_p(@cache)
   end
 
+  def exist?(name)
+    filtered_name = sanitize_filename(name)
+    File.exist?(File.join(@cache, filtered_name) + '.gz') || File.exist?(File.join(@cache, filtered_name))
+  end
+
   def read(name, _options = nil)
     filtered_name = sanitize_filename(name)
     if File.exist?(File.join(@cache, filtered_name) + '.gz') # Gzip dumps
