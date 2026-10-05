@@ -101,7 +101,6 @@ ADD . /srv/app
 EXPOSE 80
 
 HEALTHCHECK \
-    --start-interval=1s \
     --start-period=30s \
     --interval=30s \
     --timeout=20s \
