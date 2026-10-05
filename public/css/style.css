@@ -22,9 +22,79 @@ form {
   border: 1px solid lightgrey;
 }
 
+body:not([data-page=result]) form {
+  border: 0;
+}
+
 input[type=text] {
   padding-left: 3px;
   padding-right: 3px;
+}
+
+.panel-form {
+  margin: 16px 8px;
+  background: #fff;
+  border: 1px solid #e3e8ee !important;
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panel-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.panel-form-row label {
+  color: #52606d;
+  font-size: 0.9rem;
+}
+.panel-form input[type=file] {
+  font: inherit;
+  color: #345;
+}
+.job-action-primary {
+  border: 0;
+  background: #1f4b99;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+.job-action-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+#files-infos {
+  color: #52606d;
+  font-size: 0.85rem;
+}
+.result-panel {
+  margin: 16px 8px 24px;
+  background: #fff;
+  border: 1px solid #e3e8ee;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.result-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.result-panel #result {
+  width: calc(100% - 330px);
+  min-width: 280px;
+  box-sizing: border-box;
+  border: 1px solid #d0d7e2;
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+  color: #1f2933;
+  background: #f8fafc;
 }
 
 fieldset {
@@ -75,6 +145,21 @@ form #optim-options input {
   height: 600px;
   margin-top: 5px;
   min-width: 300px;
+}
+
+#optim-infos {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  vertical-align: middle;
+}
+#optim-infos .optim-summary,
+#optim-infos #optim-status,
+#optim-infos #avancement,
+#optim-infos #timer {
+  color: #52606d;
+  font-size: 0.9rem;
 }
 
 #optim-list-status {
@@ -204,6 +289,10 @@ form #optim-options input {
   padding: 8px 14px;
   font: inherit;
   cursor: pointer;
+}
+#compare-submit:hover,
+.job-action-primary:hover:not(:disabled) {
+  background: #183c7a;
 }
 .compare-scroll { overflow-x: auto; margin-top: 12px; }
 .compare-table {
