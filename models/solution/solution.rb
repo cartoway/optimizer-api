@@ -25,6 +25,19 @@ module Models
     field :heuristic_synthesis, default: []
     field :iterations
     field :solvers, default: []
+    field :interpreters, default: []
+
+    def mark_interpreter!(name)
+      self.interpreters |= [name.to_s]
+      self
+    end
+
+    def absorb_interpreters!(service_vrp)
+      return self unless service_vrp
+
+      self.interpreters |= Array(service_vrp.interpreters)
+      self
+    end
 
     has_many :routes, class_name: 'Models::Solution::Route'
     has_many :skipped_services, class_name: 'Models::SkippedService'
@@ -87,9 +100,11 @@ module Models
 
     def +(other)
       solution = Solution.new({})
+      solution.name = self.name || other.name
       solution.elapsed = self.elapsed + other.elapsed
       solution.heuristic_synthesis = self.heuristic_synthesis + other.heuristic_synthesis
       solution.solvers = self.solvers + other.solvers
+      solution.interpreters = (self.interpreters + other.interpreters).uniq
       solution.routes = self.routes + other.routes
       solution.skipped_services = self.skipped_services + other.skipped_services
       solution.unassigned_stops = self.unassigned_stops + other.unassigned_stops

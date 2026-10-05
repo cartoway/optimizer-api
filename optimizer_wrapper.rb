@@ -81,6 +81,7 @@ module OptimizerWrapper
       job_id = Job.enqueue_to(profile[:queue], Job, services_vrps: Base64.encode64(Marshal.dump(services_vrps)),
                                                     api_key: api_key,
                                                     checksum: checksum,
+                                                    vrp_name: vrp.name,
                                                     pids: [])
       JobList.add(api_key, job_id)
       {

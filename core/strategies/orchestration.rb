@@ -115,6 +115,7 @@ module Core
         log "<-- define_process levels (dicho: #{dicho_level}, split: #{split_level}) "\
             "elapsed: #{(Time.now - tic).round(2)} sec"
         solution.configuration.deprecated_headers = vrp.configuration.restitution.use_deprecated_csv_headers
+        solution.absorb_interpreters!(service_vrp)
         solution
       end
 
@@ -137,6 +138,7 @@ module Core
         unfeasible_services = {}
 
         if !vrp.subtours.empty?
+          service_vrp.mark_interpreter!(:multimodal)
           multi_modal = Interpreters::MultiModal.new(vrp, service)
           optim_solution = multi_modal.multimodal_routes
         elsif vrp.vehicles.empty? || vrp.services.empty?
@@ -198,6 +200,7 @@ module Core
 
             # vrp.periodic_heuristic check the first_solution_stategy which may change right after periodic heuristic
             periodic_heuristic_flag = vrp.periodic_heuristic?
+            service_vrp.mark_interpreter!(:periodic) if periodic_heuristic_flag
             # TODO: refactor with dedicated class
             if vrp.schedule?
               periodic = Interpreters::PeriodicVisits.new(vrp)
@@ -214,6 +217,7 @@ module Core
             regulatory_rest.apply!(vrp)
             if vrp.configuration.resolution.solver && (!periodic_heuristic_flag || vrp.services.size < 200)
               if vrp.configuration.preprocessing.cluster_threshold.to_f.positive?
+                service_vrp.mark_interpreter!(:clique_cluster)
                 block&.call(nil, nil, nil,
                             'process clique clustering : threshold '\
                             "(#{vrp.configuration.preprocessing.cluster_threshold.to_f}) ",
@@ -315,6 +319,7 @@ module Core
           optim_solution = vrp.empty_solution(service, unfeasible_services.values)
         end
 
+        optim_solution&.absorb_interpreters!(service_vrp)
         log "<-- optim_wrap::solve elapsed: #{(Time.now - tic).round(2)}sec", level: :debug
         optim_solution
       ensure

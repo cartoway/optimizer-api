@@ -34,6 +34,30 @@ class Api::V01::VrpTest < Minitest::Test
     delete_job @job_id, api_key: 'demo'
   end
 
+  def test_returned_solution_keeps_vrp_name
+    vrp = VRP.toy
+    vrp[:name] = 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c'
+
+    post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
+    assert_equal 200, last_response.status, last_response.body
+    solution = JSON.parse(last_response.body)['solutions'][0]
+    assert_equal 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c', solution['name']
+    assert_includes solution['solvers'], 'demo'
+    assert_kind_of Array, solution['interpreters']
+  end
+
+  def test_vrp_name_is_normalized_with_underscore_segments
+    assert_equal 'c352_lundi_pierre', Models::Vrp.normalize_name('c352 Lundi (Pierre)')
+    assert_equal 'cart_c352_lundipierre_abc', Models::Vrp.normalize_name('cart_c352_lundipierre_abc')
+
+    vrp = VRP.toy
+    vrp[:name] = 'c352 Lundi (Pierre)'
+
+    post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
+    assert_equal 200, last_response.status, last_response.body
+    assert_equal 'c352_lundi_pierre', JSON.parse(last_response.body).dig('solutions', 0, 'name')
+  end
+
   def test_dont_ignore_legitimate_skills
     OptimizerWrapper.stub(
       :define_main_process,
@@ -176,12 +200,16 @@ class Api::V01::VrpTest < Minitest::Test
 
   def test_list_vrp
     asynchronously do
-      @job_id = submit_vrp api_key: 'demo', vrp: VRP.toy
+      vrp = VRP.toy
+      vrp[:name] = 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c'
+      @job_id = submit_vrp api_key: 'demo', vrp: vrp
     end
 
     get '/0.1/vrp/jobs', api_key: 'demo'
     assert_equal 200, last_response.status, last_response.body
-    assert_includes JSON.parse(last_response.body).map{ |a| a['uuid'] }, @job_id
+    listed = JSON.parse(last_response.body).find{ |a| a['uuid'] == @job_id }
+    assert listed, last_response.body
+    assert_equal 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c', listed['name']
   ensure
     delete_job @job_id, api_key: 'demo'
   end
@@ -248,16 +276,36 @@ class Api::V01::VrpTest < Minitest::Test
     OptimizerWrapper.config[:dump][:solution] = old_config_dump_solution
   end
 
-  def test_get_deletes_completed_job
-    # create a "completed" job with an unused uuid
+  def test_get_keeps_completed_job_until_retention_expires
     uuid = Resque::Plugins::Status::Hash.generate_uuid until !uuid.nil? && Resque::Plugins::Status::Hash.get(uuid).nil?
-    Resque::Plugins::Status::Hash.create(uuid, { 'status' => 'completed', 'options' => { 'api_key' => 'demo' } })
+    OptimizerWrapper::JobList.add('demo', uuid)
+    Resque::Plugins::Status::Hash.create(uuid, {
+      'status' => 'completed',
+      'message' => "Completed at #{Time.now}",
+      'options' => { 'api_key' => 'demo' }
+    })
 
-    wait_status uuid, 'completed', api_key: 'demo'
+    get "/0.1/vrp/jobs/#{uuid}.json", api_key: 'demo'
+    assert_equal 200, last_response.status, last_response.body
+    assert Resque::Plugins::Status::Hash.get(uuid), 'Completed job should stay after retrieval'
 
-    delete_completed_job uuid, api_key: 'demo'
+    get '/0.1/vrp/jobs', api_key: 'demo'
+    assert_includes JSON.parse(last_response.body).map{ |a| a['uuid'] }, uuid
+
+    Resque::Plugins::Status::Hash.set(uuid, {
+      'status' => 'completed',
+      'message' => "Completed at #{Time.now - Core::Services::JobService::COMPLETED_RETENTION - 1.minute}",
+      'options' => { 'api_key' => 'demo' }
+    })
+
+    get "/0.1/vrp/jobs/#{uuid}.json", api_key: 'demo'
+    assert_nil Resque::Plugins::Status::Hash.get(uuid), 'Completed job should be removed after retention'
+
+    get '/0.1/vrp/jobs', api_key: 'demo'
+    refute_includes JSON.parse(last_response.body).map{ |a| a['uuid'] }, uuid
   ensure
-    Resque::Plugins::Status::Hash.remove(uuid)
+    Resque::Plugins::Status::Hash.remove(uuid) if uuid
+    OptimizerWrapper::Result.remove('demo', uuid) if uuid
   end
 
   def test_block_call_under_clustering
@@ -280,7 +328,7 @@ class Api::V01::VrpTest < Minitest::Test
         @job_id = submit_vrp(api_key: 'demo', vrp: vrp)
         response = wait_status @job_id, 'completed', api_key: 'demo'
         refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
-        delete_completed_job @job_id, api_key: 'demo'
+        delete_job @job_id, api_key: 'demo'
       }
     end
   end
@@ -306,7 +354,7 @@ class Api::V01::VrpTest < Minitest::Test
           wait_status @job_id, 'completed', api_key: 'demo'
           output.flush
         end
-        delete_completed_job @job_id, api_key: 'demo' if @job_id
+        delete_job @job_id, api_key: 'demo' if @job_id
 
         lines_with_avancement = output.grep(/avancement/)
       ensure

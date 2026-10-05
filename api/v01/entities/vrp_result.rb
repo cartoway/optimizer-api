@@ -114,8 +114,10 @@ module Api
     end
 
     class VrpResultSolution < Grape::Entity
+      expose :name, documentation: { type: String, desc: 'Name of the source VRP problem' }
       expose :heuristic_synthesis, documentation: { is_array: true, desc: 'When first_solution_strategies are provided, sum up of tryied heuristics and their performance.' }
       expose :solvers, documentation: { is_array: true, type: String, desc: 'Solvers used to perform the optimization' }
+      expose :interpreters, documentation: { is_array: true, type: String, desc: 'Interpreters used during the resolution (split, dichotomous, periodic, …)' }
       expose :skipped_services, using: VrpResultSolutionSkippedSolver, documentation: { is_array: true, desc: 'Solvers which were not able to solve the problem or sub problems' }
       expose :cost, documentation: { type: Float, desc: 'The actual cost of the solution considering all costs' }
       expose :cost_details, using: VRPResultDetailedCosts, documentation: { desc: 'The detail of the different costs which impact the solution' }
