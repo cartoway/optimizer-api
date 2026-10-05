@@ -114,6 +114,7 @@ module Api
             Sentry.set_user(api_key: params[:api_key]) # Filtered in sentry if user_context
 
             vrp_params = d_params[:points] ? d_params : d_params[:vrp]
+            vrp_params[:name] = Models::Vrp.normalize_name(vrp_params[:name]) if vrp_params[:name]
             APIBase.dump_vrp_dir.write([key_print, vrp_params[:name] || 'no_vrp_name', checksum].compact.join('_'), d_params.to_json) if OptimizerWrapper.config[:dump][:vrp]
 
             Sentry.set_extras(vrp_name: vrp_params[:name])
@@ -224,7 +225,8 @@ module Api
 
             if job&.completed? # job can still be nil if we have the solution from the dump
               APIBase.dump_vrp_dir.write([id, params[:api_key], 'solution'].join('_'), Oj.dump(result_object)) if stored_result.nil? && OptimizerWrapper.config[:dump][:solution]
-              Core::Services::JobService.job_remove(params[:api_key], id)
+              # Keep completed jobs for a few hours so the UI list / compare stay usable after retrieval
+              Core::Services::JobService.job_remove(params[:api_key], id) if Core::Services::JobService.retention_expired?(job)
             end
 
             status 200
@@ -252,7 +254,7 @@ module Api
           desc 'List vrp jobs', {
             nickname: 'get_job_list',
             success: VrpJobsList,
-            detail: 'List running or queued jobs.'
+            detail: 'List queued, working and recently completed jobs.'
           }
           get do
             status 200

@@ -77,8 +77,9 @@ class CacheManager
 
   private
 
-  # ActiveSupport 7.2+ refuses to parameterize ASCII-8BIT strings
+  # ActiveSupport 7.2+ refuses to parameterize ASCII-8BIT strings.
+  # Keep '_' so VRP names stay segmentable (cart_c352_lundipierre_…).
   def sanitize_filename(name)
-    name.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace).parameterize(separator: '')
+    name.to_s.encode(Encoding::UTF_8, invalid: :replace, undef: :replace).parameterize(separator: '_')
   end
 end

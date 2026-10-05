@@ -166,6 +166,7 @@ module Interpreters
     def self.dichotomous_heuristic(service_vrp, job = nil, &block)
       solution = nil
       if dichotomous_candidate?(service_vrp)
+        service_vrp.mark_interpreter!(:dichotomous)
         vrp = service_vrp.vrp
         level = service_vrp.dicho_level
         dicho_data = service_vrp.dicho_data
@@ -197,6 +198,7 @@ module Interpreters
       else
         service_vrp.vrp.configuration.resolution.init_duration = nil
       end
+      solution&.absorb_interpreters!(service_vrp)
       solution
     end
 

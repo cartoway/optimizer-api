@@ -18,8 +18,15 @@ module Models
     field :original_duration_ms, default: nil
     # Set once at dicho root after self_selection; propagated to sub-problems (empty string = use supplied routes)
     field :selected_first_solution_strategy, default: nil
+    # Interpreters marked as soon as they are eligible for this resolution context
+    field :interpreters, default: []
     has_many :skipped_services, class_name: 'Models::SkippedService'
     belongs_to :vrp, class_name: 'Models::Vrp'
+
+    def mark_interpreter!(name)
+      self.interpreters |= [name.to_s]
+      self
+    end
 
     # Migrate old hash format to ResolutionContext objects
     def self.migrate_from_hash(hash_data)

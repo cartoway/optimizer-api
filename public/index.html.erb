@@ -14,10 +14,26 @@
   <div class="block">
     <fieldset id="optim-list-status">
       <legend id="optim-list-legend"></legend>
+      <div id="jobs-filters" class="jobs-filters" hidden></div>
       <div id="jobs-list">
       </div>
     </fieldset>
   </div>
+  <section id="plan-compare" class="compare">
+    <header class="compare-header">
+      <div>
+        <h2 id="compare-title">Comparaison des résolutions</h2>
+        <p id="compare-help">Choisissez la référence, puis comparez les écarts colorés sous chaque indicateur.</p>
+      </div>
+      <form id="compare-add" autocomplete="off">
+        <input id="compare-job-id" list="compare-job-ids" placeholder="Ajouter un VRP…">
+        <datalist id="compare-job-ids"></datalist>
+        <button id="compare-submit" type="submit">Ajouter</button>
+      </form>
+    </header>
+    <p id="compare-error" class="error" hidden></p>
+    <div id="compare-table-wrap"></div>
+  </section>
   <form id="post-form" autocomplete="off">
     <!-- <a id="doc-link" href="#documentation">documentation</a> -->
     <div class="block">
@@ -36,14 +52,15 @@
 
   <script src="https://unpkg.com/i18next@21.6.6/dist/umd/i18next.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/i18next-browser-languagedetector/6.0.0/i18nextBrowserLanguageDetector.min.js"></script>
-  <script src="js/translations.js?v=20220203"></script>
+  <script src="js/translations.js?v=20261005d"></script>
   <script src="js/jquery-1.12.3.min.js"></script>
   <script src="js/papaparse.min.js"></script>
   <script src="js/Chart.Core.min.js"></script>
   <script src="js/Chart.Scatter.min.js"></script>
   <script src="js/conf.js?v=20220121"></script>
   <script src="js/utils.js?v=20220121"></script>
-  <script src="js/jobManager.js?v=20220121"></script>
+  <script src="js/jobManager.js?v=20261005d"></script>
+  <script src="js/compare.js?v=20261005d"></script>
   <script src="js/index.js?v=20220121"></script>
 </body>
 </html>
