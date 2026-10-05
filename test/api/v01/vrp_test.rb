@@ -214,6 +214,36 @@ class Api::V01::VrpTest < Minitest::Test
     delete_job @job_id, api_key: 'demo'
   end
 
+  def test_download_vrp_dump
+    old_dump = OptimizerWrapper.config[:dump][:vrp]
+    old_dir = OptimizerWrapper.dump_vrp_dir
+    tmpdir = Dir.mktmpdir('vrp-dump-test', 'test/')
+    OptimizerWrapper.config[:dump][:vrp] = true
+    OptimizerWrapper.dump_vrp_dir = CacheManager.new(tmpdir)
+
+    asynchronously do
+      vrp = VRP.toy
+      vrp[:name] = 'cart_c352_demo'
+      @job_id = submit_vrp api_key: 'demo', vrp: vrp
+    end
+
+    get '/0.1/vrp/jobs', api_key: 'demo'
+    listed = JSON.parse(last_response.body).find{ |a| a['uuid'] == @job_id }
+    assert listed['vrp_dump'], last_response.body
+
+    get "/0.1/vrp/jobs/#{@job_id}/vrp", api_key: 'demo'
+    assert_equal 200, last_response.status, last_response.body
+    assert_match(/attachment; filename="cart_c352_demo.json"/, last_response.headers['Content-Disposition'])
+    body = JSON.parse(last_response.body)
+    assert body['vrp'], last_response.body
+    assert_equal 'cart_c352_demo', body['vrp']['name']
+  ensure
+    OptimizerWrapper.config[:dump][:vrp] = old_dump
+    OptimizerWrapper.dump_vrp_dir = old_dir
+    FileUtils.remove_entry(tmpdir) if tmpdir && Dir.exist?(tmpdir)
+    delete_job @job_id, api_key: 'demo' if @job_id
+  end
+
   def test_cannot_list_vrp
     asynchronously do
       @job_id = submit_vrp api_key: 'demo', vrp: VRP.toy

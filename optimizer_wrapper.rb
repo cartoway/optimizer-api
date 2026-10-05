@@ -82,6 +82,7 @@ module OptimizerWrapper
                                                     api_key: api_key,
                                                     checksum: checksum,
                                                     vrp_name: vrp.name,
+                                                    vrp_dump_key: vrp_dump_key(api_key, vrp.name, checksum),
                                                     pids: [])
       JobList.add(api_key, job_id)
       {

@@ -18,6 +18,15 @@ function buildResultLink(jobId) {
   return '<a class="job-action" href="/result.html?api_key=' + getParams()['api_key'] + '&job_id=' + encodeURIComponent(jobId) + '" target="_blank">' + i18next.t('show_result') + '</a>'
 }
 
+function buildVrpDumpLink(job) {
+  if (!job || !job.vrp_dump) return '';
+  var jobId = job.uuid;
+  var filename = (job.name || jobId) + '.json';
+  var url = '/0.1/vrp/jobs/' + encodeURIComponent(jobId) + '/vrp?api_key=' + getParams()['api_key'];
+  return '<a class="job-action" download="' + escapeJobHtml(filename) + '" href="' + url + '">'
+    + i18next.t('download_vrp') + '</a>';
+}
+
 function escapeJobHtml(value) {
   return String(value).replace(/[&<>"']/g, function (char) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char];
@@ -54,7 +63,7 @@ function nextPrefixOptions(jobs, prefixes) {
 
 function jobsSignature(jobs) {
   return (jobs || []).map(function (job) {
-    return [job.uuid, job.status, job.name || '', job.avancement || ''].join('|');
+    return [job.uuid, job.status, job.name || '', job.avancement || '', job.vrp_dump ? '1' : '0'].join('|');
   }).join(';');
 }
 
@@ -96,6 +105,7 @@ var jobsManager = {
           + '</div>'
           + '<div class="job-card-actions">'
           + compareBtn
+          + buildVrpDumpLink(currentJob)
           + (donwloadBtn ? buildDownloadLink(currentJob.uuid, currentJob.status) : '')
           + (currentJob.status === 'completed' ? buildResultLink(currentJob.uuid) : '')
           + '<button type="button" class="job-action job-action-danger" data-role="delete" value="' + jobId + '">'
