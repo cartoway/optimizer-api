@@ -33,28 +33,45 @@ var displayTimer = function() {
 
 var displaySolution = function (jobId, solution, options) {
   var csv = "/0.1/vrp/jobs/" + jobId + '.csv' + '?api_key=' + getParams()['api_key'];
+  var summary = '';
   if (typeof solution === 'string') {
     $('#result').html(solution);
   } else if (typeof solution !== 'string') {
-    $('#optim-infos').html('iterations: ' + solution.iterations + ' cost: <b>' + Math.round(solution.cost) + '</b> (time: ' + (solution.total_time && solution.total_time.toHHMMSS()) + ' distance: ' + Math.round(solution.total_distance / 1000) + ')');
+    summary = '<span class="optim-summary">iterations: ' + solution.iterations
+      + ' cost: <b>' + Math.round(solution.cost) + '</b> (time: '
+      + (solution.total_time && solution.total_time.toHHMMSS())
+      + ' distance: ' + Math.round(solution.total_distance / 1000) + ')</span>';
     $('#result').html(JSON.stringify(solution, null, 4));
   }
 
   var jsonData = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(solution));
-  $('#optim-infos').append(' - <a download="result_' + jobId + '.json" href="' + jsonData + '">' + i18next.t('download_json') + '</a>');
-  $('#optim-infos').append(' - <a download="result_' + jobId + '.csv" href="' + csv + '">' + i18next.t('download_csv') + '</a>');
-  $('#optim-infos').append(' - <a href="/result.html?api_key=' + getParams()['api_key'] + '&job_id=' + jobId + '" target="_blank">' + i18next.t('show_result') + '</a>')
+  $('#optim-infos').html(summary
+    + '<a class="job-action" download="result_' + jobId + '.json" href="' + jsonData + '">' + i18next.t('download_json') + '</a>'
+    + '<a class="job-action" download="result_' + jobId + '.csv" href="' + csv + '">' + i18next.t('download_csv') + '</a>'
+    + '<a class="job-action" href="/result.html?api_key=' + getParams()['api_key'] + '&job_id=' + encodeURIComponent(jobId)
+    + '" target="_blank">' + i18next.t('show_result') + '</a>');
 
   if (options && options.downloadButton) {
     downloadButton(jobId, csv);
   }
   if (options && options.initForm) {
     initForm();
+  } else if (options && options.readyForm) {
+    readyForm();
   }
 };
 
-var initForm = function() {
+// Re-enable submit without clearing the displayed solution / downloads.
+var readyForm = function() {
   jobsManager.stopJobChecking();
+  if (typeof timer !== 'undefined' && timer) {
+    clearInterval(timer);
+    timer = null;
+  }
   $('#send-files').attr('disabled', false);
+};
+
+var initForm = function() {
+  readyForm();
   $('#optim-infos').html('');
 };
