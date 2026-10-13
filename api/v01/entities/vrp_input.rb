@@ -348,6 +348,7 @@ module VrpMissions
       use :vrp_request_timewindow
     end
     optional(:lapse, type: Integer, values: ->(v) { v.positive? }, desc: 'Repeating rest after this many seconds of work (travel + service). Exclusive with timewindows. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
+    optional(:initial_offset, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Work already performed before the tour starts (seconds of travel + service + setup). Shifts the first regulatory (lapse) pause earlier. Only used with lapse.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:late_multiplier, type: Float, desc: 'Late multiplier applied for this rest')
     optional(:exclusion_cost, type: Float, desc: 'Cost induced by non affectation of this rest')
     mutually_exclusive :timewindows, :lapse
