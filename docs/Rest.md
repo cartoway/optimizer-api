@@ -7,6 +7,8 @@ A rest with `timewindows` is placed by the solver in that slot.
 A rest with `lapse` is a repeating pause of `duration` seconds every `lapse` seconds of work (travel + service).
 In the current implementation, travel and service times are inflated by `duration / lapse` for the solver (rounded up). Customer timewindow **starts** are delayed by the same rate from tour start, capped at `duration` (one pause); **ends** and vehicle amplitude stay unchanged. Discrete pauses are then reinserted: after the visit if the lapse is reached during service, before the next drive if travel would complete it (unless that misses the next stop's timewindow). Solvers never receive these rests.
 
+`rests[].initial_offset` (seconds, default 0) counts work already done before the tour starts toward the first lapse, so the first pause is due sooner. Only used with `lapse`.
+
 ```json
 {
   "rests": [{

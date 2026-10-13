@@ -211,6 +211,19 @@ class Interpreters::RegulatoryRestTest < IsolatedTest
     assert_equal [:depot, :service, :rest, :service, :rest, :service, :rest, :depot], stops.map(&:type)
   end
 
+  def test_patch_counts_initial_offset_toward_first_lapse
+    problem = pause_problem
+    problem[:matrices].first[:time] = uniform_time_matrix(10)
+    problem[:services].each{ |service| service[:activity][:duration] = 40 }
+    # Without offset: travel 10 + service 40 = 50 per stop → first pause after S2 (100s).
+    # With 90s already worked: first travel completes the lapse → pause before S1.
+    problem[:rests].first[:initial_offset] = 90
+
+    _vrp, stops = patched_stops(problem)
+
+    assert_equal [:depot, :rest, :service, :service, :rest, :service, :depot], stops.map(&:type)
+  end
+
   def test_patch_inserts_pause_after_service_when_lapse_exceeded_during_service
     problem = pause_problem
     problem[:matrices].first[:time] = uniform_time_matrix(10)

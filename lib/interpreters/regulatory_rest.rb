@@ -180,7 +180,8 @@ module Interpreters
       vehicle = route.vehicle
       lapse = rest.lapse
       pause_duration = rest.duration
-      work = 0
+      # Prior duty time before this tour (e.g. work already done that morning).
+      work = rest.initial_offset.to_i
       pause_index = 0
       previous_index = nil
       previous_point_id = nil

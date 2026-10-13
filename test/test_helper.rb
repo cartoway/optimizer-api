@@ -110,6 +110,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
     vrp[:rests]&.each{ |rest|
       rest[:duration] = ScheduleType.type_cast(rest[:duration] || 0)
       rest[:lapse] = ScheduleType.type_cast(rest[:lapse]) if rest[:lapse]
+      rest[:initial_offset] = ScheduleType.type_cast(rest[:initial_offset]) if rest[:initial_offset]
     }
 
     vrp[:vehicles].each{ |vehicle|
