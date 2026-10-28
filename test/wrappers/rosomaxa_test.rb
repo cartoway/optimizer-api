@@ -432,10 +432,78 @@ class Wrappers::RosomaxaTest < Minitest::Test
     refute wrapper.send(:matrix_flag_append?)
   end
 
-  def test_rosomaxa_log_level_keeps_generation_noise_at_debug
-    assert_equal :debug, @rosomaxa.send(:rosomaxa_log_level, '[5s] generation 100 took 27ms, fitness: (0.000, 96.000, 1)')
+  def test_parse_progress_line_reads_generation_cost_and_time
+    progress = @rosomaxa.send(
+      :parse_progress_line,
+      '[5s] generation 100 took 27ms, fitness: (0.000, 96.000, 64007.851)'
+    )
+
+    assert_equal 100, progress[:iterations]
+    assert_in_delta 64007.851, progress[:cost]
+    assert_in_delta 5.0, progress[:time]
+    refute progress[:final]
+  end
+
+  def test_parse_progress_line_reads_total_generations_as_final
+    progress = @rosomaxa.send(:parse_progress_line, '[299s] total generations: 7246, speed: 24.16 gen/sec')
+
+    assert_equal 7246, progress[:iterations]
+    assert_nil progress[:cost]
+    assert_in_delta 299.0, progress[:time]
+    assert progress[:final]
+  end
+
+  def test_parse_progress_line_reads_initial_solution
+    progress = @rosomaxa.send(
+      :parse_progress_line,
+      '[0s] created initial solution in 536ms, fitness: (0.000, 104.000, 70928.735)'
+    )
+
+    assert_equal 0, progress[:iterations]
+    assert_in_delta 70928.735, progress[:cost]
+    assert_in_delta 0.0, progress[:time]
+  end
+
+  def test_parse_progress_line_ignores_population_state
+    assert_nil @rosomaxa.send(:parse_progress_line, '[5s] population state (phase: exploration)')
+  end
+
+  def test_rosomaxa_log_level_keeps_rank_noise_at_debug
+    assert_equal :debug, @rosomaxa.send(:rosomaxa_log_level, 'rank: 0, fitness: (0.000, 92.000, 1)')
     assert_equal :info, @rosomaxa.send(:rosomaxa_log_level, '[5s] population state (phase: exploration)')
     assert_equal :info, @rosomaxa.send(:rosomaxa_log_level, 'Cost 53264.03')
+  end
+
+  def test_run_rosomaxa_progress_calls_block_like_ortools
+    wrapper = Wrappers::Rosomaxa.new(exec_rosomaxa: 'true', tmp_dir: Dir.tmpdir)
+    wrapper.instance_variable_set(:@matrix_flag_append, false)
+
+    status = Object.new
+    def status.success? = true
+    fake_thread = Struct.new(:value).new(status)
+    progress_lines = [
+      "[2s] generation 0 took 21ms, fitness: (0.000, 104.000, 70669.056)\n",
+      "[5s] generation 100 took 27ms, fitness: (0.000, 96.000, 64007.851)\n",
+      "[299s] total generations: 7246, speed: 24.16 gen/sec\n"
+    ]
+    stdout = StringIO.new(progress_lines.join)
+
+    calls = []
+    Open3.stub(:popen2e, lambda { |*cmd|
+      File.write(cmd[cmd.index('-o') + 1], '{"tours":[],"unassigned":[]}')
+      [nil, stdout, fake_thread]
+    }) do
+      _result, iterations =
+        wrapper.send(:run_rosomaxa, {}, [], 1) { |*args|
+          calls << args
+        }
+      assert_equal 7246, iterations
+    end
+
+    assert_equal 3, calls.size
+    assert_equal [wrapper, 0, nil, nil, 70669.056, 2.0, nil], calls[0]
+    assert_equal [wrapper, 100, nil, nil, 64007.851, 5.0, nil], calls[1]
+    assert_equal [wrapper, 7246, nil, nil, 64007.851, 299.0, nil], calls[2]
   end
 
   def test_prepare_locations_ignores_unused_points

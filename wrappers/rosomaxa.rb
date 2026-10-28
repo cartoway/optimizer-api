@@ -19,6 +19,13 @@ module Wrappers
     QUANTITY_SCALE = 1000
     MAX_I32 = (2**31) - 2
     EPOCH = Time.utc(1970, 1, 1)
+    # vrp-cli --log: "[5s] generation 100 took 27ms, fitness: (0.000, 96.000, 64007.851)"
+    # Fitness tuple ends with the objective cost (same scale as final "Cost …").
+    PROGRESS_LINE = /
+      \[(?<time>\d+(?:\.\d+)?)s\]\s+
+      (?:generation\s+(?<generation>\d+)|created\s+initial\s+solution|total\s+generations:\s*(?<total_generations>\d+))
+      (?:.*?fitness:\s*\([^)]*,\s*(?<cost>-?[\d.eE+]+)\s*\))?
+    /x
 
     def initialize(hash = {})
       super(hash)
@@ -64,7 +71,7 @@ module Wrappers
       ]
     end
 
-    def solve(vrp, _job = nil, _thread_proc = nil)
+    def solve(vrp, _job = nil, _thread_proc = nil, &block)
       if vrp.vehicles.empty? || vrp.points.empty? || vrp.services.empty?
         return vrp.empty_solution(:rosomaxa)
       end
@@ -72,10 +79,11 @@ module Wrappers
       tic = Time.now
       problem, matrices = pragmatic_problem(vrp)
       timeout = [1, vrp.configuration.resolution.duration.to_f / 1000].max.to_i
-      result = run_rosomaxa(problem, matrices, timeout)
+      block&.call # before subprocess, in case the job is already canceled
+      result, iterations = run_rosomaxa(problem, matrices, timeout, &block)
       elapsed = (Time.now - tic) * 1000
 
-      build_solution(vrp, result, elapsed)
+      build_solution(vrp, result, elapsed, iterations: iterations)
     end
 
     private
@@ -475,7 +483,7 @@ module Wrappers
       @matrix_flag_append = false
     end
 
-    def run_rosomaxa(problem, matrices, timeout)
+    def run_rosomaxa(problem, matrices, timeout, &block)
       input = nil
       output = nil
       matrix_files = []
@@ -504,11 +512,25 @@ module Wrappers
       _stdin, stdout_and_stderr, @thread = Open3.popen2e(*cmd)
 
       out = +''
+      iterations = 0
+      cost = nil
+      time = 0.0
       stdout_and_stderr.each_line{ |line|
         stripped = line.strip
         next if stripped.empty?
 
-        log "Rosomaxa #{stripped}", level: rosomaxa_log_level(stripped)
+        progress = parse_progress_line(stripped)
+        if progress
+          iterations = progress[:iterations] if progress[:iterations]
+          cost = progress[:cost] unless progress[:cost].nil?
+          time = progress[:time] unless progress[:time].nil?
+          log_level = progress[:final] ? :info : :debug
+          log "Iteration : #{iterations} Cost : #{cost} Time : #{time}", level: log_level
+          # Intermediate pragmatic JSON is only written at the end → solution stays nil.
+          block&.call(self, iterations, nil, nil, cost, time, nil) if progress[:iterations] && progress[:time]
+        else
+          log "Rosomaxa #{stripped}", level: rosomaxa_log_level(stripped)
+        end
         out << line
       }
 
@@ -516,7 +538,7 @@ module Wrappers
         raise OptimizerWrapper::UnsupportedProblemError.new("Rosomaxa - #{out}")
       end
 
-      JSON.parse(File.read(output.path), symbolize_names: true)
+      [JSON.parse(File.read(output.path), symbolize_names: true), iterations]
     ensure
       input&.unlink
       output&.unlink
@@ -524,15 +546,31 @@ module Wrappers
       stdout_and_stderr&.close
     end
 
+    # Returns { iterations:, cost:, time:, final: } or nil when the line is not progress.
+    def parse_progress_line(line)
+      match = PROGRESS_LINE.match(line)
+      return nil unless match
+
+      time = match[:time]&.to_f
+      cost = match[:cost]&.to_f
+      if match[:total_generations]
+        { iterations: Integer(match[:total_generations]), cost: cost, time: time, final: true }
+      elsif match[:generation]
+        { iterations: Integer(match[:generation]), cost: cost, time: time, final: false }
+      elsif cost # created initial solution
+        { iterations: 0, cost: cost, time: time, final: false }
+      end
+    end
+
     def rosomaxa_log_level(line)
-      # Generation spam stays debug; population / fitness snapshots at info.
-      return :info if line.match?(/population state|created initial|total generations|^Cost |configured to use/i)
-      return :debug if line.match?(/generation \d+/i)
+      # Unparsed CLI noise: keep population / Cost / setup at info, rest debug.
+      return :info if line.match?(/population state|^Cost |configured to use/i)
+      return :debug if line.match?(/rank:|difference:|speed:/i)
 
       :info
     end
 
-    def build_solution(vrp, result, elapsed)
+    def build_solution(vrp, result, elapsed, iterations: nil)
       services_by_id = vrp.services.index_by{ |service| service.id.to_s }
       vehicles_by_id = vrp.vehicles.index_by{ |vehicle| vehicle.id.to_s }
       assigned = {}
@@ -615,6 +653,7 @@ module Wrappers
       solution =
         Models::Solution.new(
           elapsed: elapsed,
+          iterations: iterations,
           solvers: [:rosomaxa],
           routes: routes,
           unassigned_stops: unassigned
