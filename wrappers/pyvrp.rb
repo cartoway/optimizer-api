@@ -4,6 +4,17 @@ module Wrappers
   class PyVRP < Wrapper
     CUSTOM_QUANTITY_BIGNUM = 1e3
     MAX_INT64 = 2**63 - 1
+    # ProgressPrinter: "H     500     12s |  25     1234     1000 |  10     5000     4000"
+    # After String#strip the leading space marker is gone; only "H" remains optional.
+    ITERATION_LINE = /
+      \A(?:H\s+)?
+      (?<iters>\d+)\s+
+      (?<time>\d+)s\s+\|\s+
+      (?<feas_size>\d+|-)\s+(?<feas_avg>\d+|-)\s+(?<feas_best>\d+|-)\s+\|\s+
+      (?<infeas_size>\d+|-)\s+(?<infeas_avg>\d+|-)\s+(?<infeas_best>\d+|-)
+    /x
+    END_ITERS_LINE = /Search terminated in (?<time>[\d.]+)s after (?<iters>\d+) iterations/
+    END_COST_LINE = /Best-found solution has cost (?<cost>-?[\d.eE+]+)/
 
     def solver_constraints
       super + [
@@ -47,13 +58,14 @@ module Wrappers
       ]
     end
 
-    def solve(vrp, _job = nil, _thread_proc = nil)
+    def solve(vrp, _job = nil, _thread_proc = nil, &block)
       if vrp.vehicles.empty? || vrp.points.empty? || vrp.services.empty?
         return vrp.empty_solution(:pyvrp)
       end
 
       problem = pyvrp_problem(vrp)
-      result = run_pyvrp(problem, [1, vrp.configuration.resolution.duration.to_f / 1000].max.to_i)
+      block&.call # before subprocess, in case the job is already canceled
+      result = run_pyvrp(problem, [1, vrp.configuration.resolution.duration.to_f / 1000].max.to_i, &block)
 
       raise 'No feasible solution found' if !result[:feasible] && result[:routes].blank?
 
@@ -138,6 +150,7 @@ module Wrappers
       pyvrp_solution =
         Models::Solution.new(
           elapsed: elapsed_time,
+          iterations: result[:iterations],
           solvers: [:pyvrp],
           routes: routes,
           unassigned_stops: unassigneds
@@ -936,7 +949,7 @@ module Wrappers
       File.executable?(venv_python) ? venv_python : 'python3'
     end
 
-    def run_pyvrp(problem, timeout = nil)
+    def run_pyvrp(problem, timeout = nil, &block)
       input = Tempfile.new('optimize-pyvrp-input', @tmp_dir)
 
       input.write(problem.to_json)
@@ -944,15 +957,36 @@ module Wrappers
 
       output = Tempfile.new('optimize-pyvrp-output', @tmp_dir)
       output.close
-      cmd = "#{pyvrp_python} wrappers/pyvrp_wrapper.py #{input.path} #{output.path} #{timeout}"
+      # -u: ProgressPrinter lines must stream (stdout is fully buffered when piped).
+      cmd = "#{pyvrp_python} -u wrappers/pyvrp_wrapper.py #{input.path} #{output.path} #{timeout}"
       log cmd
       stdin, stdout_and_stderr, @thread = Open3.popen2e(cmd)
 
       return if !@thread
 
       out = ''
+      iterations = 0
+      cost = nil
+      time = 0.0
       stdout_and_stderr.each_line { |line|
-        log line.strip, level: :info
+        stripped = line.strip
+        next if stripped.empty?
+
+        progress = parse_progress_line(stripped)
+        if progress
+          iterations = progress[:iterations] if progress[:iterations]
+          cost = progress[:cost] unless progress[:cost].nil?
+          time = progress[:time] unless progress[:time].nil?
+          log_level = progress[:final] ? :info : :debug
+          log "Iteration : #{iterations} Cost : #{cost} Time : #{time}", level: log_level
+          # No intermediate solution JSON — only the final dump is written.
+          # END_COST has no iters/time of its own; reuse the preceding Search terminated values.
+          if progress[:iterations] && progress[:time] || (progress[:final] && progress[:cost] && !time.nil?)
+            block&.call(self, iterations, nil, nil, cost, time, nil)
+          end
+        else
+          log stripped, level: pyvrp_log_level(stripped)
+        end
         out += line
       }
 
@@ -988,6 +1022,41 @@ module Wrappers
         child_pids << @thread.pid
         child_pids.each{ |pid| Process.kill('KILL', pid) }
       end
+    end
+
+    # Returns { iterations:, cost:, time:, final: } or nil when the line is not progress.
+    def parse_progress_line(line)
+      if (match = ITERATION_LINE.match(line))
+        cost = progress_numeric(match[:feas_best]) || progress_numeric(match[:infeas_best])
+        {
+          iterations: Integer(match[:iters]),
+          cost: cost,
+          time: match[:time].to_f,
+          final: false
+        }
+      elsif (match = END_ITERS_LINE.match(line))
+        {
+          iterations: Integer(match[:iters]),
+          cost: nil,
+          time: match[:time].to_f,
+          final: true
+        }
+      elsif (match = END_COST_LINE.match(line))
+        { iterations: nil, cost: match[:cost].to_f, time: nil, final: true }
+      end
+    end
+
+    def progress_numeric(value)
+      return nil if value.nil? || value == '-'
+
+      Float(value)
+    end
+
+    def pyvrp_log_level(line)
+      return :debug if line.match?(/Iters\s+Time|Feasible\s+\|\s+Infeasible|\brestart\b/i)
+      return :info if line.match?(/\APyVRP|Solving an instance|PenaltyParams|search |Solution cost/i)
+
+      :info
     end
   end
 end
