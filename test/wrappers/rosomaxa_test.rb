@@ -1,3 +1,5 @@
+# Copyright © Cartoway, 2026
+#
 require './test/test_helper'
 
 class Wrappers::RosomaxaTest < Minitest::Test
@@ -379,5 +381,78 @@ class Wrappers::RosomaxaTest < Minitest::Test
     vrp = TestHelper.create(problem)
 
     assert_includes @rosomaxa.inapplicable_solve?(vrp), :assert_vehicles_have_start
+  end
+
+  def test_location_only_problem_is_applicable_before_matrix_compute
+    # Selection runs before compute_matrix; router will fill matrices later.
+    problem = {
+      points: [{
+        id: 'point_0',
+        location: { lat: 48.86, lon: 2.34 }
+      }, {
+        id: 'point_1',
+        location: { lat: 48.87, lon: 2.35 }
+      }],
+      vehicles: [{
+        id: 'vehicle_0',
+        start_point_id: 'point_0',
+        router_mode: 'car',
+        router_dimension: 'time'
+      }],
+      services: [{
+        id: 'service_1',
+        activity: { point_id: 'point_1' }
+      }],
+      configuration: { resolution: { duration: 1000 } }
+    }
+    vrp = TestHelper.create(problem)
+
+    assert_empty vrp.matrices
+    assert_empty @rosomaxa.inapplicable_solve?(vrp)
+  end
+
+  def test_matrix_cli_args_use_single_flag_for_multiple_profiles
+    files = [Struct.new(:path).new('/tmp/a.json'), Struct.new(:path).new('/tmp/b.json')]
+    @rosomaxa.instance_variable_set(:@matrix_flag_append, false)
+
+    assert_equal ['-m', '/tmp/a.json', '/tmp/b.json'], @rosomaxa.send(:matrix_cli_args, files)
+    assert_empty @rosomaxa.send(:matrix_cli_args, [])
+  end
+
+  def test_matrix_cli_args_repeat_flag_when_append_style
+    files = [Struct.new(:path).new('/tmp/a.json'), Struct.new(:path).new('/tmp/b.json')]
+    @rosomaxa.instance_variable_set(:@matrix_flag_append, true)
+
+    assert_equal ['-m', '/tmp/a.json', '-m', '/tmp/b.json'], @rosomaxa.send(:matrix_cli_args, files)
+  end
+
+  def test_matrix_flag_append_defaults_false_when_binary_missing
+    wrapper = Wrappers::Rosomaxa.new(exec_rosomaxa: '/nonexistent/vrp-cli', tmp_dir: Dir.tmpdir)
+
+    refute wrapper.send(:matrix_flag_append?)
+  end
+
+  def test_rosomaxa_log_level_keeps_generation_noise_at_debug
+    assert_equal :debug, @rosomaxa.send(:rosomaxa_log_level, '[5s] generation 100 took 27ms, fitness: (0.000, 96.000, 1)')
+    assert_equal :info, @rosomaxa.send(:rosomaxa_log_level, '[5s] population state (phase: exploration)')
+    assert_equal :info, @rosomaxa.send(:rosomaxa_log_level, 'Cost 53264.03')
+  end
+
+  def test_prepare_locations_ignores_unused_points
+    problem = @minimal_problem.deep_dup
+    problem[:matrices].first[:time] = [
+      [0, 1, 9],
+      [1, 0, 9],
+      [9, 9, 0]
+    ]
+    problem[:matrices].first[:distance] = problem[:matrices].first[:time]
+    problem[:points] << { id: 'point_unused', matrix_index: 2 }
+    vrp = TestHelper.create(problem)
+
+    @rosomaxa.send(:prepare_locations!, vrp)
+
+    assert_equal [0, 1], @rosomaxa.instance_variable_get(:@matrix_indices)
+    matrices = @rosomaxa.send(:build_matrices, vrp)
+    assert_equal 4, matrices.first[:travelTimes].size # 2×2, not 3×3
   end
 end

@@ -1,7 +1,28 @@
 # syntax=docker/dockerfile:1.4
-# Rosomaxa CLI is a musl binary. Pin matches the published GitHub/crates.io release.
+# Rosomaxa: ROSOMAXA_SOURCE=release → GHCR tag; ROSOMAXA_SOURCE=git → build from git ref/SHA.
+ARG ROSOMAXA_SOURCE=release
 ARG ROSOMAXA_VERSION=1.25.0
-FROM ghcr.io/reinterpretcat/vrp/vrp-cli:${ROSOMAXA_VERSION} AS rosomaxa-cli
+ARG ROSOMAXA_GIT_URL=https://github.com/reinterpretcat/vrp.git
+# Pin: reinterpretcat/vrp master @ 2026-09-21 (Fix clippy warnings)
+ARG ROSOMAXA_GIT_REF=e49bee0eccb9d732d0e020d7f9bbbb378e2de2bc
+
+FROM ghcr.io/reinterpretcat/vrp/vrp-cli:${ROSOMAXA_VERSION} AS rosomaxa-release
+
+FROM rust:1.95-alpine AS rosomaxa-git
+RUN apk add --no-cache musl-dev git
+ARG ROSOMAXA_GIT_URL
+ARG ROSOMAXA_GIT_REF
+WORKDIR /src
+# Works for branch names and full commit SHAs.
+RUN git init \
+    && git remote add origin "${ROSOMAXA_GIT_URL}" \
+    && git fetch --depth 1 origin "${ROSOMAXA_GIT_REF}" \
+    && git checkout FETCH_HEAD
+RUN cargo build --locked --release -p vrp-cli \
+    && mkdir -p /solver \
+    && cp target/release/vrp-cli /solver/vrp-cli
+
+FROM rosomaxa-${ROSOMAXA_SOURCE} AS rosomaxa-cli
 
 FROM ghcr.io/cartoway/optimizer-ortools:master
 

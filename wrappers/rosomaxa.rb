@@ -1,3 +1,17 @@
+# Copyright © Cartoway, 2026
+#
+# This file is part of Cartoway Optimizer.
+#
+# Cartoway Optimizer is free software. You can redistribute it and/or
+# modify since you respect the terms of the GNU Affero General
+# Public License as published by the Free Software Foundation,
+# either version 3 of the License, or (at your option) any later version.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with Cartoway Optimizer. If not, see:
+# <http://www.gnu.org/licenses/agpl.html>
+#
+
 require './wrappers/wrapper'
 
 module Wrappers
@@ -16,7 +30,6 @@ module Wrappers
         :assert_vehicles_objective,
 
         :assert_correctness_matrices_vehicles_and_points_definition,
-        :assert_matrix_indices,
         :assert_no_evaluation,
         :assert_no_partitions,
         :assert_no_relations_except_simple_shipments,
@@ -34,7 +47,6 @@ module Wrappers
         :assert_no_overall_duration,
         :assert_no_value_matrix,
         :assert_only_simple_rests,
-        :assert_reload_depots_indexed,
 
         :assert_no_activity_with_position,
         :assert_no_empty_or_fill,
@@ -68,12 +80,6 @@ module Wrappers
 
     private
 
-    def assert_matrix_indices(vrp)
-      vrp.points.all?(&:matrix_index) &&
-        vrp.vehicles.all?(&:matrix_id) &&
-        vrp.matrices.any?{ |matrix| matrix_table(matrix, :time) || matrix_table(matrix, :distance) }
-    end
-
     def assert_vehicles_have_start(vrp)
       vrp.vehicles.all?(&:start_point)
     end
@@ -86,14 +92,6 @@ module Wrappers
             !rest.late_multiplier.to_f.positive? &&
             rest.exclusion_cost.nil?
         }
-      }
-    end
-
-    def assert_reload_depots_indexed(vrp)
-      vrp.reload_depots.all?{ |depot|
-        depot.point&.matrix_index &&
-          depot.exclusion_cost.nil? &&
-          !depot.late_multiplier.to_f.positive?
       }
     end
 
@@ -123,8 +121,18 @@ module Wrappers
     end
 
     def prepare_locations!(vrp)
-      indices = vrp.points.map(&:matrix_index)
-      indices += vrp.reload_depots.map{ |depot| depot.point&.matrix_index }
+      # Only points referenced in the pragmatic problem: unused vrp.points would
+      # inflate the matrix while location indices stay lower → E1504.
+      indices = []
+      vrp.vehicles.each{ |vehicle|
+        indices << vehicle.start_point&.matrix_index
+        indices << vehicle.end_point&.matrix_index
+      }
+      vrp.services.each{ |service|
+        indices << service.activity&.point&.matrix_index
+        Array(service.activities).each{ |activity| indices << activity.point&.matrix_index }
+      }
+      vrp.reload_depots.each{ |depot| indices << depot.point&.matrix_index }
       @matrix_indices = indices.compact.uniq.sort
       @location_by_matrix_index = @matrix_indices.each_with_index.to_h
       @services_by_tag = {}
@@ -444,10 +452,34 @@ module Wrappers
       Time.iso8601(value).to_i
     end
 
+    # 1.25: clap num_args(1..) → `-m a b`. master/1.26+: ArgAction::Append → `-m a -m b`.
+    def matrix_cli_args(matrix_files)
+      return [] if matrix_files.empty?
+
+      if matrix_flag_append?
+        matrix_files.flat_map{ |file| ['-m', file.path] }
+      else
+        ['-m', *matrix_files.map(&:path)]
+      end
+    end
+
+    def matrix_flag_append?
+      return @matrix_flag_append if defined?(@matrix_flag_append)
+
+      out, _err, status = Open3.capture3(@exec_rosomaxa, '--version')
+      version = status.success? ? out.to_s : ''
+      # Workspace on master is already 1.26.0; released line stops at 1.25.0.
+      match = version.match(/(\d+)\.(\d+)/)
+      @matrix_flag_append = match ? (match[1].to_i > 1 || match[2].to_i >= 26) : false
+    rescue Errno::ENOENT
+      @matrix_flag_append = false
+    end
+
     def run_rosomaxa(problem, matrices, timeout)
       input = nil
       output = nil
       matrix_files = []
+      stdout_and_stderr = nil
       input = Tempfile.new('optimize-rosomaxa-problem', @tmp_dir)
       input.write(problem.to_json)
       input.close
@@ -462,12 +494,26 @@ module Wrappers
       output = Tempfile.new('optimize-rosomaxa-output', @tmp_dir)
       output.close
 
-      matrix_args = matrix_files.map{ |file| "-m '#{file.path}'" }.join(' ')
-      cmd = "#{@exec_rosomaxa} solve pragmatic '#{input.path}' #{matrix_args} --max-time=#{timeout} -o '#{output.path}'"
-      log cmd
-      _stdout, stderr, status = Open3.capture3(cmd)
-      unless status.success?
-        raise OptimizerWrapper::UnsupportedProblemError.new("Rosomaxa - #{stderr}")
+      cmd = [
+        @exec_rosomaxa, 'solve', 'pragmatic', input.path,
+        *matrix_cli_args(matrix_files),
+        "--max-time=#{timeout}", '--log', '-o', output.path
+      ]
+      log cmd.join(' ')
+      # --log streams refinement progress (fitness / generations) on stderr+stdout.
+      _stdin, stdout_and_stderr, @thread = Open3.popen2e(*cmd)
+
+      out = +''
+      stdout_and_stderr.each_line{ |line|
+        stripped = line.strip
+        next if stripped.empty?
+
+        log "Rosomaxa #{stripped}", level: rosomaxa_log_level(stripped)
+        out << line
+      }
+
+      unless @thread.value.success?
+        raise OptimizerWrapper::UnsupportedProblemError.new("Rosomaxa - #{out}")
       end
 
       JSON.parse(File.read(output.path), symbolize_names: true)
@@ -475,6 +521,15 @@ module Wrappers
       input&.unlink
       output&.unlink
       matrix_files&.each(&:unlink)
+      stdout_and_stderr&.close
+    end
+
+    def rosomaxa_log_level(line)
+      # Generation spam stays debug; population / fitness snapshots at info.
+      return :info if line.match?(/population state|created initial|total generations|^Cost |configured to use/i)
+      return :debug if line.match?(/generation \d+/i)
+
+      :info
     end
 
     def build_solution(vrp, result, elapsed)
