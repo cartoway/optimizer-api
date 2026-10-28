@@ -1,3 +1,5 @@
+// Copyright © Cartoway, 2026
+//
 const assert = require('assert');
 const {
   compareStats, groupUnassignedReasons, formatDuration, formatKm, formatDelta, formatElapsedMs, deltaTone

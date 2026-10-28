@@ -1,3 +1,5 @@
+# Copyright © Cartoway, 2026
+#
 require './test/test_helper'
 
 class Interpreters::RegulatoryRestTest < IsolatedTest

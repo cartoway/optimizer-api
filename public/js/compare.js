@@ -1,3 +1,5 @@
+// Copyright © Cartoway, 2026
+//
 var VISIT_TYPES = { service: true, pickup: true, delivery: true };
 
 var COMPARE_ROWS = [
