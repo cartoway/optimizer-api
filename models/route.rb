@@ -39,6 +39,7 @@ module Models
       super(hash)
     end
 
+    # original_id first: periodic_heuristic initialize_routes keys @services_data by original id
     def mission_ids
       missions.map{ |mission| mission.original_id || mission.id }
     end
