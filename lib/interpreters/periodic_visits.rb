@@ -77,7 +77,8 @@ module Interpreters
           # Note that we sort_by day_index so we can assume that the existing routes have the visits in the correct
           # order. That is, the first appearance of a service id will be the visit_1_X, the next will be visit_2_X,
           # and the last will be visit_X_X.
-          route.mission_ids.collect!{ |sid| expanded_service_ids[sid].shift }
+          # mission_ids is a derived Array copy; assign back to mutate missions
+          route.mission_ids = route.mission_ids.collect{ |sid| expanded_service_ids[sid].shift }
           route.vehicle_id += "_#{route.day_index}"
         }
       end

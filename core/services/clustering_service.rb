@@ -79,17 +79,16 @@ module Core
                 cluster_ids.include?(mission_id)
               }
             vrp.routes.each{ |route|
-              route.mission_ids.delete_if{ |mission_id|
-                cluster_ids.include?(mission_id) unless mission_id == ref_id
+              route.mission_ids =
+                route.mission_ids.reject{ |mission_id|
+                  cluster_ids.include?(mission_id) && mission_id != ref_id
+                }
+            }
+            route = vrp.routes[route_index]
+            route.mission_ids =
+              route.mission_ids.map{ |mission_id|
+                cluster_ids.include?(mission_id) ? new_services[i].id : mission_id
               }
-            }
-            vrp.routes[route_index].mission_ids.map!{ |mission_id|
-              if cluster_ids.include?(mission_id)
-                new_services[i].id
-              else
-                mission_id
-              end
-            }
           end
 
           new_services[i].activity.duration =

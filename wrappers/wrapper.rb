@@ -556,9 +556,10 @@ module Wrappers
           }
         }
         vrp.routes.delete_if{ |route|
-          route.mission_ids.delete_if{ |mission_id| mission_id == service.id }
-
-          route.mission_ids.empty?
+          route.missions.delete_if{ |mission|
+            (mission.original_id || mission.id) == service.id
+          }
+          route.missions.empty?
         }
       end
 
