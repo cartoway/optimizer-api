@@ -3244,8 +3244,8 @@ class WrapperTest < Minitest::Test
 
     begin
       OptimizerWrapper.config[:services][:ortools].stub(
-        :solve, # (cluster_vrp, job, proc)
-        lambda { |cluster_vrp, _, _,|
+        :solve, # (cluster_vrp, job, proc, timings: ...)
+        lambda { |cluster_vrp, _job = nil, _proc = nil, **|
           assert_empty cluster_vrp.routes
           raise OptimizerWrapper::JobKilledError
         }

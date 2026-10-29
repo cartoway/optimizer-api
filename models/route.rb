@@ -42,5 +42,14 @@ module Models
     def mission_ids
       missions.map{ |mission| mission.original_id || mission.id }
     end
+
+    def mission_ids=(ids)
+      self.missions =
+        Array(ids).filter_map{ |mission_id|
+          Models::Service.find_by_id(mission_id) ||
+            Models::ReloadDepot.find_by_id(mission_id) ||
+            Models::Rest.find_by_id(mission_id)
+        }
+    end
   end
 end
