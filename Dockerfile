@@ -29,20 +29,43 @@ FROM ghcr.io/cartoway/optimizer-ortools:master
 COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
 ARG BUNDLE_WITHOUT="test development rubocop"
-# Install Vroom (build deps purged in the same layer)
 ARG VROOM_RELEASE=v1.14.0
 ARG VROOM_GIT_URL=https://github.com/braktar/vroom.git
 ARG VROOM_BRANCH=waiting-time
-RUN apt update -y && \
-    echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && \
-    apt update -y && \
-    apt install -y --no-install-recommends \
-        git-core \
+ARG PYVRP_VERSION=0.14.0
+# PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
+# ARG PYVRP_BRANCH=
+ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8
+
+# Single apt-get update for VROOM + Python + Ruby native deps.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
+    libicu=$(apt-cache search '^libicu[0-9]' | awk '{print $1}' | head -1) && \
+    apt-get install -y --no-install-recommends \
+        git \
         build-essential \
         g++ \
-        gcc-13 \
-        g++-13 \
-        netcat-traditional && \
+        netcat-traditional \
+        python3 \
+        python-is-python3 \
+        python3-pip \
+        python3-venv \
+        libgeos-dev \
+        ${libgeos} \
+        libicu-dev \
+        ${libicu} \
+        rustc \
+        cargo \
+        pkg-config \
+        libssl-dev \
+        libclang-dev \
+        clang && \
+    apt-mark manual ${libgeos} ${libicu} && \
     git clone "$VROOM_GIT_URL" vroom && \
     cd vroom && \
     if [ -n "$VROOM_BRANCH" ]; then \
@@ -55,28 +78,12 @@ RUN apt update -y && \
     git submodule sync --recursive && \
     git submodule update --init --recursive && \
     cd src && \
-    CC=gcc-13 CXX=g++-13 \
     make -j"$(nproc)" USE_ROUTING=false \
       CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DUSE_ROUTING=false' && \
     cp ../bin/vroom /usr/local/bin/vroom && \
     strip /usr/local/bin/vroom && \
     cd / && \
-    rm -rf /vroom && \
-    apt-get purge -y --auto-remove \
-        git-core build-essential g++ gcc-13 g++-13 && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN apt update -y && apt install -y --no-install-recommends \
-        python3 \
-        python-is-python3 \
-        python3-pip \
-        python3-venv && \
-    rm -rf /var/lib/apt/lists/*
-
-ARG PYVRP_VERSION=0.14.0
-# PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
-# ARG PYVRP_BRANCH=
-ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
+    rm -rf /vroom
 
 # matplotlib is a declared pyvrp dep (plot helpers only); solver imports work without it.
 RUN python -m venv /opt/pyenv && \
@@ -92,8 +99,6 @@ RUN python -m venv /opt/pyenv && \
     rm -rf /root/.cache/pip
 ENV PATH="/opt/pyenv/bin:$PATH"
 
-ENV LANG C.UTF-8
-
 WORKDIR /srv/app
 
 # balanced_vrp_clustering (bump): Rust native ext via rb_sys — https://github.com/cartoway/balanced_vrp_clustering/tree/bump
@@ -102,30 +107,15 @@ ENV SOURCE_DATE_EPOCH=1
 
 ADD ./Gemfile /srv/app/
 ADD ./Gemfile.lock /srv/app/
-# Install native build deps, bundle, then drop compilers/headers (keep runtime libs).
-RUN apt update && \
-    libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
-    libicu=$(apt-cache search '^libicu[0-9]' | awk '{print $1}' | head -1) && \
-    apt install -y --no-install-recommends \
-        git \
-        libgeos-dev \
-        ${libgeos} \
-        libicu-dev \
-        ${libicu} \
-        rustc \
-        cargo \
-        pkg-config \
-        libssl-dev \
-        libclang-dev \
-        clang && \
-    apt-mark manual ${libgeos} ${libicu} && \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     bundle config set --local without "${BUNDLE_WITHOUT}" && \
     bundle install --full-index && \
     apt-get purge -y --auto-remove \
-        git rustc cargo clang libclang-dev \
+        git build-essential g++ rustc cargo clang libclang-dev \
         libgeos-dev libicu-dev libssl-dev pkg-config \
         python3-pip && \
-    rm -rf /var/lib/apt/lists/* /root/.cargo /tmp/*
+    rm -rf /root/.cargo /tmp/*
 
 ADD . /srv/app
 
