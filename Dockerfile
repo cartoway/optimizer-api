@@ -44,7 +44,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
+    # rgeo links against libgeos_c (C API), not only libgeos (C++). Keep both at
+    # runtime after purging *-dev, otherwise geos_c_impl.so fails to load and
+    # RGeo::Geos.capi_supported? stays false.
     libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
+    libgeos_c=$(apt-cache search '^libgeos-c[0-9]' | awk '{print $1}' | head -1) && \
     libicu=$(apt-cache search '^libicu[0-9]' | awk '{print $1}' | head -1) && \
     apt-get install -y --no-install-recommends \
         git \
@@ -57,6 +61,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         python3-venv \
         libgeos-dev \
         ${libgeos} \
+        ${libgeos_c} \
         libicu-dev \
         ${libicu} \
         rustc \
@@ -65,7 +70,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libssl-dev \
         libclang-dev \
         clang && \
-    apt-mark manual ${libgeos} ${libicu}
+    apt-mark manual ${libgeos} ${libgeos_c} ${libicu}
 
 ARG VROOM_RELEASE
 ARG VROOM_GIT_URL
