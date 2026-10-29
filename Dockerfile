@@ -40,9 +40,10 @@ ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8
 
-# Single apt-get update for VROOM + Python + Ruby native deps.
+# Single apt pass for VROOM + Python + Ruby native deps.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && \
     apt-get update && \
     libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
     libicu=$(apt-cache search '^libicu[0-9]' | awk '{print $1}' | head -1) && \
@@ -50,6 +51,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         git \
         build-essential \
         g++ \
+        gcc-13 \
+        g++-13 \
         netcat-traditional \
         python3 \
         python-is-python3 \
@@ -78,6 +81,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     git submodule sync --recursive && \
     git submodule update --init --recursive && \
     cd src && \
+    CC=gcc-13 CXX=g++-13 \
     make -j"$(nproc)" USE_ROUTING=false \
       CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DUSE_ROUTING=false' && \
     cp ../bin/vroom /usr/local/bin/vroom && \
@@ -112,9 +116,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     bundle config set --local without "${BUNDLE_WITHOUT}" && \
     bundle install --full-index && \
     apt-get purge -y --auto-remove \
-        git build-essential g++ rustc cargo clang libclang-dev \
+        git build-essential g++ gcc-13 g++-13 rustc cargo clang libclang-dev \
         libgeos-dev libicu-dev libssl-dev pkg-config \
         python3-pip && \
+    rm -f /etc/apt/sources.list.d/trixie.list && \
     rm -rf /root/.cargo /tmp/*
 
 ADD . /srv/app
