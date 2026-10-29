@@ -29,21 +29,20 @@ FROM ghcr.io/cartoway/optimizer-ortools:master
 COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
 ARG BUNDLE_WITHOUT="test development rubocop"
+ARG BUNDLE_FULL_INDEX=0
 ARG VROOM_RELEASE=v1.14.0
 ARG VROOM_GIT_URL=https://github.com/braktar/vroom.git
 ARG VROOM_BRANCH=waiting-time
 ARG PYVRP_VERSION=0.14.0
-# PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
 # ARG PYVRP_BRANCH=
 ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8
 
-# Single apt pass for VROOM + Python + Ruby native deps.
+# Needs optimizer-ortools on Debian trixie+ (system g++ for VROOM std::format).
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && \
     apt-get update && \
     libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
     libicu=$(apt-cache search '^libicu[0-9]' | awk '{print $1}' | head -1) && \
@@ -51,8 +50,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         git \
         build-essential \
         g++ \
-        gcc-13 \
-        g++-13 \
         netcat-traditional \
         python3 \
         python-is-python3 \
@@ -68,8 +65,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         libssl-dev \
         libclang-dev \
         clang && \
-    apt-mark manual ${libgeos} ${libicu} && \
-    git clone "$VROOM_GIT_URL" vroom && \
+    apt-mark manual ${libgeos} ${libicu}
+
+ARG VROOM_RELEASE
+ARG VROOM_GIT_URL
+ARG VROOM_BRANCH
+RUN git clone "$VROOM_GIT_URL" vroom && \
     cd vroom && \
     if [ -n "$VROOM_BRANCH" ]; then \
       git fetch origin "$VROOM_BRANCH" && \
@@ -81,7 +82,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     git submodule sync --recursive && \
     git submodule update --init --recursive && \
     cd src && \
-    CC=gcc-13 CXX=g++-13 \
     make -j"$(nproc)" USE_ROUTING=false \
       CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DUSE_ROUTING=false' && \
     cp ../bin/vroom /usr/local/bin/vroom && \
@@ -89,8 +89,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     cd / && \
     rm -rf /vroom
 
-# matplotlib is a declared pyvrp dep (plot helpers only); solver imports work without it.
-RUN python -m venv /opt/pyenv && \
+ARG PYVRP_VERSION
+ARG PYVRP_GIT_URL
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m venv /opt/pyenv && \
     /opt/pyenv/bin/pip install --upgrade pip && \
     /opt/pyenv/bin/pip install numpy && \
     if [ -z "$PYVRP_BRANCH" ]; then \
@@ -98,28 +100,32 @@ RUN python -m venv /opt/pyenv && \
     else \
         /opt/pyenv/bin/pip install git+$PYVRP_GIT_URL@$PYVRP_BRANCH; \
     fi && \
-    /opt/pyenv/bin/pip uninstall -y matplotlib pillow fonttools contourpy cycler kiwisolver pyparsing python-dateutil || true && \
-    /opt/pyenv/bin/pip cache purge && \
-    rm -rf /root/.cache/pip
+    /opt/pyenv/bin/pip uninstall -y matplotlib pillow fonttools contourpy cycler kiwisolver pyparsing python-dateutil || true
 ENV PATH="/opt/pyenv/bin:$PATH"
 
 WORKDIR /srv/app
 
-# balanced_vrp_clustering (bump): Rust native ext via rb_sys — https://github.com/cartoway/balanced_vrp_clustering/tree/bump
-# SOURCE_DATE_EPOCH: RubyGems sets it during native compile; helps rb_sys/cargo detection during bundle install.
+# balanced_vrp_clustering (bump): Rust native ext via rb_sys
 ENV SOURCE_DATE_EPOCH=1
 
 ADD ./Gemfile /srv/app/
 ADD ./Gemfile.lock /srv/app/
+ARG BUNDLE_WITHOUT
+ARG BUNDLE_FULL_INDEX
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=cache,target=/usr/local/bundle/cache \
+    --mount=type=cache,target=/root/.bundle/cache \
     bundle config set --local without "${BUNDLE_WITHOUT}" && \
-    bundle install --full-index && \
+    if [ "${BUNDLE_FULL_INDEX}" = "1" ]; then \
+      bundle install --full-index; \
+    else \
+      bundle install; \
+    fi && \
     apt-get purge -y --auto-remove \
-        git build-essential g++ gcc-13 g++-13 rustc cargo clang libclang-dev \
+        git build-essential g++ rustc cargo clang libclang-dev \
         libgeos-dev libicu-dev libssl-dev pkg-config \
         python3-pip && \
-    rm -f /etc/apt/sources.list.d/trixie.list && \
     rm -rf /root/.cargo /tmp/*
 
 ADD . /srv/app
