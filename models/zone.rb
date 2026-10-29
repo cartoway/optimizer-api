@@ -29,11 +29,16 @@ module Models
     end
 
     def inside(lat, lng)
-      if !lat.nil? && !lng.nil?
-        if (@geom || decode_geom).class == RGeo::Geos::CAPIPolygonImpl
-          @geom.contains?(RGeo::Cartesian.factory.point(lng, lat))
-        end
-      end
+      return if lat.nil? || lng.nil?
+
+      # Needs rgeo built with libgeos-dev and libgeos_c present at runtime.
+      # Guard with capi_supported? — CAPIPolygonImpl is undefined otherwise.
+      return unless RGeo::Geos.capi_supported?
+
+      geom = @geom || decode_geom
+      return unless geom.is_a?(RGeo::Geos::CAPIPolygonImpl)
+
+      geom.contains?(RGeo::Cartesian.factory.point(lng, lat))
     end
   end
 end
