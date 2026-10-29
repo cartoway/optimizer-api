@@ -83,6 +83,7 @@ ARG PYVRP_VERSION=0.14.0
 # ARG PYVRP_BRANCH=
 ARG PYVRP_GIT_URL=https://github.com/PyVRP/PyVRP.git
 
+# matplotlib is a declared pyvrp dep (plot helpers only); solver imports work without it.
 RUN python -m venv /opt/pyenv && \
     /opt/pyenv/bin/pip install --upgrade pip && \
     /opt/pyenv/bin/pip install numpy && \
@@ -90,7 +91,10 @@ RUN python -m venv /opt/pyenv && \
         /opt/pyenv/bin/pip install pyvrp=="$PYVRP_VERSION"; \
     else \
         /opt/pyenv/bin/pip install git+$PYVRP_GIT_URL@$PYVRP_BRANCH; \
-    fi
+    fi && \
+    /opt/pyenv/bin/pip uninstall -y matplotlib pillow fonttools contourpy cycler kiwisolver pyparsing python-dateutil || true && \
+    /opt/pyenv/bin/pip cache purge && \
+    rm -rf /root/.cache/pip
 ENV PATH="/opt/pyenv/bin:$PATH"
 
 ENV LANG C.UTF-8
