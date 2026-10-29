@@ -42,10 +42,6 @@ RUN apt update -y && \
         g++ \
         gcc-13 \
         g++-13 \
-        libssl-dev \
-        libasio-dev \
-        libglpk-dev \
-        pkg-config \
         netcat-traditional && \
     git clone "$VROOM_GIT_URL" vroom && \
     cd vroom && \
@@ -60,15 +56,14 @@ RUN apt update -y && \
     git submodule update --init --recursive && \
     cd src && \
     CC=gcc-13 CXX=g++-13 \
-    make -j"$(nproc)" \
-      CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DASIO_STANDALONE -DUSE_ROUTING=true' && \
+    make -j"$(nproc)" USE_ROUTING=false \
+      CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DUSE_ROUTING=false' && \
     cp ../bin/vroom /usr/local/bin/vroom && \
     strip /usr/local/bin/vroom && \
     cd / && \
     rm -rf /vroom && \
     apt-get purge -y --auto-remove \
-        git-core build-essential g++ gcc-13 g++-13 \
-        libssl-dev libasio-dev libglpk-dev pkg-config && \
+        git-core build-essential g++ gcc-13 g++-13 && \
     rm -rf /var/lib/apt/lists/*
 
 RUN apt update -y && apt install -y --no-install-recommends \
@@ -117,14 +112,13 @@ RUN apt update && \
         ${libgeos} \
         libicu-dev \
         ${libicu} \
-        libglpk40 \
         rustc \
         cargo \
         pkg-config \
         libssl-dev \
         libclang-dev \
         clang && \
-    apt-mark manual ${libgeos} ${libicu} libglpk40 && \
+    apt-mark manual ${libgeos} ${libicu} && \
     bundle config set --local without "${BUNDLE_WITHOUT}" && \
     bundle install --full-index && \
     apt-get purge -y --auto-remove \
