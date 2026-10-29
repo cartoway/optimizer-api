@@ -77,8 +77,13 @@ module Interpreters
           # Note that we sort_by day_index so we can assume that the existing routes have the visits in the correct
           # order. That is, the first appearance of a service id will be the visit_1_X, the next will be visit_2_X,
           # and the last will be visit_X_X.
-          # mission_ids is a derived Array copy; assign back to mutate missions
-          route.mission_ids = route.mission_ids.collect{ |sid| expanded_service_ids[sid].shift }
+          #
+          # mission_ids is derived (original_id || id) for periodic_heuristic initialize_routes.
+          # collect! mutates a copy — intentional no-op since has_many :missions. Writing through via
+          # mission_ids= would bind expanded visits and force them as ortools initial routes, which
+          # regresses schedule+solver quality (e.g. performance_12vl). Periodic heuristic instead
+          # replaces routes with missions: objects and skips this branch.
+          route.mission_ids.collect!{ |sid| expanded_service_ids[sid].shift }
           route.vehicle_id += "_#{route.day_index}"
         }
       end
