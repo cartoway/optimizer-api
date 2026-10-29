@@ -29,14 +29,14 @@ FROM ghcr.io/cartoway/optimizer-ortools:master
 COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
 ARG BUNDLE_WITHOUT="test development rubocop"
-# Install Vroom
+# Install Vroom (build deps purged in the same layer)
 ARG VROOM_RELEASE=v1.14.0
 ARG VROOM_GIT_URL=https://github.com/braktar/vroom.git
 ARG VROOM_BRANCH=waiting-time
 RUN apt update -y && \
     echo "deb http://deb.debian.org/debian trixie main" > /etc/apt/sources.list.d/trixie.list && \
     apt update -y && \
-    apt install -y \
+    apt install -y --no-install-recommends \
         git-core \
         build-essential \
         g++ \
@@ -46,8 +46,8 @@ RUN apt update -y && \
         libasio-dev \
         libglpk-dev \
         pkg-config \
-        netcat-traditional
-RUN git clone "$VROOM_GIT_URL" vroom && \
+        netcat-traditional && \
+    git clone "$VROOM_GIT_URL" vroom && \
     cd vroom && \
     if [ -n "$VROOM_BRANCH" ]; then \
       git fetch origin "$VROOM_BRANCH" && \
@@ -64,13 +64,19 @@ RUN git clone "$VROOM_GIT_URL" vroom && \
       CXXFLAGS='-MMD -MP -I. -std=c++20 -Wextra -Wpedantic -Wall -O3 -DNDEBUG -DASIO_STANDALONE -DUSE_ROUTING=true' && \
     cp ../bin/vroom /usr/local/bin/vroom && \
     strip /usr/local/bin/vroom && \
-    cd /
+    cd / && \
+    rm -rf /vroom && \
+    apt-get purge -y --auto-remove \
+        git-core build-essential g++ gcc-13 g++-13 \
+        libssl-dev libasio-dev libglpk-dev pkg-config && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN apt update -y && apt install -y \
+RUN apt update -y && apt install -y --no-install-recommends \
         python3 \
         python-is-python3 \
         python3-pip \
-        python3-venv
+        python3-venv && \
+    rm -rf /var/lib/apt/lists/*
 
 ARG PYVRP_VERSION=0.14.0
 # PYVRP_BRANCH can be: a branch name (e.g. "main"), a tag (e.g. "v0.12.1"), or a commit SHA
@@ -91,31 +97,37 @@ ENV LANG C.UTF-8
 
 WORKDIR /srv/app
 
-RUN apt update && \
-    libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
-    apt install -y --no-install-recommends \
-        git \
-        libgeos-dev \
-        ${libgeos} \
-        libicu-dev \
-        libglpk-dev \
-        nano \
-        rustc \
-        cargo \
-        pkg-config \
-        libssl-dev \
-        libclang-dev \
-        clang \
-    && rm -rf /var/lib/apt/lists/*
-
 # balanced_vrp_clustering (bump): Rust native ext via rb_sys — https://github.com/cartoway/balanced_vrp_clustering/tree/bump
 # SOURCE_DATE_EPOCH: RubyGems sets it during native compile; helps rb_sys/cargo detection during bundle install.
 ENV SOURCE_DATE_EPOCH=1
 
 ADD ./Gemfile /srv/app/
 ADD ./Gemfile.lock /srv/app/
-RUN bundle config set --local without "${BUNDLE_WITHOUT}" && \
-    bundle install --full-index
+# Install native build deps, bundle, then drop compilers/headers (keep runtime libs).
+RUN apt update && \
+    libgeos=$(apt-cache search 'libgeos-' | grep -P 'libgeos-\d.*' | awk '{print $1}') && \
+    libicu=$(apt-cache search '^libicu[0-9]' | awk '{print $1}' | head -1) && \
+    apt install -y --no-install-recommends \
+        git \
+        libgeos-dev \
+        ${libgeos} \
+        libicu-dev \
+        ${libicu} \
+        libglpk40 \
+        rustc \
+        cargo \
+        pkg-config \
+        libssl-dev \
+        libclang-dev \
+        clang && \
+    apt-mark manual ${libgeos} ${libicu} libglpk40 && \
+    bundle config set --local without "${BUNDLE_WITHOUT}" && \
+    bundle install --full-index && \
+    apt-get purge -y --auto-remove \
+        git rustc cargo clang libclang-dev \
+        libgeos-dev libicu-dev libssl-dev pkg-config \
+        python3-pip && \
+    rm -rf /var/lib/apt/lists/* /root/.cargo /tmp/*
 
 ADD . /srv/app
 
