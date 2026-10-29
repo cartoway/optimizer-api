@@ -9,7 +9,6 @@ gem 'rack-contrib', require: 'rack/contrib'
 gem 'rack-cors', require: 'rack/cors'
 gem 'rack-server-pages'
 gem 'rake'
-gem 'thin'
 
 # API
 # ~> 3.2: ParamScopeTracker (thread-safe validation); keeps mustermann 3.x (sinatra/resque)

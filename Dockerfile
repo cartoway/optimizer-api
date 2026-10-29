@@ -30,7 +30,7 @@ FROM ghcr.io/cartoway/optimizer-ortools:${OPTIMIZER_ORTOOLS_VERSION}
 
 COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
-ARG BUNDLE_WITHOUT="test development"
+ARG BUNDLE_WITHOUT="test development rubocop"
 # Install Vroom
 ARG VROOM_RELEASE=v1.14.0
 ARG VROOM_GIT_URL=https://github.com/braktar/vroom.git
