@@ -42,11 +42,11 @@ module Wrappers
       # global data
       @services_data = {}
       # all service_ids
-      @candidate_services_ids = []
+      @candidate_services_ids = {} # id => true (membership); iterate with each_key
       # subset of @candidate_services_ids : only service_ids we can assign at this
       # point some services need one service at same location and with more visits
       # to be planned before
-      @to_plan_service_ids = []
+      @to_plan_service_ids = {}
       @used_to_adjust = [] # services for whom we already tried to assign all visits (plan_service_next_visits)
 
       @candidate_routes = {}
@@ -58,10 +58,14 @@ module Wrappers
 
       @indices = {}
       @matrices = vrp[:matrices]
+      @matrices_by_id_source = @matrices
+      @matrices_by_id = @matrices.index_by{ |matrix| matrix[:id] }
 
       @services_unlocked_by = {} # specifies which service_id allows other service_ids to be in to_plan_service_ids
       @unlocked = {} # specifies if a service should follow another service
       @same_located = {}
+      # First-visit removed from planning without scanning every route's available_ids
+      @unavailable_for_routes = {}
 
       @output_tool =
         if OptimizerWrapper.config[:debug][:output_periodic]
@@ -103,7 +107,7 @@ module Wrappers
         # keep the logic of unlocked for less frequent visits.
         # We still call fill_days but with same_point_day = false
         @output_tool&.add_comment('RELAX_SAME_POINT_DAY')
-        @to_plan_service_ids = @candidate_services_ids
+        @to_plan_service_ids = @candidate_services_ids.dup
         @same_point_day = false
         @relaxed_same_point_day = true
         fill_days
@@ -425,7 +429,7 @@ module Wrappers
       @services_assignment.each{ |id, data|
         next unless data[:unassigned_indices].any?
 
-        if @candidate_services_ids.include?(id)
+        if @candidate_services_ids[id]
           @services_assignment[id][:unassigned_reasons] = [provide_fair_reason(id)]
         end
 
@@ -481,15 +485,21 @@ module Wrappers
     # Call solver in order to reoptimize stops order because heuristic chose best position
     # at each iteration, but these 'best local choices' might not lead to 'best global order'
     def reorder_stops(vrp)
+      vehicles_by_key = vrp.vehicles.index_by{ |v| [v.original_id, v.global_day_index] }
+      # one Marshal.dump shared across routes; still full VRP copy per load.
+      # create_sub_vrp was faster per call but regresses solver wall-clock + two_phases quality.
+      vrp_dump = Marshal.dump(vrp)
+      minimum_duration = @candidate_services_ids.each_key.flat_map{ |s| @services_data[s][:durations] }.min
+
       @candidate_routes.each{ |vehicle_id, all_routes|
         all_routes.each{ |day, route_data|
           next if route_data[:stops].uniq{ |s| s[:point_id] }.size <= 1
 
-          corresponding_vehicle = vrp.vehicles.find{ |v| v.original_id == vehicle_id && v.global_day_index == day }
+          corresponding_vehicle = vehicles_by_key[[vehicle_id, day]]
           corresponding_vehicle.timewindow ||= Models::Timewindow.create({})
           corresponding_vehicle.timewindow.start = route_data[:tw_start]
           corresponding_vehicle.timewindow.end = route_data[:tw_end]
-          route_vrp = construct_sub_vrp(vrp, corresponding_vehicle, route_data[:stops])
+          route_vrp = construct_sub_vrp(vrp, corresponding_vehicle, route_data[:stops], vrp_dump: vrp_dump)
 
           log "Re-ordering route for #{vehicle_id} at day #{day} : #{route_data[:stops].size}"
 
@@ -512,7 +522,6 @@ module Wrappers
           solver_route_time = (solution.routes.first.stops.last.info.begin_time -
                               solution.routes.first.stops.first.info.begin_time) # last activity is vehicle depot
 
-          minimum_duration = @candidate_services_ids.flat_map{ |s| @services_data[s][:durations] }.min
           original_indices = route_data[:stops].collect{ |s| @indices[s[:id]] }
           next if periodic_route_time - solver_route_time < minimum_duration ||
                   # we did not change our points order
@@ -544,16 +553,17 @@ module Wrappers
     end
 
     def make_available(service_id)
-      @candidate_services_ids << service_id
+      @candidate_services_ids[service_id] = true
+      @unavailable_for_routes.delete(service_id)
       @candidate_routes.each{ |_vehicle_id, all_routes|
         all_routes.each{ |day, route_data|
           next unless day <= @services_data[service_id][:raw].last_possible_days.first # first is for first visit
 
-          route_data[:available_ids] |= service_id
+          (route_data[:available_ids] ||= {})[service_id] = true
         }
       }
       @services_assignment[service_id][:missing_visits] = @services_data[service_id][:raw].visits_number
-      @services_assignment[:unassigned_reasons] = []
+      @services_assignment[service_id][:unassigned_reasons] = []
     end
 
     # When allow_partial_assignment is false, we might want to remove
@@ -582,7 +592,7 @@ module Wrappers
       # Disaffect all points at this location
       # FIXME : do we really want to disaffect those ?
       points_at_same_location =
-        @candidate_services_ids.select{ |id|
+        @candidate_services_ids.keys.select{ |id|
           @services_data[id][:points_ids] == @services_data[service_id][:points_ids]
         }
       points_at_same_location.each{ |id|
@@ -594,23 +604,29 @@ module Wrappers
 
     # Apply solution from solver on current route
     def compute_route_from(new_route, solver_route)
-      solver_order = solver_route.collect{ |s| s[:service_id] }.compact
-      new_route[:stops].sort_by!{ |stop| solver_order.find_index(stop[:id]) }.collect{ |s| s[:id] }
+      order_index = {}
+      solver_route.each{ |s|
+        next unless s[:service_id]
+
+        order_index[s[:service_id]] = order_index.size
+      }
+      new_route[:stops].sort_by!{ |stop| order_index[stop[:id]] }.collect{ |s| s[:id] }
       update_route(new_route, 0, solver_route.first.info.begin_time)
     end
 
     # For each remaining service to assign, compute the best position to assigning it
     # as well as the related data
-    def compute_candidates_for_route(route_data, set = nil)
-      unless set
-        set = @to_plan_service_ids
-        set.delete_if{ |id| @services_data[id][:raw].visits_number == 1 } if @same_point_day
+    def compute_candidates_for_route(route_data, service_ids = nil)
+      unless service_ids
+        service_ids = @to_plan_service_ids
+        service_ids.delete_if{ |id, _| @services_data[id][:raw].visits_number == 1 } if @same_point_day
       end
 
       day = route_data[:day]
-      set.collect{ |service_id|
-        next if @services_assignment[service_id][:days] &&
-                !days_respecting_lapse(service_id, @candidate_routes[route_data[:vehicle_original_id]]).include?(day)
+      # Hash (to_plan) or Array (explicit list from callers)
+      ids = service_ids.is_a?(Hash) ? service_ids.keys : service_ids
+      ids.collect{ |service_id|
+        next unless day_respects_lapse?(service_id, day)
 
         find_candidate_best_position(service_id, route_data)
       }.compact
@@ -884,9 +900,7 @@ module Wrappers
       additional_durations = @services_data[best_index[:id]][:durations].first + best_index[:considered_setup_duration]
       @same_located[best_index[:id]].each_with_index{ |service_id, i|
         @services_assignment[service_id][:missing_visits] -= 1
-        @candidate_routes.each{ |_vehicle_id, all_routes|
-          all_routes.each{ |_day, r_d| r_d[:available_ids].delete(service_id) }
-        }
+        @unavailable_for_routes[service_id] = true
         @services_assignment[service_id][:days] << route_data[:day]
         @services_assignment[service_id][:vehicles] |= [route_data[:vehicle_original_id]]
         route_data[:stops].insert(best_index[:position] + i + 1,
@@ -930,9 +944,11 @@ module Wrappers
          !@services_unlocked_by[candidate[:id]].empty? &&
          !@relaxed_same_point_day
 
-        services_to_add = @services_unlocked_by[candidate[:id]] & @candidate_services_ids
-        @to_plan_service_ids += services_to_add
-        services_to_add.each{ |service_id| @unlocked[service_id] = nil }
+        services_to_add = @services_unlocked_by[candidate[:id]].to_a.select{ |sid| @candidate_services_ids[sid] }
+        services_to_add.each{ |sid|
+          @to_plan_service_ids[sid] = true
+          @unlocked[sid] = nil
+        }
         unlocked_service_ids += services_to_add
       end
 
@@ -1063,7 +1079,7 @@ module Wrappers
         compatible_vehicle(service_id, route_data) &&
         service_does_not_violate_capacity(service_id, route_data, first_visit) &&
         (!first_visit ||
-          route_data[:available_ids].include?(service_id) &&
+          !@unavailable_for_routes[service_id] && route_data[:available_ids].include?(service_id) &&
           relaxed_or_same_point_day_constraint_respected(service_id, vehicle_id, day) &&
           same_point_compatibility(service_id, day))
     end
@@ -1220,11 +1236,7 @@ module Wrappers
       @points_assignment[point_to_add[:point]][:vehicles] |= [route_data[:vehicle_original_id]]
       @services_data[point_to_add[:id]][:capacity].each{ |need, qty| route_data[:capacity_left][need] -= qty }
 
-      if first_visit
-        @candidate_routes.each{ |_vehicle_id, all_routes|
-          all_routes.each{ |_day, r_d| r_d[:available_ids].delete(point_to_add[:id]) }
-        }
-      end
+      @unavailable_for_routes[point_to_add[:id]] = true if first_visit
 
       current_route.insert(point_to_add[:position],
                            id: point_to_add[:id],
@@ -1290,9 +1302,14 @@ module Wrappers
         start = @indices[start] if start.is_a?(String)
         arrival = @indices[arrival] if arrival.is_a?(String)
 
-        return nil unless @matrices.find{ |matrix| matrix[:id] == route_data[:matrix_id] }[dimension]
+        unless @matrices_by_id_source.equal?(@matrices)
+          @matrices_by_id_source = @matrices
+          @matrices_by_id = @matrices.index_by{ |matrix| matrix[:id] }
+        end
+        mat = @matrices_by_id[route_data[:matrix_id]]
+        return nil unless mat[dimension]
 
-        @matrices.find{ |matrix| matrix[:id] == route_data[:matrix_id] }[dimension][start][arrival]
+        mat[dimension][start][arrival]
       end
     end
 
@@ -1515,14 +1532,14 @@ module Wrappers
       }
     end
 
-    def construct_sub_vrp(vrp, vehicle, current_route)
+    def construct_sub_vrp(vrp, vehicle, current_route, vrp_dump: nil)
       # TODO : make private
 
       # TODO : check initial vrp is not modified.
       # Now it is ok because marshall dump, but do not use mashall dump
-      route_vrp = Marshal.load(Marshal.dump(vrp))
+      route_vrp = Marshal.load(vrp_dump || Marshal.dump(vrp)) # rubocop: disable Security/MarshalLoad
 
-      service_hash = current_route.map{ |service| [service[:id], service] }.to_h
+      service_hash = current_route.to_h{ |service| [service[:id], service] }
       route_vrp.services.select!{ |service| service_hash.key?(service[:id]) }
       route_vrp.services.each{ |service|
         next if service.activity
@@ -1557,7 +1574,7 @@ module Wrappers
     def generate_route(vehicle, stops)
       {
         vehicle: vehicle,
-        missions: stops.map{ |stop| stop[:mission] }.compact
+        missions: stops.filter_map{ |stop| @services_data[stop[:id]]&.dig(:raw) }
       }
     end
 
@@ -1566,6 +1583,7 @@ module Wrappers
       @previous_services_assignment = Marshal.load(Marshal.dump(@services_assignment))
       @previous_points_assignment = Marshal.load(Marshal.dump(@points_assignment))
       @previous_candidate_service_ids = Marshal.load(Marshal.dump(@candidate_services_ids))
+      @previous_unavailable_for_routes = @unavailable_for_routes.dup
     end
 
     def restore
@@ -1573,6 +1591,7 @@ module Wrappers
       @services_assignment = @previous_services_assignment
       @points_assignment = @previous_points_assignment
       @candidate_services_ids = @previous_candidate_service_ids
+      @unavailable_for_routes = @previous_unavailable_for_routes
     end
 
     def reject_all_visits(service_id, visits_number, specified_reason)
