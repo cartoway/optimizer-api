@@ -87,6 +87,10 @@ module Interpreters
           route.vehicle_id += "_#{route.day_index}"
         }
       end
+      # NOTE: when periodic_heuristic?, routes keep pre-expand Service missions. OR-Tools
+      # corresponding_mission_ids will not match expanded visit ids — warm-start stays empty
+      # by design (mapping visits regresses performance_12vl). Do not clear vrp.routes here:
+      # callers may still read the input route objects after expand.
 
       vrp
     end
@@ -224,11 +228,12 @@ module Interpreters
       new_services
     end
 
-    def build_vehicle(vrp, vehicle, vehicle_day_index, vehicle_timewindow, rests_durations)
+    def build_vehicle(vrp, vehicle, vehicle_day_index, vehicle_timewindow, rests_durations, vehicle_index)
       new_vehicle_hash = vehicle.as_json(except: [:id, :start_point_id, :end_point_id, :sequence_timewindows])
       new_vehicle_hash[:global_day_index] = vehicle_day_index
       new_vehicle_hash[:skills] = associate_skills(vehicle, vehicle_day_index)
-      new_vehicle_hash[:rests] = generate_rests(vehicle, vehicle_day_index, vehicle_timewindow, rests_durations)
+      new_vehicle_hash[:rests] =
+        generate_rests(vehicle, vehicle_day_index, vehicle_timewindow, rests_durations, vehicle_index)
       new_vehicle_hash[:timewindow] = vehicle_timewindow.as_json
       new_vehicle = Models::Vehicle.create(new_vehicle_hash)
 
@@ -245,7 +250,7 @@ module Interpreters
     def generate_vehicles(vrp)
       rests_durations = Array.new(vrp.vehicles.size, 0)
       new_vehicles = []
-      vrp.vehicles.each{ |vehicle|
+      vrp.vehicles.each_with_index{ |vehicle, vehicle_index|
         @equivalent_vehicles[vehicle.id] = [] # equivalent_vehicle_ids !
         @equivalent_vehicles[vehicle.original_id] = []
         range_indices = vrp.configuration.schedule.range_indices
@@ -254,7 +259,7 @@ module Interpreters
 
           timewindows = [vehicle.timewindow || vehicle.sequence_timewindows].flatten
           if timewindows.empty?
-            new_vehicles << build_vehicle(vrp, vehicle, vehicle_day_index, nil, rests_durations)
+            new_vehicles << build_vehicle(vrp, vehicle, vehicle_day_index, nil, rests_durations, vehicle_index)
           else
             timewindows.each{ |associated_timewindow|
               next unless associated_timewindow.day_index.nil? ||
@@ -262,7 +267,8 @@ module Interpreters
 
               new_timewindow = Models::Timewindow.create(start: associated_timewindow.start || 0,
                                                          end: associated_timewindow.end || 86400)
-              new_vehicle = build_vehicle(vrp, vehicle, vehicle_day_index, new_timewindow, rests_durations)
+              new_vehicle =
+                build_vehicle(vrp, vehicle, vehicle_day_index, new_timewindow, rests_durations, vehicle_index)
               if @have_day_index
                 new_vehicle.timewindow.start += vehicle_day_index * 86400
                 new_vehicle.timewindow.end += vehicle_day_index * 86400
@@ -277,7 +283,7 @@ module Interpreters
         vrp.relations << Models::Relation.create(
           type: :vehicle_group_duration,
           linked_vehicle_ids: @equivalent_vehicles[vehicle.original_id].map(&:first),
-          lapses: [vehicle.overall_duration + rests_durations[index]]
+          lapses: [vehicle.overall_duration + rests_durations[vehicle_index]]
         )
       }
 
@@ -415,7 +421,7 @@ module Interpreters
       routes
     end
 
-    def generate_rests(vehicle, day_index, vehicle_timewindow, rests_durations)
+    def generate_rests(vehicle, day_index, vehicle_timewindow, rests_durations, vehicle_index)
       vehicle.rests.collect{ |rest|
         # Rests can not have more than one timewindow for now
         next if (vehicle_timewindow && rest.timewindows.first &&
@@ -425,7 +431,7 @@ module Interpreters
         # rest is compatible with this vehicle day and timewindow
         new_rest = Models::Rest.create(rest.as_json(except: [:id]))
         new_rest.original_id = rest.original_id || rest.id
-        rests_durations[-1] += new_rest.duration
+        rests_durations[vehicle_index] += new_rest.duration
         new_rest.timewindows = generate_timewindows(rest.timewindows, day_index)
         new_rest
       }.compact

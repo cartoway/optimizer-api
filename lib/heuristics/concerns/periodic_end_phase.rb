@@ -31,18 +31,24 @@ module PeriodicEndPhase
     end
   end
 
-  def days_respecting_lapse(id, vehicle_routes)
+  # used_days is small (assigned visits) — keep Array, do not wrap in Set/Hash
+  def day_respects_lapse?(id, day)
+    used_days = @services_assignment[id][:days]
+    return true if used_days.empty?
+
     min_lapse = @services_data[id][:raw].minimum_lapse
     max_lapse = @services_data[id][:raw].maximum_lapse
-    used_days = @services_assignment[id][:days]
+    smaller = used_days.map{ |used_day| (used_day - day).abs }.min
+    (min_lapse.nil? || smaller >= min_lapse) &&
+      (max_lapse.nil? || smaller <= max_lapse)
+  end
 
+  def days_respecting_lapse(id, vehicle_routes)
+    used_days = @services_assignment[id][:days]
     return vehicle_routes.keys if used_days.empty?
 
-    vehicle_routes.keys.select{ |day|
-      smaller_lapse_with_other_days = used_days.collect{ |used_day| (used_day - day).abs }.min
-      (min_lapse.nil? || smaller_lapse_with_other_days >= min_lapse) &&
-        (max_lapse.nil? || smaller_lapse_with_other_days <= max_lapse)
-    }.sort_by{ |day| used_days.collect{ |used_day| (used_day - day).abs }.min } # minimize generated lapse
+    vehicle_routes.keys.select{ |day| day_respects_lapse?(id, day) }
+                  .sort_by{ |day| used_days.map{ |used_day| (used_day - day).abs }.min } # minimize generated lapse
   end
 
   private
@@ -375,8 +381,10 @@ module PeriodicEndPhase
 
   def reaffect_prohibiting_partial_assignment
     # allow any day to assign visits
+    @unavailable_for_routes.clear
+    all_available = @services_data.transform_values{ true }
     @candidate_routes.each{ |_vehicle_id, all_routes|
-      all_routes.each{ |_day, route_data| route_data[:available_ids] = @services_data.keys }
+      all_routes.each{ |_day, route_data| route_data[:available_ids] = all_available.dup }
     }
 
     banned = []
