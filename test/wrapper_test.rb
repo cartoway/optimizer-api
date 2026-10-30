@@ -2123,6 +2123,41 @@ class WrapperTest < Minitest::Test
     assert created.services.first.vehicle_compatibility[created.vehicles.first.id]
   end
 
+  def test_skills_preserves_existing_false_compatibility_happy_path
+    demo = OptimizerWrapper.config[:services][:demo]
+    vrp = TestHelper.create(VRP.toy)
+    service = vrp.services.first
+    vehicle = vrp.vehicles.first
+    service.skills = []
+    service.vehicle_compatibility = { vehicle.id => false }
+
+    assert demo.no_vehicle_with_compatible_skills(vrp, service),
+           'pre-marked false must stay incompatible (no vehicle left)'
+    assert_equal false, service.vehicle_compatibility[vehicle.id]
+  end
+
+  def test_schedule_day_compatible_matches_linear_scan_happy_path
+    demo = OptimizerWrapper.config[:services][:demo]
+    cases = [
+      [0, 83, 0, 0, Set[], Set[]],
+      [0, 83, 0, 1, Set[], Set[]],
+      [0, 83, nil, nil, Set[1], Set[]],
+      [5, 40, 3, 3, Set[3, 10], Set[17]],
+    ]
+    cases.each{ |range_start, range_end, s_day, v_day, s_unav, v_unav|
+      expected =
+        range_start.upto(range_end).any?{ |day|
+          (s_day.nil? || day % 7 == s_day) &&
+            (v_day.nil? || day % 7 == v_day) &&
+            s_unav.exclude?(day) &&
+            v_unav.exclude?(day)
+        }
+      assert_equal expected,
+                   demo.send(:schedule_day_compatible?, range_start, range_end, s_day, v_day, s_unav, v_unav),
+                   [range_start, range_end, s_day, v_day].inspect
+    }
+  end
+
   def test_feasible_if_tardiness_allowed
     vrp = VRP.basic
     demo = OptimizerWrapper.config[:services][:demo]
