@@ -622,6 +622,7 @@ module Wrappers
 
     def detect_unfeasible_services(vrp)
       unfeasible = {}
+      matrices_by_id = Array(vrp.matrices).index_by(&:id)
 
       vrp.services.each{ |service|
         check_timewindow_inconsistency(vrp, unfeasible, service)
@@ -635,7 +636,7 @@ module Wrappers
                          'Service has a quantity which is greater than the capacity of any compatible vehicle')
         end
 
-        if no_compatible_vehicle_with_compatible_tw(vrp, service)
+        if no_compatible_vehicle_with_compatible_tw(vrp, service, matrices_by_id: matrices_by_id)
           add_unassigned(unfeasible, vrp, service,
                          'Service cannot be performed by any compatible vehicle while '\
                          'respecting duration, timewindow and day limits')
@@ -801,8 +802,14 @@ module Wrappers
       s_quantities = service.quantities.map{ |quantity|
         next if quantity.empty # empty operation value is an upper-bound
 
-        [quantity.unit_id, quantity.value.abs]
+        val = quantity.value
+        next if val.nil? || val == 0 # zero qty cannot exceed capacity
+
+        [quantity.unit_id, val.abs]
       }.compact.to_h
+
+      # No positive/absolute demand: capacity cannot eliminate any vehicle.
+      return vrp.vehicles.none?{ |v| service.vehicle_compatibility[v.id] } if s_quantities.empty?
 
       vrp.vehicles.each{ |vehicle|
         next unless service.vehicle_compatibility[vehicle.id] # already eliminated
@@ -819,12 +826,13 @@ module Wrappers
       vrp.vehicles.none?{ |v| service.vehicle_compatibility[v.id] } # no compatible vehicle with enough capacity
     end
 
-    def no_compatible_vehicle_with_compatible_tw(vrp, service)
+    def no_compatible_vehicle_with_compatible_tw(vrp, service, matrices_by_id: nil)
       no_vehicle_with_compatible_skills(vrp, service) if service.vehicle_compatibility.nil?
 
       s_activities = [service.activity, service.activities].compact.flatten
 
       implicit_timewindow = [Models::Timewindow.new(start: 0)] # need to check time feasibility
+      matrices_by_id ||= Array(vrp.matrices).index_by(&:id)
 
       vrp.vehicles.each{ |vehicle|
         next unless service.vehicle_compatibility[vehicle.id] # already eliminated
@@ -841,7 +849,7 @@ module Wrappers
         service.vehicle_compatibility[vehicle.id] =
           s_activities.any?{ |activity|
             time_to_go, time_to_return, dist_to_go, dist_to_return =
-              two_way_time_and_dist(vrp, vehicle, activity) || [0, 0, 0, 0]
+              two_way_time_and_dist(vehicle, activity, matrices_by_id) || [0, 0, 0, 0]
 
             # NOTE: There is no easy way to include the setup duration in the elimination because the
             # setup_duration logic is based of time[point_a][point_b] == 0; so we need to check all
@@ -878,7 +886,7 @@ module Wrappers
       vrp.vehicles.none?{ |v| service.vehicle_compatibility[v.id] } # no compatible vehicle with compatible timewindow
     end
 
-    def two_way_time_and_dist(vrp, vehicle, activity)
+    def two_way_time_and_dist(vehicle, activity, matrices_by_id)
       return unless vehicle.matrix_id
 
       v_start_m_index = vehicle.start_point&.matrix_index
@@ -886,7 +894,8 @@ module Wrappers
 
       return unless v_start_m_index || v_end_m_index
 
-      matrix = vrp.matrices.find{ |m| m.id == vehicle.matrix_id }
+      matrix = matrices_by_id[vehicle.matrix_id]
+      return unless matrix
 
       [
         (v_start_m_index && matrix.time) ? matrix.time[v_start_m_index][activity.point.matrix_index] : 0,
@@ -901,8 +910,9 @@ module Wrappers
       unfeasible = check_unreachable(vrp, :distance, unfeasible)
       unfeasible = check_unreachable(vrp, :value, unfeasible)
 
+      matrices_by_id = Array(vrp.matrices).index_by(&:id)
       vrp.services.each{ |service|
-        if no_compatible_vehicle_with_compatible_tw(vrp, service)
+        if no_compatible_vehicle_with_compatible_tw(vrp, service, matrices_by_id: matrices_by_id)
           add_unassigned(unfeasible, vrp, service,
                          'No compatible vehicle can reach this service while respecting all constraints')
         end
