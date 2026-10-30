@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info SKIP_DICHO=true SKIP_REAL_CASES=true SKIP_PERIODIC=true SKIP_SPLIT_CLUSTERING=true"
-      TIMEOUT: 10m
+      TIMEOUT: 8m
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -117,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/lib/heuristics/dichotomous_test.rb"
-      TIMEOUT: 20m
+      TIMEOUT: 5m
     steps: &test_steps
       - name: Checkout
         uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/real_cases_test.rb"
-      TIMEOUT: 10m
+      TIMEOUT: 8m
     steps: *test_steps
 
   test_real_periodic:
@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/real_cases_periodic_test.rb"
-      TIMEOUT: 10m
+      TIMEOUT: 8m
     steps: *test_steps
 
   test_real_periodic_solver:
@@ -154,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/real_cases_periodic_solver_test.rb"
-      TIMEOUT: 25m
+      TIMEOUT: 18m
     steps: *test_steps
 
   test_periodic:
@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPTIONS: "COV=false LOG_LEVEL=info TEST=test/lib/interpreters/split_clustering_test.rb"
-      TIMEOUT: 25m
+      TIMEOUT: 8m
     steps: *test_steps
 
   docker:
