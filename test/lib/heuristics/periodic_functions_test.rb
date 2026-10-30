@@ -210,8 +210,11 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(:@services_data, services_data)
       s.instance_variable_set(:@services_assignment, Marshal.load(File.binread("#{file}services_assignment.bindump"))) # rubocop: disable Security/MarshalLoad
       s.instance_variable_set(:@points_assignment, Marshal.load(File.binread("#{file}points_assignment.bindump"))) # rubocop: disable Security/MarshalLoad
-      s.instance_variable_set(:@candidate_services_ids,
-                              Marshal.load(File.binread("#{file}candidate_services_ids.bindump"))) # rubocop: disable Security/MarshalLoad
+      loaded_candidates = Marshal.load(File.binread("#{file}candidate_services_ids.bindump")) # rubocop: disable Security/MarshalLoad
+      s.instance_variable_set(
+        :@candidate_services_ids,
+        loaded_candidates.is_a?(Hash) ? loaded_candidates : loaded_candidates.to_h{ |id| [id, true] }
+      )
       starting_with = s.instance_variable_get(:@services_assignment).sum{ |_id, data| data[:missing_visits] }
       s.send(:add_missing_visits)
 
@@ -521,6 +524,7 @@ class HeuristicTest < Minitest::Test
       vrp_to_solve = TestHelper.create(vrp)
       vrp_to_solve.vehicles = TestHelper.expand_vehicles(vrp_to_solve)
       s = Wrappers::PeriodicHeuristic.new(vrp_to_solve)
+      all_available_ids = vrp_to_solve.services.to_h{ |svc| [svc.id, true] }
 
       route_with_one = [
         { id: 'service_1', point_id: 'point_1', start: 0, arrival: 0, end: 0, setup_duration: 0, activity: 0 }
@@ -538,16 +542,16 @@ class HeuristicTest < Minitest::Test
         'vehicle_0' => {
           0 => { stops: route_with_one, cost_fixed: 2, global_day_index: 0,
                  tw_start: 0, tw_end: 10000, matrix_id: 'm1', capacity_left: {}, capacity: {},
-                 available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 available_ids: all_available_ids.dup },
           1 => { stops: route_with_two, cost_fixed: 2, global_day_index: 1,
                  tw_start: 0, tw_end: 10000, matrix_id: 'm1', capacity_left: {}, capacity: {},
-                 available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 available_ids: all_available_ids.dup },
           2 => { stops: route_with_three, cost_fixed: 2, global_day_index: 2,
                  tw_start: 0, tw_end: 10000, matrix_id: 'm1', capacity_left: {}, capacity: {},
-                 available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 available_ids: all_available_ids.dup },
           3 => { stops: route_with_four, cost_fixed: 2, global_day_index: 3,
                  tw_start: 0, tw_end: 10000, matrix_id: 'm1', capacity_left: {}, capacity: {},
-                 available_ids: [vrp_to_solve.services.collect(&:id)] }
+                 available_ids: all_available_ids.dup }
         }
       }
       s_a, p_a = get_assignment_data(candidate_route, vrp_to_solve)
@@ -584,25 +588,29 @@ class HeuristicTest < Minitest::Test
         'vehicle_0' => {
           0 => { stops: route_with_four, cost_fixed: 2, global_day_index: 3,
                  tw_start: 0, tw_end: 10000, matrix_id: 'm1',
-                 capacity_left: {}, capacity: {}, available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 capacity_left: {}, capacity: {},
+                 available_ids: all_available_ids.dup },
           1 => { stops: Array.new(3){ |i|
                           { id: "service_#{i + 1}", point_id: "point_#{i + 1}",
                             start: 0, arrival: 0, end: 0, setup_duration: 0, activity: 0 }
                         },
                  cost_fixed: 2, global_day_index: 2, tw_start: 0, tw_end: 10000, matrix_id: 'm1',
-                 capacity_left: {}, capacity: {}, available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 capacity_left: {}, capacity: {},
+                 available_ids: all_available_ids.dup },
           2 => { stops: Array.new(2){ |i|
                           { id: "service_#{i + 1}", point_id: "point_#{i + 1}",
                             start: 0, arrival: 0, end: 0, setup_duration: 0, activity: 0 }
                         },
                  cost_fixed: 2, global_day_index: 1, tw_start: 0, tw_end: 10000, matrix_id: 'm1',
-                 capacity_left: {}, capacity: {}, available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 capacity_left: {}, capacity: {},
+                 available_ids: all_available_ids.dup },
           3 => { stops: [
                    { id: 'service_1', point_id: 'point_1',
                      start: 0, arrival: 0, end: 0, setup_duration: 0, activity: 0 }
                  ],
                  cost_fixed: 2, global_day_index: 0, tw_start: 0, tw_end: 10000, matrix_id: 'm1',
-                 capacity_left: {}, capacity: {}, available_ids: [vrp_to_solve.services.collect(&:id)] },
+                 capacity_left: {}, capacity: {},
+                 available_ids: all_available_ids.dup },
         }
       )
       s_a, p_a = get_assignment_data(s.instance_variable_get(:@candidate_routes), vrp_to_solve)

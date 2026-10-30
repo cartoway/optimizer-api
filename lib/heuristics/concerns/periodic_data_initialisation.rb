@@ -41,7 +41,7 @@ module PeriodicDataInitialization
         maximum_ride_distance: vehicle.maximum_ride_distance,
         router_dimension: vehicle.router_dimension.to_sym,
         cost_fixed: vehicle.cost_fixed,
-        available_ids: [],
+        available_ids: {},
         completed: false,
       }
     }
@@ -51,7 +51,8 @@ module PeriodicDataInitialization
     @output_tool&.add_comment('INITIALIZE_ROUTES')
     considered_ids = []
     routes.sort_by(&:day_index).each{ |defined_route|
-      associated_route = @candidate_routes[defined_route.vehicle_id][defined_route.day_index.to_i]
+      vehicle_key = defined_route.vehicle&.original_id || defined_route.vehicle_id
+      associated_route = @candidate_routes[vehicle_key][defined_route.day_index.to_i]
       defined_route.mission_ids.each{ |id|
         next if !@services_data.key?(id) # id has been removed when detecting unfeasible services in wrapper
 
@@ -61,8 +62,8 @@ module PeriodicDataInitialization
           insert_visit_in_route(associated_route, best_index, false)
 
           # unlock corresponding services
-          services_to_add = @services_unlocked_by[id].to_a & @candidate_services_ids
-          @to_plan_service_ids += services_to_add
+          services_to_add = @services_unlocked_by[id].to_a.select{ |sid| @candidate_services_ids[sid] }
+          services_to_add.each{ |sid| @to_plan_service_ids[sid] = true }
           services_to_add.each{ |service_id| @unlocked[service_id] = nil }
         else
           @services_assignment[id][:unassigned_reasons] |= ['Can not add this service to its corresponding route']
@@ -153,8 +154,8 @@ module PeriodicDataInitialization
       }
 
       if possible_days_are_consistent(vrp, service)
-        @candidate_services_ids << service.id
-        @to_plan_service_ids << service.id
+        @candidate_services_ids[service.id] = true
+        @to_plan_service_ids[service.id] = true
       else
         reject_all_visits(service.id, service.visits_number,
                           'First and last possible days do not allow this service planification')
@@ -167,7 +168,7 @@ module PeriodicDataInitialization
   def adapt_services_data(vrp)
     # reminder : services in (relaxed_)same_point_day relation have only one point_id
 
-    @to_plan_service_ids = []
+    @to_plan_service_ids = {}
     vrp.points.each{ |point|
       same_located_set =
         @services_data.select{ |_id, data|
@@ -198,7 +199,7 @@ module PeriodicDataInitialization
           }
         }
 
-        @to_plan_service_ids << representative_ids.last
+        @to_plan_service_ids[representative_ids.last] = true
         @services_unlocked_by[representative_ids.last] = representative_ids.slice(0, representative_ids.size - 1).to_a
       end
     }
@@ -235,7 +236,8 @@ module PeriodicDataInitialization
         all_routes.each_key{ |day|
           next if day > latest_day
 
-          @candidate_routes[vehicle_id][day][:available_ids] += set.collect(&:first)
+          avail = @candidate_routes[vehicle_id][day][:available_ids]
+          set.each{ |id, _data| avail[id] = true }
         }
       }
     }
