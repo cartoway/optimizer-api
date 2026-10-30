@@ -2111,6 +2111,18 @@ class WrapperTest < Minitest::Test
     assert_equal(1, unfeasible.values.flatten.count{ |un| un.reason&.split(' && ')&.include?(unassigned_reason) })
   end
 
+  def test_capacity_skips_zero_quantities_happy_path
+    demo = OptimizerWrapper.config[:services][:demo]
+    vrp = VRP.toy
+    vrp[:units] = [{ id: 'u1' }]
+    vrp[:services].first[:quantities] = [{ unit_id: 'u1', value: 0 }]
+    vrp[:vehicles].first[:capacities] = [{ unit_id: 'u1', limit: 1 }]
+
+    created = TestHelper.create(vrp)
+    assert_empty demo.detect_unfeasible_services(created)
+    assert created.services.first.vehicle_compatibility[created.vehicles.first.id]
+  end
+
   def test_feasible_if_tardiness_allowed
     vrp = VRP.basic
     demo = OptimizerWrapper.config[:services][:demo]
