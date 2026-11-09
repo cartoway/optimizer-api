@@ -74,7 +74,7 @@ jobs:
           build-args: |
             BUNDLE_WITHOUT=production:development
             BUNDLE_FULL_INDEX=1
-            OPTIMIZER_ORTOOLS_VERSION=${{ secrets.OPTIMIZER_ORTOOLS_VERSION }}
+            OPTIMIZER_ORTOOLS_VERSION=${{ secrets.OPTIMIZER_ORTOOLS_VERSION || 'v111.0.0' }}
             VROOM_VERSION=${{ secrets.VROOM_VERSION }}
           tags: optimizer-api:latest
           outputs: type=docker,dest=/tmp/optimizer-api.tar

@@ -5,6 +5,8 @@ ARG ROSOMAXA_VERSION=1.25.0
 ARG ROSOMAXA_GIT_URL=https://github.com/reinterpretcat/vrp.git
 # Pin: reinterpretcat/vrp master @ 2026-09-21 (Fix clippy warnings)
 ARG ROSOMAXA_GIT_REF=e49bee0eccb9d732d0e020d7f9bbbb378e2de2bc
+# Global (before first FROM) so --build-arg can select the optimizer-ortools base tag.
+ARG OPTIMIZER_ORTOOLS_VERSION=v111.0.0
 
 FROM ghcr.io/reinterpretcat/vrp/vrp-cli:${ROSOMAXA_VERSION} AS rosomaxa-release
 
@@ -24,7 +26,7 @@ RUN cargo build --locked --release -p vrp-cli \
 
 FROM rosomaxa-${ROSOMAXA_SOURCE} AS rosomaxa-cli
 
-FROM ghcr.io/cartoway/optimizer-ortools:master
+FROM ghcr.io/cartoway/optimizer-ortools:${OPTIMIZER_ORTOOLS_VERSION}
 
 COPY --from=rosomaxa-cli /solver/vrp-cli /usr/local/bin/vrp-cli
 
