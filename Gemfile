@@ -3,7 +3,7 @@ ruby '>= 3.3'
 
 gem 'require_all'
 
-gem 'puma', '~> 7.0'
+gem 'puma', '~> 8.0'
 gem 'rack'
 gem 'rack-contrib', require: 'rack/contrib'
 gem 'rack-cors', require: 'rack/cors'
@@ -28,6 +28,8 @@ gem 'activemodel', '>= 7.2'
 gem 'activesupport', '>= 7.2', require: 'active_support'
 gem 'google-protobuf', '>=3', require: 'google/protobuf'
 gem 'oj'
+# json 3 removed quirks_mode; Grape formatter still passes it
+gem 'json', '~> 2.0'
 
 # Text
 gem 'charlock_holmes'
@@ -57,13 +59,15 @@ gem 'rgeo-geojson', require: 'rgeo/geo_json'
 gem 'sentry-resque'
 gem 'sentry-ruby'
 
+group :development do
+  # Offline code analysis / IDE (not needed in CI test image)
+  gem 'ripper-tags'
+  gem 'solargraph'
+end
+
 group :development, :test do
   gem 'benchmark-ips' # to in-place benchmark of different implementations
   gem 'byebug'
-
-  # Offline code analysis
-  gem 'ripper-tags'
-  gem 'solargraph'
 
   # For creating dependency graphs
   # gem 'rubrowser' # active to create graph
@@ -83,7 +87,7 @@ end
 group :rubocop do
   # Linting
   gem 'rubocop'
-  gem 'rubocop-policy', github: 'cartoway/rubocop-policy'
+  gem 'rubocop-policy', github: 'cartoway/rubocop-policy', tag: 'v0.3.0'
 end
 
 group :test do
