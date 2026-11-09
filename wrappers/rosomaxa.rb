@@ -28,7 +28,7 @@ module Wrappers
     /x
 
     def initialize(hash = {})
-      super(hash)
+      super
       @exec_rosomaxa = hash[:exec_rosomaxa] || ENV['ROSOMAXA_PATH'] || '/usr/local/bin/vrp-cli'
     end
 

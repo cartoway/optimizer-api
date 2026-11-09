@@ -33,7 +33,7 @@ module Interpreters
                                                             tour.router_mode,
                                                             (tour.time_bounds ? :time : :distance),
                                                             stop.location.lat, stop.location.lon,
-                                                            (tour.time_bounds || tour.distance_bounds)))
+                                                            tour.time_bounds || tour.distance_bounds))
           next unless isoline
 
           {
@@ -84,7 +84,7 @@ module Interpreters
         isolines.each{ |iso_second|
           next if iso_second[:id] == isoline[:id]
 
-          next if (isoline[:inside_points] & iso_second[:inside_points]).empty?
+          next if !isoline[:inside_points].intersect?(iso_second[:inside_points])
 
           pattern_first = patterns.find{ |pattern| pattern.include? isoline[:id] }
           pattern_second = patterns.find{ |pattern| pattern.include? iso_second[:id] }
@@ -107,7 +107,7 @@ module Interpreters
     def generate_subproblems(patterns)
       problem_size = @original_vrp.services.size
 
-      patterns.collect{ |pattern|
+      patterns.filter_map{ |pattern|
         sub_vrp = Marshal.load(Marshal.dump(@original_vrp))
         sub_vrp.id = pattern
         sub_vrp.relations = @original_vrp.relations
@@ -157,7 +157,7 @@ module Interpreters
         @original_vrp.subtours.select{ |sub_tour|
           !sub_tour[:transmodal_stops].empty? &&
             !pattern.empty? &&
-            !(sub_tour[:transmodal_stops].map(&:id) & pattern).empty?
+            !!sub_tour[:transmodal_stops].map(&:id).intersect?(pattern)
         }.each{ |sub_tour|
           duplicate_vehicles =
             sub_tour.capacities.collect{ |capacity|
@@ -176,9 +176,9 @@ module Interpreters
                     start_point: transmodal_point,
                     end_point: transmodal_point,
                     skills: [
-                      sub_vrp[:points].collect{ |point|
+                      sub_vrp[:points].filter_map{ |point|
                         point[:associated_stops].include?(transmodal_id) ? point[:associated_stops].join('_') : nil
-                      }.compact.uniq +
+                      }.uniq +
                       alternative
                     ],
                     capacities: sub_tour.capacities,
@@ -193,9 +193,9 @@ module Interpreters
                   speed_multiplier: sub_tour.speed_multiplier,
                   start_point: transmodal_point,
                   end_point: transmodal_point,
-                  skills: [sub_vrp[:points].collect{ |point|
+                  skills: [sub_vrp[:points].filter_map{ |point|
                              point[:associated_stops].include?(transmodal_id) ? point[:associated_stops].join('_') : nil
-                           }.compact.uniq],
+                           }.uniq],
                   capacities: sub_tour.capacities,
                   duration: sub_tour.duration,
                 )
@@ -216,7 +216,7 @@ module Interpreters
           end
           round = service.quantities.select{ |quantity|
                     max_capacities[quantity.unit.id]&.positive?
-                  }.collect{ |quantity| ((quantity.value || 0) / max_capacities[quantity.unit.id]) }.max || 1
+                  }.collect{ |quantity| (quantity.value || 0) / max_capacities[quantity.unit.id] }.max || 1
           services =
             (1..round.ceil).collect{ |index|
               duplicated_service = Marshal.load(Marshal.dump(service))
@@ -236,7 +236,7 @@ module Interpreters
         }.flatten!
         sub_vrp.points.uniq!
         sub_vrp
-      }.compact.delete_if{ |sub_vrp| sub_vrp.services.empty? }
+      }.delete_if{ |sub_vrp| sub_vrp.services.empty? }
     end
 
     def solve_subproblems(subvrps)

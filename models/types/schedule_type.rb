@@ -24,9 +24,7 @@ class ScheduleType
           3600 * Regexp.last_match(1).to_i + 60 * Regexp.last_match(2).to_i + Regexp.last_match(3).to_i
         elsif /\A([0-9]+):([0-9]{2})\z/ =~ value.to_s
           3600 * Regexp.last_match(1).to_i + 60 * Regexp.last_match(2).to_i
-        elsif /\A[0-9]+\.{0,1}[0-9]*\z/.match?(value.to_s)
-          value.to_i
-        elsif value.is_a?(Integer) || value.is_a?(Float)
+        elsif /\A[0-9]+\.{0,1}[0-9]*\z/.match?(value.to_s) || value.is_a?(Integer) || value.is_a?(Float)
           value.to_i
         else
           log 'error', level: :error

@@ -23,6 +23,7 @@ class InterpreterTrackingTest < Minitest::Test
         Interpreters::Dichotomous.stub(:ensure_time_budget!, ->(_sv) {}) do
           Interpreters::Dichotomous.stub(:build_dicho_node_solution, ->(*) { solution }) do
             result = Interpreters::Dichotomous.dichotomous_heuristic(service_vrp)
+
             assert_includes service_vrp.interpreters, 'dichotomous'
             assert_includes result.interpreters, 'dichotomous'
           end

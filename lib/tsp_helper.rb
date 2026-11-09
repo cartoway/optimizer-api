@@ -52,7 +52,7 @@ module TSPHelper
   end
 
   def self.convert_point(point, tsp_suffix)
-    return unless  point
+    return unless point
 
     {
       id: "#{tsp_suffix}_#{point.id}",

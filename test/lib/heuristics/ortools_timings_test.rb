@@ -12,7 +12,8 @@ module Interpreters
       OrtoolsTimings.increment!(dicho_data, :calls)
 
       timings = OrtoolsTimings.for_dicho_data(dicho_data)
-      assert_equal 12.5, timings[:build_problem_ms]
+
+      assert_in_delta(12.5, timings[:build_problem_ms])
       assert_equal 1, timings[:calls]
     end
 
@@ -31,6 +32,7 @@ module Interpreters
       end
 
       timings = OrtoolsTimings.for_dicho_data(dicho_data)
+
       assert_equal 1, timings[:calls]
       assert_equal 0, timings[:heuristic_selection_calls]
       assert_operator timings[:build_problem_ms], :>, 0

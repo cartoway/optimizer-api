@@ -129,6 +129,7 @@ module Interpreters
       DichoEndStageSolver.record_inserted!(@service_vrp.dicho_data, 2)
 
       stored = DichoResolutionTimings.for_dicho_data(@service_vrp.dicho_data)
+
       assert_equal 1, stored[:end_stage_insert_attempts]
       assert_equal 1, stored[:end_stage_insert_successes]
       assert_equal 1, stored[:end_stage_insert_rejected]

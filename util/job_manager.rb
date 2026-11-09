@@ -50,6 +50,8 @@ module OptimizerWrapper
       raw_services_vrps = Marshal.load(Base64.decode64(self.options['services_vrps'])) # rubocop:disable Security/MarshalLoad
       services_vrps = Models::ResolutionContext.migrate_array(raw_services_vrps)
       log "Vrp size: #{services_vrps.size} Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv.vrp.name }}"
+      configuration = services_vrps.first.vrp.configuration
+      preprocessing = configuration&.preprocessing
       Sentry.set_extras(
         vrps: services_vrps.map{ |sv|
           {
@@ -60,10 +62,10 @@ module OptimizerWrapper
           }
         },
         config: {
-          max_split_size: services_vrps.first.vrp.configuration&.preprocessing&.max_split_size,
-          partitions: services_vrps.first.vrp.configuration&.preprocessing&.partitions&.size,
-          schedule: !services_vrps.first.vrp.configuration&.schedule&.range_indices.nil?,
-          random_seed: services_vrps.first.vrp.configuration&.resolution&.random_seed,
+          max_split_size: preprocessing&.max_split_size,
+          partitions: preprocessing&.partitions&.size,
+          schedule: !configuration&.schedule&.range_indices.nil?,
+          random_seed: configuration&.resolution&.random_seed,
         }
       )
 
@@ -119,12 +121,12 @@ module OptimizerWrapper
       log "Ending job... #{options['checksum']}"
       best_solution = final_solutions.min(&:count_assigned_services)
       # WARNING: the following log is used for server performance comparison automation
-      log "Elapsed time: #{(Time.now - job_started_at).round(2)}s Vrp size: #{services_vrps.size} "\
-          "Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv.vrp.name }} "\
-          "Checksum: #{options['checksum']} "\
-          "Random seed: #{services_vrps.first.vrp.configuration&.resolution&.random_seed} "\
-          "Assigned services: #{best_solution&.count_assigned_services} "\
-          "Unassigned services: #{best_solution&.count_unassigned_services} "\
+      log "Elapsed time: #{(Time.now - job_started_at).round(2)}s Vrp size: #{services_vrps.size} " \
+          "Key print: #{key_print} Names: #{services_vrps.map{ |sv| sv.vrp.name }} " \
+          "Checksum: #{options['checksum']} " \
+          "Random seed: #{services_vrps.first.vrp.configuration&.resolution&.random_seed} " \
+          "Assigned services: #{best_solution&.count_assigned_services} " \
+          "Unassigned services: #{best_solution&.count_unassigned_services} " \
           "Used routes: #{best_solution&.count_used_routes}"
 
       # Add values related to the current solve status

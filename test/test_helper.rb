@@ -22,15 +22,16 @@ require './environment.rb'
 
 WebMock.disable_net_connect!
 
-if Rake.application.top_level_tasks.include?('test') && ![ENV['COVERAGE'], ENV['COV']].include?('false')
+if Rake.application.top_level_tasks.include?('test') && ![ENV.fetch('COVERAGE', nil),
+                                                          ENV.fetch('COV', nil)].include?('false')
   require 'simplecov'
   SimpleCov.start
 end
 
 Minitest::Reporters.use! [
-  !ENV['TIME'] ? Minitest::Reporters::ProgressReporter.new : nil,
-  ENV['HTML'] && Minitest::Reporters::HtmlReporter.new, # Create an HTML report with more information
-  ENV['TIME'] && Minitest::Reporters::SpecReporter.new, # Generate a report to find slowest tests
+  ENV['TIME'] ? nil : Minitest::Reporters::ProgressReporter.new,
+  ENV.fetch('HTML', nil) && Minitest::Reporters::HtmlReporter.new, # Create an HTML report with more information
+  ENV.fetch('TIME', nil) && Minitest::Reporters::SpecReporter.new, # Generate a report to find slowest tests
 ].compact
 
 Minitest::Retry.use!(
@@ -143,11 +144,11 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
 
         next if vrp.is_a?(Hash) && !s.key?(:visits_number)
 
-        unless s[:visits_number].is_a?(Integer) && s[:visits_number].positive?
-          raise StandardError.new(
-            "Service/Shipment #{s[:id]} visits_number (#{s[:visits_number]}) is invalid."
-          )
-        end
+        next if s[:visits_number].is_a?(Integer) && s[:visits_number].positive?
+
+        raise StandardError.new(
+          "Service/Shipment #{s[:id]} visits_number (#{s[:visits_number]}) is invalid."
+        )
       }
     }
 
@@ -174,7 +175,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
                                          :zones, :vehicles, :services, :shipments, :relations, :reload_depots, :subtours,
                                          :routes, :configuration]
       unless unknown_model_fields.empty?
-        raise 'If there is a new model class add it above. '\
+        raise 'If there is a new model class add it above. ' \
               "If not, following fields should not be in vrp: #{unknown_model_fields}"
       end
     end
@@ -195,8 +196,8 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
                Models::Relation::ONE_LAPSE_TYPES,
                Models::Relation::SEVERAL_LAPSE_TYPES].any?{ |set| set.include?(r[:type]) }
 
-      raise 'This relation does not exit in any of NO_LAPSE_RELATIONS ONE_LAPSE_RELATIONS '\
-      'SEVERAL_LAPSE_RELATIONS, there is a risk of incorrect management'
+      raise 'This relation does not exit in any of NO_LAPSE_RELATIONS ONE_LAPSE_RELATIONS ' \
+            'SEVERAL_LAPSE_RELATIONS, there is a risk of incorrect management'
     }
 
     vrp[:relations]&.each{ |r|
@@ -204,8 +205,8 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
       next if [Models::Relation::ON_VEHICLES_TYPES,
                Models::Relation::ON_SERVICES_TYPES].any?{ |set| set.include?(r[:type]) }
 
-      raise 'This relation does not exit in any of ON_VEHICLES_TYPES '\
-      'ON_SERVICES_TYPES there is a risk of incorrect management'
+      raise 'This relation does not exit in any of ON_VEHICLES_TYPES ' \
+            'ON_SERVICES_TYPES there is a risk of incorrect management'
     }
 
     vrp[:vehicles]&.each{ |v|
@@ -360,7 +361,7 @@ module TestHelper # rubocop: disable Style/CommentedKeyword, Lint/RedundantCopDi
   end
 end
 
-module VRP # rubocop: disable Metrics/ModuleLength, Style/CommentedKeyword
+module VRP # rubocop: disable Metrics/ModuleLength
   def self.toy
     {
       units: [{ id: 'u1' }],
@@ -1595,18 +1596,18 @@ module VRP # rubocop: disable Metrics/ModuleLength, Style/CommentedKeyword
       matrices: [{
         id: 'matrix_0',
         time: [
-          [0,  1,  1, 10,  0],
-          [1,  0,  1, 10,  1],
-          [1,  1,  0, 10,  1],
+          [0,  1,  1, 10, 0],
+          [1,  0,  1, 10, 1],
+          [1,  1,  0, 10, 1],
           [10, 10, 10, 0, 10],
-          [0,  1,  1, 10,  0]
+          [0,  1,  1, 10, 0]
         ],
         distance: [
-          [0,  1,  1, 10,  0],
-          [1,  0,  1, 10,  1],
-          [1,  1,  0, 10,  1],
+          [0,  1,  1, 10, 0],
+          [1,  0,  1, 10, 1],
+          [1,  1,  0, 10, 1],
           [10, 10, 10, 0, 10],
-          [0,  1,  1, 10,  0]
+          [0,  1,  1, 10, 0]
         ]
       }],
       points: (0..(size - 1)).collect{ |i|

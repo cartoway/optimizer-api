@@ -34,9 +34,10 @@ class HeuristicTest < Minitest::Test
         vrp.configuration.resolution.solver = true
         solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }},
                                                  Marshal.load(Marshal.dump(vrp)), nil)
-        assert unassigned >= solutions[0].unassigned_stops.size,
-               "Increased number of unassigned with ORtools : had #{unassigned}, "\
-               "has #{solutions[0].unassigned_stops.size} now"
+
+        assert_operator unassigned, :>=, solutions[0].unassigned_stops.size,
+                        "Increased number of unassigned with ORtools : had #{unassigned}, " \
+                        "has #{solutions[0].unassigned_stops.size} now"
       }
     end
 
@@ -49,13 +50,15 @@ class HeuristicTest < Minitest::Test
 
       vrp.services.group_by{ |s| s.activity.point.id }.each{ |point_id, services_set|
         expected_number_of_days = services_set.collect{ |service| service[:visits_number] }.max
-        days_used = solutions[0].routes.count{ |r| r.stops.count{ |act| act.activity.point.id == point_id } > 0 }
+        days_used = solutions[0].routes.count{ |r| r.stops.any?{ |act| act.activity.point.id == point_id } }
+
         assert_operator days_used, :<=, expected_number_of_days,
                         "Used #{days_used} for point #{point_id} instead of #{expected_number_of_days} expected."
       }
 
       # check performance :
       limit = vrp.visits * 6 / 100.0
+
       assert_operator solutions[0].unassigned_stops.size, :<, limit, 'Too many unassigned'
       assert solutions[0].unassigned_stops.none?{ |un| un.reason.include?(' vehicle ') },
              'Some services could not be assigned to a vehicle'
@@ -72,6 +75,7 @@ class HeuristicTest < Minitest::Test
           solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
           unassigned_nb + solutions[0].unassigned_stops.size
         }
+
       assert_operator unassigned_visits, :<=, 248, 'Expecting less unassigned visits'
     end
 
@@ -105,12 +109,14 @@ class HeuristicTest < Minitest::Test
       vrp.configuration.resolution.solver = false
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
       unassigned = solutions[0].unassigned_stops.size
+
       assert_equal 46, unassigned
 
       vrp = TestHelper.load_vrp(self)
       vrp.configuration.resolution.solver = true
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
-      assert unassigned >= solutions[0].unassigned_stops.size
+
+      assert_operator unassigned, :>=, solutions[0].unassigned_stops.size
     end
   end
 end

@@ -32,16 +32,18 @@ module Cleanse
   def self.same_empty_units(capacity_unit_ids, previous, current)
     if previous && current
       if previous
-        previous_empty_units = previous.loads.map{ |loa|
-          loa.quantity.unit.id if loa.quantity.empty
-        }.compact
+        previous_empty_units =
+          previous.loads.filter_map{ |loa|
+            loa.quantity.unit.id if loa.quantity.empty
+          }
       end
       if current
         useful_units = useful_unit_ids(capacity_unit_ids, current)
 
-        current_empty_units = current.loads.map{ |loa|
-          loa.quantity.unit.id if loa.quantity.empty
-        }.compact
+        current_empty_units =
+          current.loads.filter_map{ |loa|
+            loa.quantity.unit.id if loa.quantity.empty
+          }
       end
       !previous_empty_units.empty? && !current_empty_units.empty? &&
         (useful_units & previous_empty_units & current_empty_units == useful_units)
@@ -51,16 +53,18 @@ module Cleanse
   def self.same_fill_units(capacity_unit_ids, previous, current)
     if previous && current
       if previous
-        previous_fill_units = previous.loads.map{ |loa|
-          loa.quantity.unit.id if loa.quantity.fill
-        }.compact
+        previous_fill_units =
+          previous.loads.filter_map{ |loa|
+            loa.quantity.unit.id if loa.quantity.fill
+          }
       end
       if current
         useful_units = useful_unit_ids(capacity_unit_ids, current)
 
-        current_fill_units = current.loads.map{ |loa|
-          loa.quantity.unit.id if loa.quantity.fill
-        }.compact
+        current_fill_units =
+          current.loads.filter_map{ |loa|
+            loa.quantity.unit.id if loa.quantity.fill
+          }
       end
       !previous_fill_units.empty? && !current_fill_units.empty? &&
         (useful_units & previous_fill_units & current_fill_units == useful_units)
@@ -68,14 +72,14 @@ module Cleanse
   end
 
   def self.useful_unit_ids(capacity_unit_ids, stop)
-    stop.loads.map{ |loa| loa.quantity.unit.id }.compact & capacity_unit_ids
+    stop.loads.filter_map{ |loa| loa.quantity.unit.id } & capacity_unit_ids
   end
 
   def self.cleanse_empties_fills(_vrp, solution)
     service_types = %i[pickup delivery service]
     solution.routes.each{ |route|
       vehicle = route.vehicle
-      capacity_unit_ids = vehicle.capacities.collect{ |capacity| capacity.unit_id if capacity.limit }.compact
+      capacity_unit_ids = vehicle.capacities.filter_map{ |capacity| capacity.unit_id if capacity.limit }
       previous_activity = nil
 
       route.stops.delete_if{ |stop|
@@ -100,7 +104,7 @@ module Cleanse
   end
 
   def self.cleanse_duplicate_empties_fills(vrp, solution)
-    count_services = vrp.empties_or_fills.map{ |service| [service.id, 0] }.to_h
+    count_services = vrp.empties_or_fills.to_h{ |service| [service.id, 0] }
 
     # count empties or fills already part of the routes
     solution.routes.each{ |route|
@@ -120,7 +124,8 @@ module Cleanse
       next if route.stops.map{ |s| s.activity.point_id }.uniq.size > 1
 
       route.stops.map{ |stop|
-        if stop.loads&.first&.quantity&.empty
+        quantity = stop.loads&.first&.quantity
+        if quantity&.empty
           add_unnassigned(solution.unassigned_stops, stop, 'Unnecessary empty stop.')
           route.stops.delete(stop)
         end

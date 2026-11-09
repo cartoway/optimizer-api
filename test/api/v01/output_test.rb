@@ -61,7 +61,8 @@ class Api::V01::OutputTest < Minitest::Test
     result = JSON.parse(response.body, symbolize_names: true)
 
     solution = result[:solutions][0]
-    solution[:cost_details].each{ |_key, value|
+
+    solution[:cost_details].each_value{ |value|
       assert value
     }
     detail_keys = %i[lat lon setup_duration duration quantities timewindows]
@@ -146,31 +147,37 @@ class Api::V01::OutputTest < Minitest::Test
     vrp[:configuration][:restitution] = { csv: true }
 
     csv_data = submit_csv api_key: 'demo', vrp: vrp
+
     assert_equal csv_data.collect(&:size).max, csv_data.collect(&:size).first
     assert_includes csv_data.first, 'day_week'
     assert_includes csv_data.first, 'day_week_num'
 
     day_index = csv_data.first.find_index('day')
-    assert_equal ['day', '0', '1', '2', '3'], csv_data.collect{ |l| l[day_index] }.compact.uniq
+
+    assert_equal ['day', '0', '1', '2', '3'], csv_data.filter_map{ |l| l[day_index] }.uniq
 
     visit_index = csv_data.first.find_index('visit_index')
-    assert_equal ['1', '2', 'visit_index'], csv_data.collect{ |l| l[visit_index] }.compact.uniq.sort
+
+    assert_equal ['1', '2', 'visit_index'], csv_data.filter_map{ |l| l[visit_index] }.uniq.sort
   end
 
   def test_check_returned_day_and_visit_index
     vrp = VRP.basic
     response = post '/0.1/vrp/submit', { api_key: 'solvers', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
     result = JSON.parse(response.body)
+
     assert(result['solutions'].first['routes'].none?{ |route| route['day'] })
     assert(result['solutions'].first['routes'].none?{ |route| route['activities'].any?{ |a| a['visit_index'] } })
 
     vrp = VRP.periodic
     response = post '/0.1/vrp/submit', { api_key: 'solvers', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
     result = JSON.parse(response.body)
+
     assert_equal [0, 1, 2, 3], result['solutions'].first['routes'].collect{ |route| route['day'] }.sort
     visit_indices = result['solutions'].first['routes'].flat_map{ |r|
       r['activities'].map{ |a| a['visit_index'] }
     }.compact
+
     assert_equal [1], visit_indices.uniq
 
     vrp = VRP.periodic
@@ -182,6 +189,7 @@ class Api::V01::OutputTest < Minitest::Test
     }
     response = post '/0.1/vrp/submit', { api_key: 'solvers', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
     result = JSON.parse(response.body)
+
     assert_equal %w[2021-02-10 2021-02-11 2021-02-12 2021-02-13 2021-02-14 2021-02-15],
                  result['solutions'].first['routes'].collect{ |route| route['day'] }.sort
   end
@@ -191,6 +199,7 @@ class Api::V01::OutputTest < Minitest::Test
     vrp[:configuration][:restitution] = { csv: true }
 
     csv_data = submit_csv api_key: 'demo', vrp: vrp
+
     assert_equal csv_data.collect(&:size).max, csv_data.collect(&:size).first
     refute_includes csv_data.first, 'day_week'
     refute_includes csv_data.first, 'day_week_num'
@@ -206,6 +215,7 @@ class Api::V01::OutputTest < Minitest::Test
     response = post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
     result = JSON.parse(response.body)['solutions'].first
     activities = result['routes'].flat_map{ |r| r['activities'] }
+
     assert(activities.any?{ |a| a['detail'] && a['detail']['skills'].to_a.size < 2 })
     assert(activities.any?{ |a| a['detail'] && a['detail']['skills'].to_a.include?('skill_to_output') })
   end
@@ -227,12 +237,13 @@ class Api::V01::OutputTest < Minitest::Test
       # each element should have 3 skills added by clustering :
       assert_equal 3, element['detail']['skills'].size
       # - exactly 1 skill corresponding to vehicle_id entity
-      assert(element['detail']['skills'].include?('vehicle_0') ^ element['detail']['skills'].include?('vehicle_1'))
+      assert_operator(element['detail']['skills'].include?('vehicle_0'), :^,
+                      element['detail']['skills'].include?('vehicle_1'))
       # - exactly 1 skill corresponding to work_day entity
       assert_equal element['detail']['skills'].size - 1,
                    (element['detail']['skills'] - %w[mon tue wed thu fri sat sun]).size
       # - exactly 1 skill corresponding to cluster number
-      assert_equal 1, (element['detail']['skills'].count{ |skill| /cluster\ [0-9]/.match?(skill) })
+      assert_equal(1, element['detail']['skills'].count{ |skill| /cluster\ [0-9]/.match?(skill) })
     }
 
     # to make it hard to find original_id back :
@@ -249,10 +260,10 @@ class Api::V01::OutputTest < Minitest::Test
       # each element should have 2 skills added by clustering :
       assert_equal 2, element['detail']['skills'].size
       # - exactly 1 skill corresponding to vehicle_id entity
-      assert(element['detail']['skills'].include?('vehicle_cluster_vehicle_0') ^
-             element['detail']['skills'].include?('vehicle_cluster_vehicle_1'))
+      assert_operator(element['detail']['skills'].include?('vehicle_cluster_vehicle_0'), :^,
+                      element['detail']['skills'].include?('vehicle_cluster_vehicle_1'))
       # - exactly 1 skill corresponding to cluster number
-      assert_equal 1, (element['detail']['skills'].count{ |skill| /cluster\ [0-9]/.match?(skill) })
+      assert_equal(1, element['detail']['skills'].count{ |skill| /cluster\ [0-9]/.match?(skill) })
     }
   end
 
@@ -262,8 +273,8 @@ class Api::V01::OutputTest < Minitest::Test
     file = OutputHelper::Clustering.generate_files(all_services_vrps, true)
     generated_file = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 
-    assert File.exist?(generated_file + '_geojson.gz'), 'Geojson file not found'
-    assert File.exist?(generated_file + '_csv.gz'), 'Csv file not found'
+    assert_path_exists generated_file + '_geojson.gz', 'Geojson file not found'
+    assert_path_exists generated_file + '_csv.gz', 'Csv file not found'
     csv = CSV.parse(Api::V01::APIBase.dump_vrp_dir.read(file + '_csv'))
 
     assert_equal all_services_vrps.sum{ |service| service.vrp.services.size } + 1, csv.size
@@ -279,8 +290,8 @@ class Api::V01::OutputTest < Minitest::Test
     file = OutputHelper::Clustering.generate_files(all_services_vrps)
     generated_file = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 
-    assert File.exist?(generated_file + '_geojson.gz'), 'Geojson file not found'
-    assert File.exist?(generated_file + '_csv.gz'), 'Csv file not found'
+    assert_path_exists generated_file + '_geojson.gz', 'Geojson file not found'
+    assert_path_exists generated_file + '_csv.gz', 'Csv file not found'
     csv = CSV.parse(Api::V01::APIBase.dump_vrp_dir.read(file + '_csv'))
 
     assert_equal all_services_vrps.sum{ |service| service.vrp.services.size } + 1, csv.size
@@ -298,16 +309,17 @@ class Api::V01::OutputTest < Minitest::Test
     file = 'periodic_construction_test_fake_job'
     filepath = File.join(Api::V01::APIBase.dump_vrp_dir.cache, file)
 
-    refute File.exist?(filepath + '.gz'), 'File created before end of generation'
+    refute_path_exists filepath + '.gz', 'File created before end of generation'
 
     output_tool.add_comment('my comment')
     days = [0, 2, 4]
     output_tool.insert_visits(days, 'service_id', 3)
     output_tool.close_file
 
-    assert File.exist?(filepath + '.gz'), 'File not found'
+    assert_path_exists filepath + '.gz', 'File not found'
 
     csv = CSV.parse(Api::V01::APIBase.dump_vrp_dir.read(file))
+
     assert(csv.any?{ |line| line.first == 'my comment' })
     assert(csv.any?{ |line|
       line[0] == 'service_id' &&
@@ -415,7 +427,8 @@ class Api::V01::OutputTest < Minitest::Test
      ['es', ['tipo parada', 'descanso', 'depósito', 'visita']]].each{ |provided, translations|
       result = submit_csv api_key: 'ortools', vrp: complete_vrp, http_accept_language: provided
       type_index = result.first.find_index(translations[0])
-      types = result.collect{ |line| line[type_index] }.compact - [translations[0]]
+      types = result.filter_map{ |line| line[type_index] } - [translations[0]]
+
       assert_equal 3, types.uniq.size
       assert_equal 1, types.count(translations[1])
       assert_equal 2, types.count(translations[2])
@@ -427,6 +440,7 @@ class Api::V01::OutputTest < Minitest::Test
     vrp = VRP.lat_lon
     vrp[:configuration][:restitution] = { csv: true }
     result = submit_csv api_key: 'demo', vrp: vrp
+
     assert_equal 9, result.size # header + 2 depots +6 services
   end
 
@@ -436,6 +450,7 @@ class Api::V01::OutputTest < Minitest::Test
       vrp[:configuration][:restitution] = { csv: true }
       @job_id = submit_csv api_key: 'demo', vrp: vrp
       result = wait_status_csv @job_id, 'completed', api_key: 'demo'
+
       assert_equal 9, result.count("\n")
     end
   end
@@ -461,6 +476,7 @@ class Api::V01::OutputTest < Minitest::Test
       result = wait_status_csv @job_id, 'completed', api_key: 'demo'
       csv = CSV.parse(result, headers: true)
       ids = csv.collect{ |line| line['id'] }
+
       assert_includes ids, 'shipment_0_pickup'
       assert_includes ids, 'shipment_0_delivery'
       vrp[:services].each{ |s|
@@ -521,6 +537,7 @@ class Api::V01::OutputTest < Minitest::Test
       response = post '/0.1/vrp/submit',
                       { api_key: 'solvers', vrp: problem }.to_json, 'CONTENT_TYPE' => 'application/json'
       headers = response.body.split("\n").map{ |line| line.split(',') }.first
+
       assert_empty (expected_activities_keys - headers),
                    "#{expected_activities_keys - headers} activity keys are missing in #{method}"
       assert_empty (expected_route_keys - headers - data[:periodic_keys]),
@@ -530,6 +547,7 @@ class Api::V01::OutputTest < Minitest::Test
 
       undocumented = headers - expected_route_keys - expected_activities_keys -
                      expected_unassigned_keys - data[:periodic_keys]
+
       assert_empty undocumented, "#{undocumented} keys are not documented, found in #{method}"
     }
   end
@@ -539,6 +557,7 @@ class Api::V01::OutputTest < Minitest::Test
       vrp = VRP.lat_lon_periodic
       @job_id = submit_vrp api_key: 'demo', vrp: vrp
       result = wait_status @job_id, 'completed', api_key: 'demo'
+
       assert_nil(result['geojsons'])
 
       vrp = VRP.lat_lon_periodic_two_vehicles
@@ -546,6 +565,7 @@ class Api::V01::OutputTest < Minitest::Test
       vrp[:configuration][:restitution] = { geometry: [:partitions] }
       @job_id = submit_vrp api_key: 'ortools', vrp: vrp
       result = wait_status @job_id, 'completed', api_key: 'ortools'
+
       refute(result['geojsons'].first['partitions'].key?('work_day'))
       # points should always be returned
       refute_empty(result['geojsons'].first['points'])
@@ -567,8 +587,10 @@ class Api::V01::OutputTest < Minitest::Test
       vrp = VRP.lat_lon_periodic_two_vehicles
       vrp[:configuration][:preprocessing][:partitions] = TestHelper.vehicle_and_days_partitions
       vrp[:configuration][:restitution] = { geometry: [:polylines, :partitions] }
+
       assert submit_vrp api_key: 'ortools', vrp: vrp
       result = JSON.parse(last_response.body)
+
       assert(result['geojsons'].first['polylines']['features'].all?{ |f| f['properties']['color'] })
       assert_equal ['vehicle', 'work_day'], result['geojsons'].first['partitions'].keys
       assert(result['geojsons'].first['partitions']['vehicle']['features'].all?{ |f| f['properties']['color'] })
@@ -579,12 +601,14 @@ class Api::V01::OutputTest < Minitest::Test
   def test_geojsons_returned_synchronously
     vrp = VRP.lat_lon_periodic
     result = submit_vrp api_key: 'demo', vrp: vrp
+
     assert_nil(result['geojsons'])
 
     vrp = VRP.lat_lon_periodic_two_vehicles
     vrp[:configuration][:preprocessing][:partitions] = [TestHelper.vehicle_and_days_partitions[0]]
     vrp[:configuration][:restitution] = { geometry: [:partitions] }
     result = submit_vrp api_key: 'ortools', vrp: vrp
+
     refute(result['geojsons'].first['partitions'].key?('work_day'))
     # points should always be returned
     refute_empty(result['geojsons'].first['points'])
@@ -606,6 +630,7 @@ class Api::V01::OutputTest < Minitest::Test
       vrp[:configuration][:preprocessing][:partitions] = TestHelper.vehicle_and_days_partitions
       vrp[:configuration][:restitution] = { geometry: [:polylines, :partitions] }
       result = submit_vrp api_key: 'ortools', vrp: vrp
+
       assert(result['geojsons'].first['polylines']['features'].all?{ |f| f['properties']['color'] })
       assert_equal ['vehicle', 'work_day'], result['geojsons'].first['partitions'].keys
       assert(result['geojsons'].first['partitions']['vehicle']['features'].all?{ |f| f['properties']['color'] })
@@ -642,6 +667,7 @@ class Api::V01::OutputTest < Minitest::Test
       expected_headers.each{ |language, expected_list|
         wait_status_csv @job_id, 'completed', api_key: 'ortools', http_accept_language: language
         current_headers = last_response.body.split("\n").first.split(',')
+
         assert_empty expected_list - current_headers, 'Header misses labels'
         # assert_empty current_headers - expected_list, 'Header has extra labels' # TODO: this should be checked
       }
@@ -670,6 +696,7 @@ class Api::V01::OutputTest < Minitest::Test
         @job_id = submit_csv api_key: 'demo', vrp: vrp, http_accept_language: 'fr'
         wait_status_csv @job_id, 200, api_key: 'demo', http_accept_language: 'fr'
         current_headers = last_response.body.split("\n").first.split(',')
+
         assert_empty expected - current_headers
 
         delete_completed_job @job_id, api_key: 'demo'

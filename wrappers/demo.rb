@@ -20,10 +20,10 @@ require './wrappers/wrapper'
 module Wrappers
   class Demo < Wrapper
     def initialize(hash = {})
-      super(hash)
+      super
     end
 
-    def solve(vrp, _job = nil, _thread_proc = nil, &_block)
+    def solve(vrp, _job = nil, _thread_proc = nil, &)
       routes =
         vrp.vehicles.map{ |vehicle|
           stops = [vehicle.start_point && Models::Solution::StopDepot.new(vehicle.start_point)] +

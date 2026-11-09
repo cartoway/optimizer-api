@@ -136,8 +136,8 @@ module Models
           [[self.linked_service_ids, self.linked_vehicle_ids, self.lapses.first]]
         else
           self.lapses.collect.with_index{ |lapse, index|
-            [self.linked_service_ids && self.linked_service_ids[index..index + 1],
-             self.linked_vehicle_ids && self.linked_vehicle_ids[index..index + 1],
+            [self.linked_service_ids && self.linked_service_ids[index..(index + 1)],
+             self.linked_vehicle_ids && self.linked_vehicle_ids[index..(index + 1)],
              lapse]
           }
         end

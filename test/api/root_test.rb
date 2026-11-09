@@ -28,7 +28,8 @@ class Api::RootTest < Minitest::Test
 
   def test_ping
     get '/ping'
-    assert last_response.ok?, last_response.body
+
+    assert_predicate last_response, :ok?, last_response.body
     assert_equal '"pong"', last_response.body
   end
 end

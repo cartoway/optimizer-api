@@ -19,8 +19,8 @@
 module DistanceMatrix
   extend ActiveSupport::Concern
 
-  def compute_matrix(job_id = nil, &block)
-    compute_need_matrix(job_id, &block)
+  def compute_matrix(job_id = nil, &)
+    compute_need_matrix(job_id, &)
   end
 
   private
@@ -55,38 +55,39 @@ module DistanceMatrix
       }.uniq
 
       i = 0
-      uniq_need_matrix = Hash[uniq_need_matrix.collect{ |mode, dimensions, options|
-        block&.call(nil, i += 1, uniq_need_matrix.size, 'compute matrix', nil, nil, nil)
-        lats = matrix_points.map{ |pt| pt[0] }.sort
-        lons = matrix_points.map{ |pt| pt[1] }.sort
-        dist = distance(lats.last, lons.last, lats.first, lons.first)
-        # set matrix_time and matrix_distance depending of dimensions order
-        log "matrix computation #{matrix_points.size}x#{matrix_points.size} (#{dist} km) "\
-            "-- #{services.size} services, #{vehicles.size} vehicles"
+      uniq_need_matrix =
+        uniq_need_matrix.to_h{ |mode, dimensions, options|
+          block&.call(nil, i += 1, uniq_need_matrix.size, 'compute matrix', nil, nil, nil)
+          lats = matrix_points.map{ |pt| pt[0] }.sort
+          lons = matrix_points.map{ |pt| pt[1] }.sort
+          dist = distance(lats.last, lons.last, lats.first, lons.first)
+          # set matrix_time and matrix_distance depending of dimensions order
+          log "matrix computation #{matrix_points.size}x#{matrix_points.size} (#{dist} km) " \
+              "-- #{services.size} services, #{vehicles.size} vehicles"
 
-        Api::V01::APIBase.dump_vrp_dir.write(
-          "#{job_id}_requests.curl", router.send('params', mode, dimensions.join('_'), options)
-          .merge({ src: matrix_points.flatten.join(',') }.compact).to_json + "\n",
-          mode: 'a', gz: false
-        )
+          Api::V01::APIBase.dump_vrp_dir.write(
+            "#{job_id}_requests.curl", router.send(:params, mode, dimensions.join('_'), options)
+            .merge({ src: matrix_points.flatten.join(',') }.compact).to_json + "\n",
+            mode: 'a', gz: false
+          )
 
-        tic = Time.now
-        router_matrices = router.matrix(OptimizerWrapper.config[:router][:url],
-                                        mode, dimensions, matrix_points, matrix_points, options)
-        log "matrix computed in #{(Time.now - tic).round(2)} seconds"
-        m = Models::Matrix.create(
-          time: (router_matrices[dimensions.index(:time)] if dimensions.index(:time)),
-          distance: (router_matrices[dimensions.index(:distance)] if dimensions.index(:distance)),
-          value: (router_matrices[dimensions.index(:value)] if dimensions.index(:value))
-        )
-        if [m.time, m.distance, m.value].any?{ |matrix| matrix&.any?{ |row| row.any?(&:negative?) } }
-          log 'Negative value provided by router' # TODO: fix this on the router-api side and turn this into an error
-          [m.time, m.distance, m.value].each{ |matrix| matrix&.each{ |row| row.collect!(&:abs) } }
-        end
+          tic = Time.now
+          router_matrices = router.matrix(OptimizerWrapper.config[:router][:url],
+                                          mode, dimensions, matrix_points, matrix_points, options)
+          log "matrix computed in #{(Time.now - tic).round(2)} seconds"
+          m = Models::Matrix.create(
+            time: (router_matrices[dimensions.index(:time)] if dimensions.index(:time)),
+            distance: (router_matrices[dimensions.index(:distance)] if dimensions.index(:distance)),
+            value: (router_matrices[dimensions.index(:value)] if dimensions.index(:value))
+          )
+          if [m.time, m.distance, m.value].any?{ |matrix| matrix&.any?{ |row| row.any?(&:negative?) } }
+            log 'Negative value provided by router' # TODO: fix this on the router-api side and turn this into an error
+            [m.time, m.distance, m.value].each{ |matrix| matrix&.each{ |row| row.collect!(&:abs) } }
+          end
 
-        self.matrices += [m]
-        [[mode, dimensions, options], m]
-      }]
+          self.matrices += [m]
+          [[mode, dimensions, options], m]
+        }
 
       uniq_need_matrix =
         need_matrix.collect{ |vehicle, dimensions|

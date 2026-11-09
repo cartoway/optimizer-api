@@ -66,7 +66,7 @@ end
 
 class Struct # :nodoc:
   def vrp_result(options = nil)
-    Hash[members.zip(values)].vrp_result(options)
+    members.zip(values).to_h.vrp_result(options)
   end
 end
 

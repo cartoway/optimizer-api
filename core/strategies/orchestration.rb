@@ -5,13 +5,13 @@ module Core
         log "--> define_main_process #{services_vrps.size} VRPs"
         log "activities: #{services_vrps.map{ |sv| sv.vrp.services.size }}"
         log "vehicles: #{services_vrps.map{ |sv| sv.vrp.vehicles.size }}"
-        log 'configuration.resolution.vehicle_limit: '\
+        log 'configuration.resolution.vehicle_limit: ' \
             "#{services_vrps.map{ |sv| sv.vrp.configuration.resolution.vehicle_limit }}"
         log "min_durations: #{services_vrps.map{ |sv| sv.vrp.configuration.resolution.minimum_duration&.round }}"
         log "max_durations: #{services_vrps.map{ |sv| sv.vrp.configuration.resolution.duration&.round }}"
         tic = Time.now
 
-        expected_activity_count = services_vrps.collect{ |sv| sv.vrp.visits }.sum
+        expected_activity_count = services_vrps.sum{ |sv| sv.vrp.visits }
 
         several_service_vrps = Interpreters::SeveralSolutions.expand_similar_resolutions(services_vrps)
         several_solutions =
@@ -46,7 +46,7 @@ module Core
               # find the best result and its index
               (result, position) =
                 repeated_results.each.with_index(1).min_by { |rresult, _| rresult.unassigned_stops.size }
-              log "#{job}_repetition - #{repeated_results.collect{ |r| r.unassigned_stops.size }} : "\
+              log "#{job}_repetition - #{repeated_results.collect{ |r| r.unassigned_stops.size }} : " \
                   "chose to keep the #{position.ordinalize} solution"
               result
             }
@@ -90,10 +90,10 @@ module Core
           )
         end
 
-        log "--> define_process VRP (service: #{vrp.services.size} including #{shipment_size} shipment relations, "\
-            "vehicle: #{vrp.vehicles.size}, v_limit: #{vrp.configuration.resolution.vehicle_limit}) "\
+        log "--> define_process VRP (service: #{vrp.services.size} including #{shipment_size} shipment relations, " \
+            "vehicle: #{vrp.vehicles.size}, v_limit: #{vrp.configuration.resolution.vehicle_limit}) " \
             "with levels (dicho: #{dicho_level}, split: #{split_level})"
-        log "min_duration #{vrp.configuration.resolution.minimum_duration&.round} "\
+        log "min_duration #{vrp.configuration.resolution.minimum_duration&.round} " \
             "max_duration #{vrp.configuration.resolution.duration&.round}"
 
         tic = Time.now
@@ -112,7 +112,7 @@ module Core
         if service_vrp.service != :demo # demo solver returns a fixed solution
           Core::Components::Solution.check_solutions_consistency(expected_activity_count, [solution])
         end
-        log "<-- define_process levels (dicho: #{dicho_level}, split: #{split_level}) "\
+        log "<-- define_process levels (dicho: #{dicho_level}, split: #{split_level}) " \
             "elapsed: #{(Time.now - tic).round(2)} sec"
         solution.configuration.deprecated_headers = vrp.configuration.restitution.use_deprecated_csv_headers
         solution.absorb_interpreters!(service_vrp)
@@ -219,7 +219,7 @@ module Core
               if vrp.configuration.preprocessing.cluster_threshold.to_f.positive?
                 service_vrp.mark_interpreter!(:clique_cluster)
                 block&.call(nil, nil, nil,
-                            'process clique clustering : threshold '\
+                            'process clique clustering : threshold ' \
                             "(#{vrp.configuration.preprocessing.cluster_threshold.to_f}) ",
                             nil, nil, nil)
               end
@@ -327,7 +327,7 @@ module Core
       end
 
       def build_independent_vrps(vrp, skill_sets, vehicle_indices_by_skills, skill_service_ids)
-        unused_vehicle_indices = (0..vrp.vehicles.size - 1).to_a
+        unused_vehicle_indices = (0..(vrp.vehicles.size - 1)).to_a
         independent_vrps =
           skill_sets.collect{ |skills_set|
             # Compatible problem ids are retrieved
@@ -345,7 +345,7 @@ module Core
         is_sticky = vrp.services.all?{ |service| service.skills.any?{ |skill| skill.to_s.include?("sticky_skill") } }
         total_size =
           is_sticky ? vrp.vehicles.size :
-            independent_vrps.collect{ |s_vrp| s_vrp.services.size * [1, s_vrp.vehicles.size].min }.sum
+            independent_vrps.sum{ |s_vrp| s_vrp.services.size * [1, s_vrp.vehicles.size].min }
         independent_vrps.each{ |sub_vrp|
           # If one sub vrp has no vehicle or no service, duration can be zero.
           # We only split duration among sub_service_vrps that have at least one vehicle and one service.
