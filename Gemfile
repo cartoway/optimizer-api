@@ -3,7 +3,7 @@ ruby '>= 3.3'
 
 gem 'require_all'
 
-gem 'puma', '~> 6.6'
+gem 'puma', '~> 7.0'
 gem 'rack'
 gem 'rack-contrib', require: 'rack/contrib'
 gem 'rack-cors', require: 'rack/cors'
@@ -88,11 +88,12 @@ end
 
 group :test do
   gem 'dotenv'
-  gem 'minitest', require: 'minitest/autorun'
-  gem 'minitest-around' # to create a block around unit tests for initialisation and cleanup
+  gem 'minitest', '~> 5.0', require: 'minitest/autorun' # 6.x breaks reporters ProgressReporter
+  # 0.6 + reporters 1.8 recurse in run_with_hooks (SystemStackError)
+  gem 'minitest-around', '~> 0.5.0' # block around unit tests for initialisation and cleanup
   gem 'minitest-bisect' # useful for identifing randomly failing order-depoendent tests
   gem 'minitest-focus', require: 'minitest/focus'
-  gem 'minitest-reporters', require: 'minitest/reporters'
+  gem 'minitest-reporters', '~> 1.6.0', require: 'minitest/reporters'
   gem 'minitest-retry', require: 'minitest/retry' # relaunches selected methods when they fail
   gem 'minitest-stub_any_instance', require: 'minitest/stub_any_instance'
   gem 'rack-test', require: 'rack/test'
