@@ -17,6 +17,8 @@
 #
 
 module Helper
+  ROUTE_INFO_STATS = %i[total_time total_travel_time total_travel_value total_distance].freeze
+
   def self.string_padding(value, length)
     value.to_s.rjust(length, '0')
   end
@@ -40,7 +42,7 @@ module Helper
     when Array # has_many
       original.collect{ |val| deep_copy(val, override: override, shallow_copy: shallow_copy) }
     when Models::Base # belongs_to
-      raise 'Keys cannot be both overridden and shallow copied' if (override.keys & shallow_copy).any?
+      raise 'Keys cannot be both overridden and shallow copied' if override.keys.intersect?(shallow_copy)
 
       # if an option doesn't exist for the current object level, pass it to lower levels
       unused_override =
@@ -65,7 +67,7 @@ module Helper
       # or the key or key_id is given in override.
       keys = original.attributes.keys.flat_map{ |key|
         [
-          key[0..-4].to_sym, "#{key[0..-6]}ies".to_sym, "#{key[0..-5]}s".to_sym, key
+          key[0..-4].to_sym, :"#{key[0..-6]}ies", :"#{key[0..-5]}s", key
         ].find{ |k| original.class.method_defined?(k) }
       }.compact.uniq - [:id] # cannot duplicate the object with the same id
 
@@ -76,7 +78,7 @@ module Helper
           next unless override[key].nil?
 
           [
-            "#{key}_id".to_sym, "#{key[0..-2]}_ids".to_sym, "#{key[0..-4]}y_ids".to_sym
+            :"#{key}_id", :"#{key[0..-2]}_ids", :"#{key[0..-4]}y_ids"
           ].find{ |k| original.class.method_defined?(k) && (!override.key?(k) || override[k]) }
         elsif ["#{key}_id", "#{key[0..-2]}_ids", "#{key[0..-4]}y_ids"].any?{ |k| override[k.to_sym] }
           next
@@ -91,11 +93,11 @@ module Helper
       keys |= shallow_copy.select{ |k| original.class.method_defined?(k) }
 
       # prefer the option if supplied
-      original.class.create(keys.each_with_object({}) { |key, data|
-        data[key] = override[key] ||
+      original.class.create(keys.to_h { |key|
+        [key, override[key] ||
                     (shallow_copy.include?(key) ? original.send(key) : deep_copy(original.send(key),
                                                                                  override: unused_override,
-                                                                                 shallow_copy: unused_shallow_copy))
+                                                                                 shallow_copy: unused_shallow_copy))]
       })
     else
       original.dup
@@ -108,7 +110,7 @@ module Helper
 
     # Correct unassigned services
     new_service_ids = new_solution.routes.flat_map{ |route| route.stops.map(&:service_id) }.compact +
-                      new_solution.unassigned_stops.map(&:service_id).compact
+                      new_solution.unassigned_stops.filter_map(&:service_id)
 
     solution.unassigned_stops.delete_if{ |activity|
       # Remove from unassigned if they appear in new unassigned or if they are served in new routes
@@ -124,7 +126,7 @@ module Helper
       solution.routes[old_index] = new_route if old_index
       solution.routes << new_route unless old_index
 
-      [:total_time, :total_travel_time, :total_travel_value, :total_distance].each{ |stat|
+      ROUTE_INFO_STATS.each{ |stat|
         # If both nil no correction necessary
         next if new_route.info.send(stat).nil? && solution.routes[old_index].info.send(stat).nil?
 
@@ -137,10 +139,10 @@ module Helper
   end
 
   def self.services_duration(services)
-    services.group_by{ |s| s.activity.point_id }.map{ |_point_id, ss|
+    services.group_by{ |s| s.activity.point_id }.sum{ |_point_id, ss|
       sm = ss.max_by(&:visits_number)
-      sm.activity.setup_duration * sm.visits_number + ss.map{ |s| s.activity.duration * s.visits_number }.sum
-    }.sum
+      sm.activity.setup_duration * sm.visits_number + ss.sum{ |s| s.activity.duration * s.visits_number }
+    }
   end
 
   def self.visits(services)

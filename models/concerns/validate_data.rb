@@ -92,7 +92,7 @@ module ValidateData
         )
       end
     else
-      max_matrix_index = @hash[:points].max{ |p| p[:matrix_index] || -1 }[:matrix_index] || -1
+      max_matrix_index = @hash[:points].max_by{ |p| p[:matrix_index] || -1 }[:matrix_index] || -1
       matrix_not_big_enough =
         @hash[:matrices].any?{ |matrix_group|
           Models::Matrix.dimensions.any?{ |dimension|
@@ -166,7 +166,7 @@ module ValidateData
       next unless periodic_heuristic
 
       if v[:skills].to_a.size > 1
-        raise OptimizerWrapper::DiscordantProblemError.new('Periodic heuristic does not support '\
+        raise OptimizerWrapper::DiscordantProblemError.new('Periodic heuristic does not support ' \
                                                            'vehicle alternative skills')
       end
     }
@@ -184,7 +184,7 @@ module ValidateData
       end
 
       if mission[:quantities]&.any?{ |q| q[:empty] && q[:value] == 0 }
-        raise OptimizerWrapper::DiscordantProblemError.new('Value of an empty operation cannot be 0 -- '\
+        raise OptimizerWrapper::DiscordantProblemError.new('Value of an empty operation cannot be 0 -- ' \
                                                            'value signifies the maximum amount to empty')
       end
     }
@@ -197,7 +197,7 @@ module ValidateData
       end
 
       unless relation[:linked_vehicle_ids]&.uniq&.size == relation[:linked_vehicle_ids]&.size
-        raise OptimizerWrapper::DiscordantProblemError.new('Same vehicle ID is provided multiple '\
+        raise OptimizerWrapper::DiscordantProblemError.new('Same vehicle ID is provided multiple ' \
                                                            'times in one relation.')
       end
     }
@@ -247,7 +247,7 @@ module ValidateData
 
     return unless inconsistent_position_services.any?
 
-    raise OptimizerWrapper::DiscordantProblemError.new('Inconsistent positions in relations: '\
+    raise OptimizerWrapper::DiscordantProblemError.new('Inconsistent positions in relations: ' \
                                                        "#{inconsistent_position_services.uniq}")
   end
 
@@ -434,7 +434,7 @@ module ValidateData
       services_that_are_both_pickup_and_delivery = pickups & deliveries
       unless services_that_are_both_pickup_and_delivery.empty?
         raise OptimizerWrapper::UnsupportedProblemError.new(
-          'A service cannot be both a delivery and a pickup in different relations. '\
+          'A service cannot be both a delivery and a pickup in different relations. ' \
           'Following services appear in multiple shipment relations both as pickup and delivery: ',
           [services_that_are_both_pickup_and_delivery]
         )
@@ -491,13 +491,13 @@ module ValidateData
         relation[:linked_service_ids]&.collect{ |s_id| @hash[:services].find{ |s| s[:id] == s_id } } || []
       if services_in_relation.uniq{ |s| s[:visits_number] || 1 }.size > 1
         raise OptimizerWrapper::UnsupportedProblemError.new(
-          'Services in relations should have the same visits_number. '\
+          'Services in relations should have the same visits_number. ' \
           'Following services in relation but they have different visits_number values: ',
           [relation[:linked_service_ids]]
         )
       elsif services_in_relation.uniq{ |s| [s[:minimum_lapse] || 1, s[:maximum_lapse].to_i] }.size > 1
         raise OptimizerWrapper::UnsupportedProblemError.new(
-          'Services in relations should have the same minimum_lapse and maximum_lapse. '\
+          'Services in relations should have the same minimum_lapse and maximum_lapse. ' \
           'Following services in relation but they have different lapse values: ',
           [relation[:linked_service_ids]]
         )
@@ -513,7 +513,7 @@ module ValidateData
       services.none?{ |service|
         sticky_ids = service[:sticky_vehicle_ids] || []
 
-        if relation_sticky_ids.any? && sticky_ids.any? && (sticky_ids & relation_sticky_ids).empty?
+        if relation_sticky_ids.any? && sticky_ids.any? && !sticky_ids.intersect?(relation_sticky_ids)
           inconsistent_stickies << services.map{ |s| s[:id] }
         end
         relation_sticky_ids += sticky_ids
@@ -522,7 +522,7 @@ module ValidateData
     return unless inconsistent_stickies.any?
 
     raise OptimizerWrapper::UnsupportedProblemError.new(
-      'All services from a relation should have consistent sticky_vehicle_ids or none'\
+      'All services from a relation should have consistent sticky_vehicle_ids or none' \
       'Following services have different sticky_vehicle_ids: ',
       inconsistent_stickies
     )

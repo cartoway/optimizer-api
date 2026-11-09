@@ -114,7 +114,7 @@ module Api
             op = quota[:operation]
             next unless op.nil? || op == operation
 
-            quota.slice(:daily, :monthly, :yearly).each do |k, _v|
+            quota.slice(:daily, :monthly, :yearly).each_key do |k|
               redis_count.incrby count_base_key(op, k), options[:transactions]
               redis_count.expire count_base_key(op, k), 366.days
             end

@@ -24,7 +24,7 @@ require './lib/heuristics/dicho_level_timings'
 module Wrappers
   class Ortools < Wrapper
     def initialize(hash = {})
-      super(hash)
+      super
       @exec_ortools =
         hash[:exec_ortools] ||
         'LD_LIBRARY_PATH=../or-tools/dependencies/install/lib/:../or-tools/lib/ ../optimizer-ortools/tsp_simple'
@@ -73,7 +73,7 @@ module Wrappers
       ]
     end
 
-    def solve(vrp, job, thread_proc = nil, timings: nil, timings_context: nil, timings_level: nil, &block)
+    def solve(vrp, job, thread_proc = nil, timings: nil, timings_context: nil, timings_level: nil, &)
       total_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       build_problem_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       @call_phase_ms = { build: 0.0, prepare: 0.0, parse: 0.0, solver: 0.0 }
@@ -86,8 +86,8 @@ module Wrappers
       duplicated_ends = already_end.uniq.select{ |linked_id| already_end.count{ |link| link == linked_id } > 1 }
       if vrp.routes.empty? && order_relations.size == 1 && vrp.services.none?{ |service| service.activities.any? }
         order_relations.select{ |relation|
-          (relation.linked_service_ids[0..-2] & duplicated_begins).empty? &&
-            (relation.linked_service_ids[1..-1] & duplicated_ends).empty?
+          !relation.linked_service_ids[0..-2].intersect?(duplicated_begins) &&
+            !relation.linked_service_ids[1..-1].intersect?(duplicated_ends)
         }.each{ |relation|
           order_route = {
             vehicle: vrp.vehicles.size == 1 ? vrp.vehicles.first : nil,
@@ -98,14 +98,14 @@ module Wrappers
       end
 
       problem_unit_hash =
-        vrp.units.collect{ |unit|
+        vrp.units.to_h{ |unit|
           [unit.id, {
             unit_id: unit.id,
             fill: false,
             empty: false
           }]
-        }.to_h
-      total_quantities = vrp.units.map{ |unit| [unit.id, 0] }.to_h
+        }
+      total_quantities = vrp.units.to_h{ |unit| [unit.id, 0] }
 
       vrp.relations.select{ |r| r.type == :shipment }.each{ |r|
         vrp.units.each{ |unit|
@@ -261,7 +261,7 @@ module Wrappers
       build_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - build_problem_start) * 1000
       @call_phase_ms[:build] = build_ms
       Interpreters::OrtoolsTimings.add!(timings, :build_problem_ms, build_ms)
-      result = run_ortools(problem, vrp, thread_proc, timings: timings, &block)
+      result = run_ortools(problem, vrp, thread_proc, timings: timings, &)
       call_total_ms = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - total_start) * 1000
       Interpreters::OrtoolsTimings.add!(timings, :total_ms, call_total_ms)
       record_level_call!(timings, timings_level, call_total_ms, result)
@@ -373,13 +373,13 @@ module Wrappers
     end
 
     def service_quantity_hash(service)
-      service.quantities.each_with_object({}){ |quantity, memo|
-        memo[quantity.unit_id] = {
+      service.quantities.to_h{ |quantity|
+        [quantity.unit_id, {
           value: quantity.value + (quantity.pickup || 0) + (quantity.delivery || 0),
           empty: quantity.empty,
           fill: quantity.fill,
           setup_value: quantity.setup_value
-        }
+        }]
       }
     end
 
@@ -482,26 +482,27 @@ module Wrappers
         previous_matrix_index = nil
         vehicle = vrp.vehicles[index]
         route_costs = build_cost_details(route.cost_details)
-        stops = route.activities.map{ |activity|
-          current_matrix_index =
-            case activity.type
-            when 'service'
-              service = vrp.services[activity.index]
-              service.activity&.point&.matrix_index ||
-              !service.activities.empty? && service.activities[activity.alternative].point.matrix_index
-            when 'start'
-              vrp.vehicles[index].start_point&.matrix_index
-            when 'end'
-              vrp.vehicles[index].end_point&.matrix_index
-            end
-          stop = build_route_stop(vrp, vehicle, problem_services, problem_rests, activity)
-          next stop if activity.type == 'rest'
+        stops =
+          route.activities.filter_map{ |activity|
+            current_matrix_index =
+              case activity.type
+              when 'service'
+                service = vrp.services[activity.index]
+                service.activity&.point&.matrix_index ||
+                !service.activities.empty? && service.activities[activity.alternative].point.matrix_index
+              when 'start'
+                vrp.vehicles[index].start_point&.matrix_index
+              when 'end'
+                vrp.vehicles[index].end_point&.matrix_index
+              end
+            stop = build_route_stop(vrp, vehicle, problem_services, problem_rests, activity)
+            next stop if activity.type == 'rest'
 
-          matrix = vrp.matrices.find{ |m| m.id == vehicle.matrix_id }
-          build_route_data(stop, matrix, previous_matrix_index, current_matrix_index)
-          previous_matrix_index = current_matrix_index
-          stop
-        }.compact
+            matrix = vrp.matrices.find{ |m| m.id == vehicle.matrix_id }
+            build_route_data(stop, matrix, previous_matrix_index, current_matrix_index)
+            previous_matrix_index = current_matrix_index
+            stop
+          }
         route_detail = Models::Solution::Route::Info.new({})
         initial_loads =
           route.activities.first.quantities.map.with_index{ |quantity, q_index|
@@ -523,10 +524,11 @@ module Wrappers
     end
 
     def build_solution(vrp, content)
-      problem_services = vrp.services.map{ |service| [service.id, service] }.to_h
-      problem_rests = vrp.vehicles.map{ |vehicle|
-        [vehicle.id, Interpreters::RegulatoryRest.solver_rests(vehicle).map{ |rest| [rest.id, rest] }.to_h]
-      }.to_h
+      problem_services = vrp.services.to_h{ |service| [service.id, service] }
+      problem_rests =
+        vrp.vehicles.to_h{ |vehicle|
+          [vehicle.id, Interpreters::RegulatoryRest.solver_rests(vehicle).to_h{ |rest| [rest.id, rest] }]
+        }
       routes = build_routes(vrp, problem_services, problem_rests, content.routes)
       Models::Solution.new(
         solvers: [:ortools],
@@ -580,7 +582,7 @@ module Wrappers
         timings_level,
         total_ms: call_total_ms,
         ruby_ms: ruby_ms,
-        solver_ms: result&.elapsed.to_f || @call_phase_ms[:solver]
+        solver_ms: result&.elapsed.to_f
       )
     end
 
@@ -686,8 +688,8 @@ module Wrappers
         t = /Time : ([0-9.eE+-]+)/.match(line)
         t && (time = t[1].to_f)
         log_level =
-          if /Final Iteration :/.match(line) ||
-             /First solution strategy :/.match(line) ||
+          if line.include?('Final Iteration :') ||
+             line.include?('First solution strategy :') ||
              /Using the provided initial solution./.match(line) ||
              /OR-Tools v[0-9]+\.[0-9]+\n/.match(line)
             :info
@@ -703,7 +705,7 @@ module Wrappers
 
         begin
           @previous_result =
-            if vrp.configuration.restitution.intermediate_solutions && s && !/Final Iteration :/.match(line)
+            if vrp.configuration.restitution.intermediate_solutions && s && !line.include?('Final Iteration :')
               timed_parse_output(vrp, output, timings)
             end
           # if @previous_result=nil, the block will not override the existing solution
@@ -755,10 +757,10 @@ module Wrappers
       if @thread&.alive? # Need to kill the job and its children if it is still alive
         child_pids = []
         IO.popen("ps -ef | grep #{@thread.pid}") { |io|
-          child_pids = io.readlines.map do |line|
+          child_pids = io.readlines.filter_map do |line|
             parts = line.split(/\s+/)
             parts[1].to_i if parts[2] == @thread.pid.to_s
-          end.compact || []
+          end || []
         }
         child_pids << @thread.pid
         child_pids.each{ |pid| Process.kill('KILL', pid) }
@@ -791,12 +793,13 @@ module Wrappers
 
     def corresponding_mission_ids(available_services, missions)
       available_ids = available_services.map(&:id)
-      available_counts = available_ids.each_with_object(Hash.new(0)){ |id, counts| counts[id] += 1 }
+      available_counts = available_ids.tally
 
       missions.map(&:id).filter_map{ |mission_id|
         correct_id =
           [mission_id, "#{mission_id}pickup", "#{mission_id}delivery"].find{ |candidate|
-            available_counts[candidate].positive?
+            # tally has no default; missing key is nil — to_i keeps .positive? safe
+            available_counts[candidate].to_i.positive?
           }
         next unless correct_id
 

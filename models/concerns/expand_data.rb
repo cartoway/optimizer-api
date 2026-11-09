@@ -40,10 +40,9 @@ module ExpandData
   end
 
   def expand_unavailable_days
-    unavailable_days = self.configuration.schedule&.unavailable_days&.select{ |unavailable_index|
-      unavailable_index >= self.configuration.schedule.range_indices[:start] &&
-        unavailable_index <= self.configuration.schedule.range_indices[:end]
-    } || []
+    schedule = self.configuration.schedule
+    range = schedule&.range_indices && (schedule.range_indices[:start]..schedule.range_indices[:end])
+    unavailable_days = (range && schedule.unavailable_days&.grep(range)) || []
 
     self.vehicles.each{ |vehicle|
       vehicle.unavailable_days |= unavailable_days
@@ -68,7 +67,7 @@ module ExpandData
       next if service.sticky_vehicle_ids.empty?
 
       key = service.sticky_vehicle_ids.sort.join('_')
-      skill = "sticky_skill_#{key}".to_sym
+      skill = :"sticky_skill_#{key}"
       unless sticky_hash.key?(key)
         sticky_hash[key] = service.sticky_vehicle_ids
         service.sticky_vehicles.each{ |vehicle| vehicle.skills.each{ |skill_set| skill_set << skill } }
@@ -117,8 +116,8 @@ module ExpandData
     end
 
     if repeat == max_repeats
-      err_msg = 'Either the number of repeats is not enough or there is an infinite loop in '\
-                'accumulate_skills_of_services_in_linking_relations. '\
+      err_msg = 'Either the number of repeats is not enough or there is an infinite loop in ' \
+                'accumulate_skills_of_services_in_linking_relations. ' \
                 'Some relations might be silently ignored during split_independent_vrp.'
       log err_msg, level: :warn
       raise err_msg if ENV['APP_ENV'] != 'production'
@@ -127,7 +126,7 @@ module ExpandData
     if warn_for_on_service_types
       # either a new LINKING_RELATIONS is forgotten to included in ON_SERVICES_TYPES or
       # this new service has ON_VEHICLES_TYPES and this check needs improvement
-      err_msg = 'Skill accumulation can only handle LINKING_RELATIONS which are ON_SERVICES_TYPES. '\
+      err_msg = 'Skill accumulation can only handle LINKING_RELATIONS which are ON_SERVICES_TYPES. ' \
                 'Some relations might be silently ignored during split_independent_vrp.'
       log err_msg, level: :warn
       raise err_msg if ENV['APP_ENV'] != 'production'

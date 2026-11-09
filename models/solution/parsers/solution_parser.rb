@@ -49,9 +49,9 @@ module Parsers
       %i[total_time total_travel_time total_travel_value total_distance total_waiting_time].each{ |stat_symbol|
         next if solution.routes.none?{ |r| r.info.send stat_symbol }
 
-        solution.info.send("#{stat_symbol}=", solution.routes.collect{ |r|
+        solution.info.send("#{stat_symbol}=", solution.routes.filter_map{ |r|
           r.info.send(stat_symbol)
-        }.compact.reduce(:+))
+        }.sum)
       }
     end
   end

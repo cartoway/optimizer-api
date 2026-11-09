@@ -32,10 +32,12 @@ class HeuristicTest < Minitest::Test
               qty ? qty.quantity.value : 0
             }
           assigned_quantities += route_quantities
+
           assert_operator route_quantities, :<=, route_capacity
         }
         unassigned_quantities =
           solution.unassigned_stops.sum{ |un| un.loads.find{ |l| l.quantity.unit.id == unit_id }&.quantity&.value || 0 }
+
         assert_in_delta vrp.services.sum{ |service|
                           (service.quantities.find{ |qty| qty.unit_id == unit_id }&.value || 0) * service.visits_number
                         }, (assigned_quantities + unassigned_quantities).round(3), 1e-3
@@ -46,13 +48,15 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.load_vrp(self)
       vrp.configuration.resolution.minimize_days_worked = true
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
-      assert solutions[0].unassigned_stops.size <= 3
+
+      assert_operator solutions[0].unassigned_stops.size, :<=, 3
 
       check_quantities(vrp, solutions[0])
 
       assigned_service_ids = solutions[0][:routes].flat_map{ |route|
         route.stops.map(&:service_id)
       }.compact
+
       assert_nil assigned_service_ids.uniq!,
                  'There should not be any duplicate service ID because there are no duplicated IDs in instance'
       assert_equal vrp.services.map(&:id).sort,
@@ -65,6 +69,7 @@ class HeuristicTest < Minitest::Test
       vrp.configuration.resolution.minimize_days_worked = true
       vrp.services.find{ |s| s.id == '3359' }.priority = 0
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
+
       assert(solutions[0].unassigned_stops.none?{ |service| service.service_id.include?('3359') })
       assert(solutions[0].unassigned_stops.none?{ |service| service.service_id.include?('0110') })
     end
@@ -82,6 +87,7 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.load_vrp(self)
       vrp.configuration.resolution.minimize_days_worked = true
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
+
       assert_empty solutions[0].unassigned_stops
       check_quantities(vrp, solutions[0])
     end
@@ -89,6 +95,7 @@ class HeuristicTest < Minitest::Test
     def test_instance_same_point_day
       vrp = TestHelper.load_vrp(self)
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
+
       assert_operator solutions[0].unassigned_stops.size, :<=, 800
       check_quantities(vrp, solutions[0])
     end
@@ -103,6 +110,7 @@ class HeuristicTest < Minitest::Test
       refute_empty solutions[0].unassigned_stops, 'If unassigned set is empty this test becomes useless'
       solutions[0].unassigned_stops.group_by(&:id).each{ |id, set|
         expected_visits = vrp.services.select{ |s| s.original_id == id }.sum(&:visits_number)
+
         assert_equal expected_visits, set.size
       }
 
@@ -132,6 +140,7 @@ class HeuristicTest < Minitest::Test
       vrp.configuration.resolution.allow_partial_assignment = true
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }},
                                                Marshal.load(Marshal.dump(vrp)), nil)
+
       assert solutions[0].routes.any?{ |r| r.stops.size - 2 < 5 },
              'We expect at least one route with less than 5 services, this test is useless otherwise'
       should_remain_assigned = solutions[0].routes.sum{ |r| r.stops.size - 2 >= 5 ? r.stops.size - 2 : 0 }
@@ -141,13 +150,15 @@ class HeuristicTest < Minitest::Test
       vrp.vehicles.each{ |v| v.cost_fixed = 5 }
       vrp.services.each{ |s| s.exclusion_cost = 1 }
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
+
       assert solutions[0].routes.all?{ |r| (r.stops.size - 2).zero? || r.stops.size - 2 >= 5 },
              'Expecting no route with less than 5 stops unless it is an empty route'
-      assert_operator should_remain_assigned, :<=, (solutions[0].routes.sum{ |r| r.stops.size - 2 })
+      assert_operator(should_remain_assigned, :<=, solutions[0].routes.sum{ |r| r.stops.size - 2 })
       assert_operator solutions[0].unassigned_stops.size, :>=, should_remain_unassigned
 
       all_ids = solutions[0].routes.flat_map{ |route| route.stops.map(&:service_id) }.compact +
                 solutions[0].unassigned_stops.map(&:service_id).uniq
+
       assert_equal vrp.visits, all_ids.size
     end
 
@@ -206,6 +217,7 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.load_vrp(self)
       vrp.configuration.resolution.minimize_days_worked = true
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
+
       assert_empty solutions[0].unassigned_stops
       assert_equal(262, solutions[0].routes.count{ |r|
         r.stops.any?{ |a| a.service_id&.include? 'service_0_' } && r.vehicle.id
@@ -219,9 +231,10 @@ class HeuristicTest < Minitest::Test
         days_used = solutions[0].routes.select{ |r|
           r.stops.any?{ |a| a.service_id&.include? "#{s.id}_" }
         }.collect!{ |r| r.vehicle.global_day_index }.sort!
+
         assert_equal s[:visits_number], days_used.size
-        (1..days_used.size - 1).each{ |index|
-          assert days_used[index] - days_used[index - 1] >= s[:minimum_lapse]
+        (1..(days_used.size - 1)).each{ |index|
+          assert_operator days_used[index] - days_used[index - 1], :>=, s[:minimum_lapse]
         }
       }
     end
@@ -243,6 +256,7 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.load_vrp(self)
       vrp.configuration.resolution.minimize_days_worked = true
       solutions = OptimizerWrapper.wrapper_vrp('ortools', { services: { vrp: [:ortools] }}, vrp, nil)
+
       assert_operator solutions[0].unassigned_stops.size, :<=, 10
     end
   end

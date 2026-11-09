@@ -25,12 +25,15 @@ module Models
       def test_cost_info_comparison
         cost_a = Models::Solution::CostInfo.create({})
         cost_b = Models::Solution::CostInfo.create({})
+
         assert_equal cost_a, cost_b
 
-        cost_hash = Models::Solution::CostInfo.field_names.map{ |field|
-          [field, 1]
-        }.to_h
+        cost_hash =
+          Models::Solution::CostInfo.field_names.to_h{ |field|
+            [field, 1]
+          }
         cost_a = Models::Solution::CostInfo.create(cost_hash)
+
         refute_equal cost_a, cost_b
       end
     end
