@@ -1,9 +1,9 @@
 source 'https://rubygems.org'
-ruby '>= 3.2'
+ruby '>= 3.3'
 
 gem 'require_all'
 
-gem 'puma'
+gem 'puma', '~> 6.6'
 gem 'rack'
 gem 'rack-contrib', require: 'rack/contrib'
 gem 'rack-cors', require: 'rack/cors'
@@ -12,7 +12,7 @@ gem 'rake'
 
 # API
 # ~> 3.2: ParamScopeTracker (thread-safe validation); keeps mustermann 3.x (sinatra/resque)
-# grape >= 3.2 needs Ruby >= 3.2 (matches Docker/CI)
+# grape >= 3.3 / mustermann 4 need Ruby >= 3.3 — still blocked by sinatra ~> mustermann 3 until Sinatra 5
 gem 'grape', '~> 3.2.0'
 gem 'grape-entity'
 gem 'grape_logging', '>= 3.0'
@@ -37,7 +37,10 @@ gem 'i18n'
 # Queue
 gem 'redis', '<4'
 gem 'resque', '<2'
-gem 'resque-status', '>0.4'
+# Hard fork: upstream quirkey/resque-status dead since 2015 (pinned resque ~> 1.19)
+gem 'resque-status', github: 'cartoway/resque-status'
+# Keep mustermann 3.x: mustermann 4 pulls Sinatra 1.0 via resolver (Sinatra 2–4 pin ~> 3.0)
+gem 'mustermann', '~> 3.1'
 
 # Web
 gem 'rest-client'
