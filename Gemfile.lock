@@ -21,7 +21,7 @@ GIT
 
 GIT
   remote: https://github.com/cartoway/rubocop-policy.git
-  revision: 0b3cf10e7b64a0905072736e7450ee84b5430c71
+  revision: 796fbdfaf776e92f339a1c14778666b4220ba035
   tag: v0.3.0
   specs:
     rubocop-policy (0.1.0)
