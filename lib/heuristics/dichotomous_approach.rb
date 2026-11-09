@@ -148,10 +148,10 @@ module Interpreters
           (config.resolution.vehicle_limit.nil? ||
             config.resolution.vehicle_limit > config.resolution.dicho_algorithm_vehicle_limit) &&
           config.resolution.dicho_algorithm_service_limit.to_i.positive? &&
-          service_vrp.vrp.services.size - service_vrp.vrp.routes.map{ |r| r.mission_ids.size }.sum >
+          service_vrp.vrp.services.size - service_vrp.vrp.routes.sum{ |r| r.mission_ids.size } >
             config.resolution.dicho_algorithm_service_limit &&
           !service_vrp.vrp.schedule? &&
-          service_vrp.vrp.points.all?{ |point| point&.location&.lat && point&.location&.lon } &&
+          service_vrp.vrp.points.all?{ |point| point&.location&.lat && point&.location.lon } &&
           service_vrp.vrp.relations.empty? &&
           # TODO: max_split transfer_unused_resources can handle empties_or_fills use that logic in dicho
           service_vrp.vrp.services.none?{ |s| s.quantities.any?(&:fill) || s.quantities.any?(&:empty) }
@@ -170,11 +170,11 @@ module Interpreters
         vrp = service_vrp.vrp
         level = service_vrp.dicho_level
         dicho_data = service_vrp.dicho_data
-        log_message = "dicho - level(#{level}) "\
-                  "activities: #{vrp.services.size} "\
-                  "vehicles (limit): #{vrp.vehicles.size}(#{vrp.configuration.resolution.vehicle_limit})"\
-                  "duration [min, max]: [#{vrp.configuration.resolution.minimum_duration&.round},"\
-                  "#{vrp.configuration.resolution.duration&.round}]"
+        log_message = "dicho - level(#{level}) " \
+                      "activities: #{vrp.services.size} " \
+                      "vehicles (limit): #{vrp.vehicles.size}(#{vrp.configuration.resolution.vehicle_limit})" \
+                      "duration [min, max]: [#{vrp.configuration.resolution.minimum_duration&.round}," \
+                      "#{vrp.configuration.resolution.duration&.round}]"
         log log_message, level: :info
 
         DichoConstructionTimings.ensure!(dicho_data)
@@ -308,7 +308,7 @@ module Interpreters
                   if message.include?('dichotomous process')
                     message
                   else
-                    add = "dichotomous process #{(service_vrp.dicho_denominators.last * avc).to_i}"\
+                    add = "dichotomous process #{(service_vrp.dicho_denominators.last * avc).to_i}" \
                           "/#{service_vrp.dicho_denominators.last}"
                     Core::Strategies::Orchestration.concat_avancement(add, message)
                   end
@@ -486,7 +486,7 @@ module Interpreters
       service_vrp.vrp.configuration.resolution.dicho_level_coeff = 2**power
     end
 
-    def self.set_config(service_vrp) # rubocop: disable Naming/AccessorMethodName, Style/CommentedKeyword
+    def self.set_config(service_vrp) # rubocop: disable Naming/AccessorMethodName
       # service_vrp.vrp.configuration.resolution.batch_heuristic = true
       config = service_vrp.vrp.configuration
       config.restitution.allow_empty_result = true
@@ -527,11 +527,12 @@ module Interpreters
         next if solution.nil?
 
         solution.routes.map{ |route|
-          missions = route.stops.map{ |stop|
-            next if stop.is_a?(Models::Solution::StopDepot) || stop.mission.is_a?(Models::Rest)
+          missions =
+            route.stops.filter_map{ |stop|
+              next if stop.is_a?(Models::Solution::StopDepot) || stop.mission.is_a?(Models::Rest)
 
-            stop.mission
-          }.compact
+              stop.mission
+            }
           next if missions.empty?
 
           Models::Route.create(
@@ -640,7 +641,7 @@ module Interpreters
           next if sub_vrp_vehicle_limit&.zero? # vehicle limit hit, cannot use more new vehicles
         end
 
-        assigned_service_ids = vehicles_indices.map{ |_v, r_i, _v_i| r_i }.compact.flat_map{ |r_i|
+        assigned_service_ids = vehicles_indices.filter_map{ |_v, r_i, _v_i| r_i }.flat_map{ |r_i|
           solution.routes[r_i].stops.map(&:service_id)
         }.compact
 
@@ -733,7 +734,7 @@ module Interpreters
       log "try to insert #{before_unassigned} unassigned from #{vrp.services.size} services"
       vrp.routes = build_initial_routes([solution])
       vrp.configuration.resolution.init_duration = nil
-      unassigned_service_ids = solution.unassigned_stops.map(&:service_id).compact
+      unassigned_service_ids = solution.unassigned_stops.filter_map(&:service_id)
       unassigned_services = vrp.services.select{ |s| unassigned_service_ids.include?(s.id) }
       unassigned_services_by_skills =
         unassigned_services.sort_by{ |service| -service.exclusion_cost.to_f }

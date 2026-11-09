@@ -62,7 +62,7 @@ module Api
 
       parser :csv, CSVParser
 
-      # rubocop:disable Metrics/BlockLength
+      # rubocop:disable-next Metrics/BlockLength
       namespace :vrp do
         helpers VrpInput, VrpConfiguration, VrpMisc, VrpMissions, VrpShared, VrpVehicles
         resource :submit do
@@ -347,7 +347,6 @@ module Api
           end
         end
       end
-      # rubocop:enable Metrics/BlockLength
     end
   end
 end

@@ -25,9 +25,9 @@ module Interpreters
     end
 
     def self.check_triangle_inequality(matrix)
-      (0..matrix.size - 1).each{ |i|
-        (0..matrix.size - 1).each{ |j|
-          (0..matrix[i].size - 1).each{ |k|
+      (0..(matrix.size - 1)).each{ |i|
+        (0..(matrix.size - 1)).each{ |j|
+          (0..(matrix[i].size - 1)).each{ |k|
             matrix[i][j] = [matrix[i][j], matrix[i][k] + matrix[k][j]].min
           }
         }
@@ -37,15 +37,15 @@ module Interpreters
 
     def self.generate_matrix(vrp)
       matrix =
-        (0..vrp.matrices[0][:time].size - 1).collect{ |i|
-          (0..vrp.matrices[0][:time][i].size - 1).collect{ |j|
+        (0..(vrp.matrices[0][:time].size - 1)).collect{ |i|
+          (0..(vrp.matrices[0][:time][i].size - 1)).collect{ |j|
             random_ratio = rand(vrp.configuration.resolution.variation_ratio)
             vrp.matrices[0][:time][i][j] + (rand(3).zero? ? -1 : 1) * vrp.matrices[0][:time][i][j] * random_ratio / 100
           }
         }
-      while (0..matrix.size - 1).any?{ |i|
-              (0..matrix[i].size - 1).any?{ |j|
-                (0..matrix[i].size - 1).any? { |k|
+      while (0..(matrix.size - 1)).any?{ |i|
+              (0..(matrix[i].size - 1)).any?{ |j|
+                (0..(matrix[i].size - 1)).any? { |k|
                   matrix[i][j] > matrix[i][k] + matrix[k][j]
                 }
               }
@@ -66,7 +66,7 @@ module Interpreters
         service_vrp.vrp.matrices = generate_matrix(vrp)
       end
 
-      (0..service_vrp.vrp.vehicles.size - 1).each{ |j|
+      (0..(service_vrp.vrp.vehicles.size - 1)).each{ |j|
         service_vrp.vrp.vehicles[j][:cost_time_multiplier] = 0
         service_vrp.vrp.vehicles[j][:cost_distance_multiplier] = 0
         service_vrp.vrp.vehicles[j][:cost_value_multiplier] = 1
@@ -92,17 +92,15 @@ module Interpreters
         heuristic_list =
           if vrp[:vehicles].any?{ |vehicle| vehicle[:force_start] || vehicle[:shift_preference].to_s == 'force_start' }
             [mandatory_heuristic, verified('local_cheapest_insertion'), verified('global_cheapest_arc')]
-          elsif mandatory_heuristic == 'savings'
-            [mandatory_heuristic, verified('global_cheapest_arc'), verified('local_cheapest_insertion')]
-          elsif mandatory_heuristic == 'parallel_cheapest_insertion'
+          elsif ['savings', 'parallel_cheapest_insertion'].include?(mandatory_heuristic)
             [mandatory_heuristic, verified('global_cheapest_arc'), verified('local_cheapest_insertion')]
           else
             [mandatory_heuristic, verified('global_cheapest_arc'), verified('parallel_cheapest_insertion')]
           end
 
-        heuristic_list |= ['savings'] if vrp.vehicles.collect{ |vehicle|
+        heuristic_list |= ['savings'] if vrp.vehicles.sum{ |vehicle|
                                            vehicle[:rests].to_a.size
-                                         }.sum.positive? # while waiting for self_selection improve
+                                         }.positive? # while waiting for self_selection improve
         heuristic_list
       else
         first_solution_strategy
@@ -330,7 +328,7 @@ module Interpreters
                       [priority_penalty, solution.unassigned_stops&.size.to_i, solution.cost.to_i, elapsed_times[i]],
             priority_penalty: priority_penalty,
             used: false,
-            cost: solution ? solution.cost : nil,
+            cost: solution&.cost,
             time_spent: elapsed_times[i],
             solution: solution
           }
@@ -339,23 +337,26 @@ module Interpreters
 
         if best[:heuristic] != 'supplied_initial_routes'
           # if another heuristic is the best, use its solution as the initial route
-          vrp.routes = best[:solution].routes.collect{ |route|
-            mission_ids = route.stops.collect(&:service_id).compact
-            next if mission_ids.empty?
+          vrp.routes =
+            best[:solution].routes.filter_map{ |route|
+              mission_ids = route.stops.filter_map(&:service_id)
+              next if mission_ids.empty?
 
-            Models::Route.create(vehicle: vrp.vehicles.find{ |v| v.id == route.vehicle_id }, mission_ids: mission_ids)
-          }.compact
+              Models::Route.create(vehicle: vrp.vehicles.find{ |v|
+                v.id == route.vehicle_id
+              }, mission_ids: mission_ids)
+            }
         end
 
         best[:used] = true
 
         preprocessing = vrp.configuration.preprocessing
         preprocessing.heuristic_result = best[:solution]
-        preprocessing.heuristic_result[:solvers].map!{ |solver| "configuration.preprocessing.#{solver}".to_sym }
+        preprocessing.heuristic_result[:solvers].map!{ |solver| :"configuration.preprocessing.#{solver}" }
         synthesis.each{ |synth| synth.delete(:solution) }
         vrp.configuration.resolution.batch_heuristic = nil
         preprocessing.first_solution_strategy =
-          best[:heuristic] != 'supplied_initial_routes' ? [verified(best[:heuristic])] : []
+          best[:heuristic] == 'supplied_initial_routes' ? [] : [verified(best[:heuristic])]
         preprocessing.heuristic_synthesis = synthesis
         vrp.configuration.resolution.duration =
           vrp.configuration.resolution.duration ? [
@@ -406,7 +407,7 @@ module Interpreters
         verified('christofides')
       elsif loop_route && unique_configuration &&
             (vehicles.any?(&:duration) && vehicles.size == 1 ||
-            size_mtws.to_f / services.map(&:visits_number).sum > 0.2 && size_rest.zero?)
+            size_mtws.to_f / services.sum(&:visits_number) > 0.2 && size_rest.zero?)
         verified('global_cheapest_arc')
       elsif vehicles.size == 1 && size_rest.positive? || size_mtws > 0
         verified('local_cheapest_insertion')
@@ -414,8 +415,6 @@ module Interpreters
             vehicles.none?(&:duration) && vrp.points.size < 250
         # Savings heuristic requires a high memory quantity which may lead to OOM error for large problems
         verified('savings')
-      elsif size_rest.positive? || unique_configuration || loop_route
-        verified('parallel_cheapest_insertion')
       else
         verified('parallel_cheapest_insertion')
       end

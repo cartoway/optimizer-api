@@ -28,20 +28,23 @@ class Api::V01::ApiTest < Minitest::Test
 
   def test_should_not_access
     get '/0.1/vrp/submit'
+
     assert_equal 401, last_response.status
     assert_equal 'Unauthorized', JSON.parse(last_response.body)['error']
   end
 
   def test_unauthorized_api_key
     post '/0.1/vrp/submit', api_key: '!', vrp: VRP.toy
+
     assert_equal 401, last_response.status, last_response.body
     assert_includes JSON.parse(last_response.body)['error'], 'Unauthorized'
   end
 
   def test_should_not_access_if_expired
     get '/0.1/vrp/submit', api_key: 'expired'
+
     assert_equal 402, last_response.status
-    assert_equal 'Subscription expired. Please contact support () '\
+    assert_equal 'Subscription expired. Please contact support () ' \
                  'or sales () to extend your access period.',
                  JSON.parse(last_response.body)['error']
   end
@@ -55,8 +58,9 @@ class Api::V01::ApiTest < Minitest::Test
       # delete must be the last one!
       { method: 'delete', uri: "jobs/#{@job_id}.json", operation: :delete_job, options: {}}
     ].each do |obj|
+      demo_params = { api_key: 'demo' }
       (1..2).each do |cpt|
-        send(obj[:method], "/0.1/vrp/#{obj[:uri]}", { api_key: 'demo' }.merge(obj[:options]))
+        send(obj[:method], "/0.1/vrp/#{obj[:uri]}", demo_params.merge(obj[:options]))
 
         keys = OptimizerWrapper.config[:redis_count].keys(
           "optimizer:#{obj[:operation]}:#{Time.now.utc.to_s[0..9]}_key:demo_ip*"
@@ -79,9 +83,11 @@ class Api::V01::ApiTest < Minitest::Test
   def test_use_quota
     clear_optim_redis_count
     post '/0.1/vrp/submit', { api_key: 'quota', vrp: VRP.basic }.to_json, 'CONTENT_TYPE' => 'application/json'
-    assert last_response.ok?, last_response.body
+
+    assert_predicate last_response, :ok?, last_response.body
 
     post '/0.1/vrp/submit', { api_key: 'quota', vrp: VRP.basic }.to_json, 'CONTENT_TYPE' => 'application/json'
+
     assert_equal 429, last_response.status
 
     assert_includes JSON.parse(last_response.body)['message'], 'Too many daily requests'
@@ -95,15 +101,18 @@ class Api::V01::ApiTest < Minitest::Test
 
   def test_metrics
     clear_optim_redis_count
-    post '/0.1/vrp/submit?asset=myAsset', { api_key: 'demo', vrp: VRP.toy }.to_json, \
+    post '/0.1/vrp/submit?asset=myAsset', { api_key: 'demo', vrp: VRP.toy }.to_json,
          'CONTENT_TYPE' => 'application/json'
-    assert last_response.ok?, last_response.body
+
+    assert_predicate last_response, :ok?, last_response.body
 
     get '0.1/metrics', { api_key: 'demo'}
+
     assert_equal 401, last_response.status
 
     get '0.1/metrics', { api_key: 'metrics'}
-    assert last_response.ok?, last_response.body
+
+    assert_predicate last_response, :ok?, last_response.body
     json = JSON.parse(last_response.body).first
 
     assert_equal Date.today.strftime('%Y-%m-%d'), json['count_date']
@@ -122,7 +131,8 @@ class Api::V01::ApiTest < Minitest::Test
     # assert override 10 by nil (unlimited)
     11.times do
       post '/0.1/vrp/submit', { api_key: 'quota_nil', vrp: VRP.basic }.to_json, 'CONTENT_TYPE' => 'application/json'
-      assert last_response.ok?, last_response.body
+
+      assert_predicate last_response, :ok?, last_response.body
     end
   end
 
@@ -168,6 +178,7 @@ class Api::V01::ApiTest < Minitest::Test
       }
     }
     post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
+
     assert_equal 200, last_response.status, last_response.body
   ensure
     remove_request_stub s

@@ -33,11 +33,13 @@ class Wrappers::PyVRPProgressTest < Minitest::Test
 
   def test_parse_progress_line_reads_search_terminated_and_best_cost
     terminated = @pyvrp.send(:parse_progress_line, 'Search terminated in 30.50s after 1500 iterations.')
+
     assert_equal 1500, terminated[:iterations]
     assert_in_delta 30.5, terminated[:time]
     assert terminated[:final]
 
     best = @pyvrp.send(:parse_progress_line, 'Best-found solution has cost 950.25.')
+
     assert_in_delta 950.25, best[:cost]
     assert best[:final]
   end
@@ -63,6 +65,7 @@ class Wrappers::PyVRPProgressTest < Minitest::Test
     }) do
       @pyvrp.stub(:pyvrp_python, 'python3') do
         result = @pyvrp.send(:run_pyvrp, {}, 1) { |*args| calls << args }
+
         assert_equal 1500, result[:iterations]
       end
     end

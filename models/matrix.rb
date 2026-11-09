@@ -31,7 +31,7 @@ module Models
     DIMENSIONS.each do |dimension|
       define_method "integer_#{dimension}" do |max_value = nil|
         matrix = send(dimension)
-        return matrix if matrix.nil? || matrix.first.all? { |v| v.is_a?(Integer) } && max_value.nil?
+        return matrix if matrix.nil? || matrix.first.all?(Integer) && max_value.nil?
 
         matrix.map { |row|
           row.map { |v|

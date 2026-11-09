@@ -28,7 +28,23 @@ Style/FrozenStringLiteralComment:
 Style/GuardClause:
   Enabled: false
 
+# Grape entity modules, cache helpers, and as_json monkey-patches share files by design.
+Style/OneClassPerFile:
+  Enabled: false
+
 Style/NumericPredicate:
+  Enabled: false
+
+# .sum inits with 0; unsafe for Models::Solution#+ / other non-Numeric #+.
+Performance/Sum:
+  Enabled: false
+
+# each_key/each_value are Hash-only; Array of [k, v] pairs (group_by/select) break.
+Style/HashEachMethods:
+  Enabled: false
+
+# Hash#select returns a Hash (.values OK); grep returns Array — unsafe on hashes.
+Style/SelectByRegexp:
   Enabled: false
 
 # We prefer standardizing on double-quoted strings for readability.

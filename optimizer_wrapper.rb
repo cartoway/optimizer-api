@@ -70,10 +70,10 @@ module OptimizerWrapper
         skipped_services: services_vrps.map(&:skipped_services).flatten
       }
     elsif config[:solve][:synchronously] || (
-            services_vrps.size == 1 &&
-            !vrp.configuration.preprocessing.cluster_threshold &&
-            config[:services][services_vrps[0].service].solve_synchronous?(vrp)
-          )
+      services_vrps.size == 1 &&
+      !vrp.configuration.preprocessing.cluster_threshold &&
+      config[:services][services_vrps[0].service].solve_synchronous?(vrp)
+    )
       # The job seems easy enough to perform it with the server
       define_main_process(services_vrps, job_id)
     else

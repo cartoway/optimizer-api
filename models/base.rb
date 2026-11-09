@@ -217,15 +217,15 @@ module Models
         types[name] = options[:type]
       end
       clear_mutable_default_keys_cache
-      super(name, options)
+      super
     end
 
-    def self.has_many(name, options = {}) # rubocop: disable Naming/PredicateName, Style/CommentedKeyword
+    def self.has_many(name, options = {}) # rubocop: disable Naming/PredicatePrefix
       field_names << name
 
       # respect English spelling rules:
       # vehicles -> vehicle_ids | capacities -> capacity_ids | matrices -> matrix_ids
-      ids_function_name = "#{ActiveSupport::Inflector.singularize(name.to_s)}_ids".to_sym
+      ids_function_name = :"#{ActiveSupport::Inflector.singularize(name.to_s)}_ids"
 
       add_default_value(name, options[:default] || [])
       add_default_value(ids_function_name, options[:default] || [])
@@ -262,7 +262,7 @@ module Models
       assoc_class = nil
       redefine_method("#{name}=") do |vals|
         assoc_class ||= class_from_string(options[:class_name])
-        self[name] = vals&.collect{ |val|
+        self[name] = vals&.filter_map{ |val|
           if assoc_class == Symbol
             val&.to_sym
           elsif val.is_a?(assoc_class)
@@ -270,7 +270,7 @@ module Models
           elsif !val.empty?
             assoc_class.create(val)
           end
-        }&.compact || []
+        } || []
         self[ids_function_name] = self[name]&.map(&:id) if assoc_class.module_parent == Models
         self[name]
       end
@@ -292,7 +292,7 @@ module Models
     def self.belongs_to(name, options = {})
       field_names << name
 
-      id_function_name = "#{name}_id".to_sym
+      id_function_name = :"#{name}_id"
       clear_mutable_default_keys_cache
 
       case options[:as_json]
@@ -356,7 +356,7 @@ module Models
 
     def config_provides_key?(configuration, key)
       %i[preprocessing restitution schedule resolution].any?{ |section|
-        nested = key[section.size + 1..]&.to_sym
+        nested = key[(section.size + 1)..]&.to_sym
         nested && configuration[section]&.key?(nested)
       }
     end

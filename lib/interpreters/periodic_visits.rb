@@ -19,6 +19,13 @@ require './lib/heuristics/periodic_heuristic.rb'
 
 module Interpreters
   class PeriodicVisits
+    VEHICLE_LINKING_RELATION_TYPES = %i[
+      vehicle_group_duration
+      vehicle_group_duration_on_weeks
+      vehicle_group_duration_on_months
+      vehicle_trips
+    ].freeze
+
     def initialize(vrp)
       @periods = []
       @equivalent_vehicles = {} # collection of [vehicle.id, vehicle.global_day_index]
@@ -44,7 +51,7 @@ module Interpreters
       end
     end
 
-    def expand(vrp, job, &block)
+    def expand(vrp, job, &)
       return vrp unless vrp.schedule?
 
       vehicles_linking_relations = save_vehicle_linking_relations(vrp)
@@ -60,7 +67,7 @@ module Interpreters
 
       if vrp.periodic_heuristic?
         periodic_heuristic = Wrappers::PeriodicHeuristic.new(vrp, job)
-        vrp.routes = periodic_heuristic.compute_initial_solution(vrp, &block)
+        vrp.routes = periodic_heuristic.compute_initial_solution(vrp, &)
       end
 
       vrp.services = generate_services(vrp)
@@ -213,7 +220,7 @@ module Interpreters
             last_possible_days: [service.last_possible_days[visit_index]]
           )
           if !service.minimum_lapse && !service.maximum_lapse && service.visits_number > 1
-            new_service.skills += ["#{visit_index + 1}_f_#{service.visits_number}".to_sym]
+            new_service.skills += [:"#{visit_index + 1}_f_#{service.visits_number}"]
           end
 
           @expanded_services[service.id] ||= []
@@ -340,9 +347,7 @@ module Interpreters
         time_back_to_depot = vrp[:matrices][0][:time][this_service_index][route[:vehicle][:end_point][:matrix_index]]
       end
 
-      if !residual_time_for_vehicle[route[:vehicle][:id]]
-        true
-      else
+      if residual_time_for_vehicle[route[:vehicle][:id]]
         additional_time =
           travel_time + time_back_to_depot - residual_time_for_vehicle[route[:vehicle].id][:last_computed_time]
         if additional_time <= residual_time[residual_time_for_vehicle[route[:vehicle].id][:idx]]
@@ -352,6 +357,8 @@ module Interpreters
         else
           false
         end
+      else
+        true
       end
     end
 
@@ -384,10 +391,11 @@ module Interpreters
         service_id = service_sequence_data[1]
         current_index = service_sequence_data[2].to_i
         sequence_size = service_sequence_data[-1].to_i
-        related_indices = vrp.services.collect{ |r_service|
-          match_result = /(.+)_([0-9]+)\_([0-9]+)/.match(r_service.id).to_a
-          match_result[2].to_i if match_result[1] == service_id && match_result[2].to_i < current_index
-        }.compact
+        related_indices =
+          vrp.services.filter_map{ |r_service|
+            match_result = /(.+)_([0-9]+)\_([0-9]+)/.match(r_service.id).to_a
+            match_result[2].to_i if match_result[1] == service_id && match_result[2].to_i < current_index
+          }
         previous_service_index = related_indices.max
         gap_with_previous = current_index - previous_service_index if previous_service_index
         previous_service_route =
@@ -422,7 +430,7 @@ module Interpreters
     end
 
     def generate_rests(vehicle, day_index, vehicle_timewindow, rests_durations, vehicle_index)
-      vehicle.rests.collect{ |rest|
+      vehicle.rests.filter_map{ |rest|
         # Rests can not have more than one timewindow for now
         next if (vehicle_timewindow && rest.timewindows.first &&
                 !rest.timewindows.first.compatible_with?(vehicle_timewindow)) ||
@@ -434,18 +442,18 @@ module Interpreters
         rests_durations[vehicle_index] += new_rest.duration
         new_rest.timewindows = generate_timewindows(rest.timewindows, day_index)
         new_rest
-      }.compact
+      }
     end
 
     def associate_skills(new_vehicle, vehicle_day_index)
       if new_vehicle.skills.empty?
         new_vehicle.skills = [
-          @periods.collect{ |p| "#{(vehicle_day_index * p / (@schedule_end + 1)).to_i + 1}_f_#{p}".to_sym }
+          @periods.collect{ |p| :"#{(vehicle_day_index * p / (@schedule_end + 1)).to_i + 1}_f_#{p}" }
         ]
       else
         new_vehicle.skills.collect!{ |alternative_skill|
           alternative_skill +
-            @periods.collect{ |p| "#{(vehicle_day_index * p / (@schedule_end + 1)).to_i + 1}_f_#{p}".to_sym }
+            @periods.collect{ |p| :"#{(vehicle_day_index * p / (@schedule_end + 1)).to_i + 1}_f_#{p}" }
         }
       end
     end
@@ -461,7 +469,7 @@ module Interpreters
         while day <= @schedule_end && nb_services_seen < service.visits_number
           day += 1 while service.unavailable_days.include?(day) || vrp.vehicles.none?{ |v|
                            v.available_at(day)
-                         }                                                                    && day <= @schedule_end
+                         } && day <= @schedule_end
           break if day > @schedule_end
 
           computed_first_possible_days << day
@@ -477,7 +485,7 @@ module Interpreters
         while day >= @schedule_start && nb_services_seen < service.visits_number
           day -= 1 while service.unavailable_days.include?(day) || vrp.vehicles.none?{ |v|
                            v.available_at(day)
-                         }                                                                    && day >= @schedule_start
+                         } && day >= @schedule_start
           break if day < @schedule_start
 
           computed_last_possible_days << day
@@ -494,10 +502,7 @@ module Interpreters
 
     def save_vehicle_linking_relations(vrp)
       vehicle_linking_relations, vrp.relations =
-        vrp.relations.partition{ |r|
-        [:vehicle_group_duration, :vehicle_group_duration_on_weeks, :vehicle_group_duration_on_months,
-         :vehicle_trips].include?(r.type)
-      }
+        vrp.relations.partition{ |r| VEHICLE_LINKING_RELATION_TYPES.include?(r.type) }
       vehicle_linking_relations
     end
 
@@ -522,10 +527,10 @@ module Interpreters
     end
 
     def collect_weeks_in_schedule
-      current_day = (@schedule_start + 1..@schedule_start + 7).find{ |d| d % 7 == 0 } # next monday
-      schedule_week_indices = [(@schedule_start..current_day - 1).to_a]
+      current_day = ((@schedule_start + 1)..(@schedule_start + 7)).find{ |d| d % 7 == 0 } # next monday
+      schedule_week_indices = [(@schedule_start..(current_day - 1)).to_a]
       while current_day + 6 <= @schedule_end
-        schedule_week_indices << (current_day..current_day + 6).to_a
+        schedule_week_indices << (current_day..(current_day + 6)).to_a
         current_day += 7
       end
       schedule_week_indices << (current_day..@schedule_end).to_a unless current_day > @schedule_end

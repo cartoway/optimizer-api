@@ -185,6 +185,7 @@ class Interpreters::RegulatoryRestTest < IsolatedTest
 
     # Linear extra would be 500 * 0.1 = 50; cap at duration 10.
     tw = vrp.services.find{ |s| s.id == 'service_3' }.activity.timewindows.first
+
     assert_equal 510, tw.start
     assert_equal 800, tw.end
   end
@@ -208,6 +209,7 @@ class Interpreters::RegulatoryRestTest < IsolatedTest
     _vrp, stops = patched_stops(pause_problem)
 
     rest_stops = stops.select{ |stop| stop.type == :rest }
+
     assert_equal 3, rest_stops.size, 'A pause is due after each 100s of work (three services)'
     assert(rest_stops.all?{ |stop| stop.activity.duration == 10 })
     assert_equal [:depot, :service, :rest, :service, :rest, :service, :rest, :depot], stops.map(&:type)

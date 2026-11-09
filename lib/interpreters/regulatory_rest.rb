@@ -48,7 +48,7 @@ module Interpreters
       end
 
       rate = rates.first
-      tour_start = vrp.vehicles.map{ |vehicle| vehicle.timewindow&.start }.compact.min || 0
+      tour_start = vrp.vehicles.filter_map{ |vehicle| vehicle.timewindow&.start }.min || 0
       snapshot!(vrp)
       inflate_matrices!(vrp, rate)
       inflate_durations!(vrp, rate)
@@ -108,10 +108,10 @@ module Interpreters
       }
 
       vrp[:regulatory_rest_snapshot] = {
-        matrices: vrp.matrices.select(&:time).map{ |matrix| [matrix, matrix.time.map(&:dup)] }.to_h,
+        matrices: vrp.matrices.select(&:time).to_h{ |matrix| [matrix, matrix.time.map(&:dup)] },
         durations: durations,
         tw_starts: tw_starts,
-        vehicle_rests: vrp.vehicles.map{ |vehicle| [vehicle, vehicle.rests.dup] }.to_h,
+        vehicle_rests: vrp.vehicles.to_h{ |vehicle| [vehicle, vehicle.rests.dup] },
         vrp_rests: vrp.rests.dup,
       }
     end

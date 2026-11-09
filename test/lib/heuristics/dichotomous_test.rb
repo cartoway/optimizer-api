@@ -101,31 +101,31 @@ class DichotomousTest < Minitest::Test
       soln_quality_assert_message =
         "Too many unassigned services (#{solution.unassigned_stops.size}) for #{active_route_size} routes"
       if active_route_size > 12
-        assert solution.unassigned_stops.size <= 13, soln_quality_assert_message
+        assert_operator solution.unassigned_stops.size, :<=, 13, soln_quality_assert_message
       elsif active_route_size == 12
-        assert solution.unassigned_stops.size <= 23, soln_quality_assert_message
+        assert_operator solution.unassigned_stops.size, :<=, 23, soln_quality_assert_message
       elsif active_route_size == 11
-        assert solution.unassigned_stops.size <= 33, soln_quality_assert_message
+        assert_operator solution.unassigned_stops.size, :<=, 33, soln_quality_assert_message
       else
-        assert solution.unassigned_stops.size <= 43, soln_quality_assert_message
+        assert_operator solution.unassigned_stops.size, :<=, 43, soln_quality_assert_message
       end
 
       # Check elapsed time
       max_dur = vrp.configuration.resolution.duration / 1000.0
       min_dur = vrp.configuration.resolution.minimum_duration / 1000.0
 
-      assert solution.elapsed / 1000 < max_dur * 1.05,
-             "Time spent in optimization (#{solution.elapsed / 1000}) is greater than " \
-             "the maximum duration asked (#{max_dur})."
+      elapsed_s = solution.elapsed / 1000
+      assert_operator elapsed_s, :<, max_dur * 1.05,
+                      "Time spent in optimization (#{elapsed_s}) is greater than " \
+                      "the maximum duration asked (#{max_dur})."
       # Due to "no remaining jobs" in end_stage, it can be violated (randomly but very rarely).
-      assert solution.elapsed / 1000 > min_dur * 0.99,
-             "Time spent in optimization (#{solution.elapsed / 1000}) is less than " \
-             "the minimum duration asked (#{min_dur})."
+      assert_operator elapsed_s, :>, min_dur * 0.99,
+                      "Time spent in optimization (#{elapsed_s}) is less than " \
+                      "the minimum duration asked (#{min_dur})."
       # Due to API overhead, it can be violated (randomly but very rarely).
       # Since the optimisation time is short the relative overhead is big.
-      assert t2 - t1 < max_dur * 2.5,
-             "Time spend in the API (#{t2 - t1}) is too big compared to maximum " \
-             "optimization duration asked (#{max_dur})."
+      assert_operator t2 - t1, :<, max_dur * 2.5, "Time spend in the API (#{t2 - t1}) is too big compared to maximum " \
+                                                  "optimization duration asked (#{max_dur})."
     end
 
     def test_dichotomous_condition_limits
@@ -154,6 +154,7 @@ class DichotomousTest < Minitest::Test
       }
 
       vrp = TestHelper.create(limit_vrp)
+
       refute Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
@@ -162,6 +163,7 @@ class DichotomousTest < Minitest::Test
       vrp[:vehicles] = limit_vrp[:vehicles].dup
       vrp[:vehicles] << { id: "v#{limits[:vehicle] + 1}", router_mode: 'car', router_dimension: 'time', skills: [[]] }
       vrp = TestHelper.create(vrp)
+
       refute Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
@@ -170,6 +172,7 @@ class DichotomousTest < Minitest::Test
       vrp[:services] = limit_vrp[:services].dup
       vrp[:services] << { id: "s#{limits[:service] + 1}", activity: { point_id: 'p1' }}
       vrp = TestHelper.create(vrp)
+
       refute Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
@@ -178,16 +181,19 @@ class DichotomousTest < Minitest::Test
       vrp[:services] << { id: "s#{limits[:service] + 1}", activity: { point_id: 'p1' }}
       vrp[:vehicles] << { id: "v#{limits[:vehicle] + 1}", router_mode: 'car', router_dimension: 'time', skills: [[]] }
       vrp = TestHelper.create(vrp)
+
       refute Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
 
       vrp.vehicles.each{ |v| v.duration = 36000 }
+
       assert Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
 
       vrp.configuration.resolution.dicho_algorithm_service_limit = 0
+
       refute Interpreters::Dichotomous.dichotomous_candidate?(
         Models::ResolutionContext.new(vrp: vrp, service: :demo, dicho_level: 0)
       )
@@ -234,6 +240,7 @@ class DichotomousTest < Minitest::Test
       service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :ortools, dicho_level: 0, dicho_data: {})
 
       Interpreters::Dichotomous.ensure_time_budget!(service_vrp)
+
       assert_equal 10_000, service_vrp.resolution_time_budget_ms
       assert_equal 10_000, service_vrp.original_duration_ms
 
@@ -241,10 +248,12 @@ class DichotomousTest < Minitest::Test
       assert_equal 10_000, vrp.configuration.resolution.duration
 
       service_vrp.resolution_time_budget_ms = 100
+
       refute Interpreters::Dichotomous.apply_solve_duration_cap!(service_vrp)
 
       service_vrp.resolution_time_budget_ms = 10_000
       Interpreters::Dichotomous.consume_time_budget!(service_vrp, 3000)
+
       assert_in_delta 7000, service_vrp.resolution_time_budget_ms, 0.01
     end
 
@@ -296,7 +305,7 @@ class DichotomousTest < Minitest::Test
         end
       end
 
-      assert recorded_durations.any?, 'Expected at least one dichotomous solve call'
+      assert_predicate recorded_durations, :any?, 'Expected at least one dichotomous solve call'
       assert_operator recorded_durations.sum, :<=, max_duration * 1.05,
                       "Sum of solve durations (#{recorded_durations.sum}) exceeds budget (#{max_duration})"
     end
@@ -339,6 +348,7 @@ class DichotomousTest < Minitest::Test
         end
 
         timings = service_vrp.dicho_data[:construction_timings]
+
         assert timings, 'construction_timings should be populated after dichotomous split'
         assert_operator timings[:splits_count], :>=, 1
         assert_operator Interpreters::DichoConstructionTimings.total_ms(timings), :>=, 0
@@ -371,14 +381,14 @@ class DichotomousTest < Minitest::Test
       level = nil
       Interpreters::Dichotomous.stub(:split, lambda{ |vrpi, cut_symbol|
         assert_operator counter, :<, 3,
-                        'Interpreters::Dichotomous::split is called too many times. '\
+                        'Interpreters::Dichotomous::split is called too many times. ' \
                         'Either there is an infinite loop due to imposible clustering or dicho split logic is altered.'
 
-        if vrpi[:dicho_level] != level
+        if vrpi[:dicho_level] == level
+          counter += 1
+        else
           level = vrpi[:dicho_level]
           counter = 1
-        else
-          counter += 1
         end
 
         Interpreters::Dichotomous.send(:__minitest_stub__split, vrpi, cut_symbol)
@@ -409,6 +419,7 @@ class DichotomousTest < Minitest::Test
         )
       while service_vrp.vrp.services.size > 100
         services_vrps_dicho = Interpreters::Dichotomous.split(service_vrp, nil)
+
         assert_equal 2, services_vrps_dicho.size
 
         locations_one =
@@ -425,19 +436,21 @@ class DichotomousTest < Minitest::Test
         # The solution is to improve the vehicle_compatibility logic and using it inside collect_data
         assert_operator 3, :>=, (locations_one & locations_two).size, 'There should not be too many "split" points'
 
-        durations = []
-        services_vrps_dicho.each{ |service_vrp_dicho|
-          durations << service_vrp_dicho.vrp.services_duration
-        }
+        durations =
+          services_vrps_dicho.map{ |service_vrp_dicho|
+            service_vrp_dicho.vrp.services_duration
+          }
+
         assert_equal service_vrp.vrp.services_duration.to_i, durations.sum.to_i
-        assert services_vrps_dicho[0].vrp.vehicles.size >= services_vrps_dicho[1].vrp.vehicles.size,
-               'Dicho should start solving the side with more vehicles first'
+        assert_operator services_vrps_dicho[0].vrp.vehicles.size, :>=, services_vrps_dicho[1].vrp.vehicles.size,
+                        'Dicho should start solving the side with more vehicles first'
 
         average_duration = durations.sum / durations.size
         # Clusters should be balanced but the priority is the geometry
         range = 0.6
         min_duration = (1.0 - range) * average_duration
         max_duration = (1.0 + range) * average_duration
+
         durations.each_with_index{ |duration, index|
           assert duration < max_duration && duration > min_duration,
                  "Duration ##{index} (#{duration}) should be between #{min_duration} and #{max_duration}"
@@ -467,10 +480,12 @@ class DichotomousTest < Minitest::Test
 
     def test_split_function_with_services_at_same_location
       vrp = TestHelper.load_vrp(self, fixture_file: 'two_phases_clustering_sched_with_freq_and_same_point_day_5veh')
+
       assert vrp.services.group_by{ |s| s.activity.point_id }.any?{ |_pt_id, set| set.size > 1 },
              'This test is useless if there are not several services with same point_id'
       service_vrp = Models::ResolutionContext.new(vrp: vrp, dicho_sides: [], dicho_denominators: [], dicho_level: 0)
       split = Interpreters::Dichotomous.send(:split, service_vrp)
+
       assert_equal 2, split.size
       assert_equal vrp.services.size, split.sum{ |s| s.vrp.services.size }, 'Wrong number of services returned'
     end
@@ -480,6 +495,7 @@ class DichotomousTest < Minitest::Test
       route_rest = Models::Solution::Stop.new(rest)
       solution_route = Models::Solution::Route.new(stops: [route_rest])
       initial_solution = Models::Solution.new(routes: [solution_route])
+
       assert_empty Interpreters::Dichotomous.send(:build_initial_routes, [initial_solution])
     end
 
@@ -506,6 +522,7 @@ class DichotomousTest < Minitest::Test
       vrp_data[:vehicles].last[:id] = 'v_1'
 
       problem = TestHelper.create(vrp_data)
+
       assert_operator problem.vehicles.size, :>, 1, 'Dicho split requires at least two vehicles'
       assert_operator problem.services.size, :>, 5, 'Dicho split requires more services than dicho_division_service_limit'
       problem.configuration.resolution.dicho_algorithm_vehicle_limit = 1
@@ -521,8 +538,9 @@ class DichotomousTest < Minitest::Test
         dicho_denominators: []
       )
       children = Interpreters::Dichotomous.send(:split, parent)
+
       assert_equal 2, children.size
-      assert_equal problem.services.size, (children.sum{ |child| child.vrp.services.size })
+      assert_equal(problem.services.size, children.sum{ |child| child.vrp.services.size })
 
       first_child = children.first.vrp
       route = problem.empty_route(first_child.vehicles.first)
@@ -538,6 +556,7 @@ class DichotomousTest < Minitest::Test
         )
 
       Core::Components::Solution.check_solutions_consistency(problem.visits, [merged])
+
       assert_equal children.last.vrp.services.size, merged.count_unassigned_services
       assert(
         merged.unassigned_stops.all?{ |stop|
@@ -571,10 +590,12 @@ class DichotomousTest < Minitest::Test
 
           sv_one = sub_service_vrps[1].vrp
           transferred_vehicle = sv_one.vehicles.last
+
           assert_equal 'extra_unused_vehicle', transferred_vehicle.id,
                        'transfer_unused_vehicles should have transfer the extra vehicle'
 
           point_ids = sv_one.points.map(&:id)
+
           assert_equal point_ids.size, point_ids.uniq.size, 'There are duplicate points after transfer_unused_vehicles'
           assert sv_one.points.any?{ |p|
                    p.object_id == transferred_vehicle.start_point.object_id

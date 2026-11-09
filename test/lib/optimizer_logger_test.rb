@@ -21,23 +21,23 @@ require 'minitest/around/unit'
 
 class OptimizerLoggerTest < Minitest::Test
   def around
-    File.delete './test.log' if File.exist? './test.log'
+    FileUtils.rm_f './test.log'
     @log_device = OptimizerLogger.log_device
     OptimizerLogger.log_device = 'test.log'
     yield
   ensure
     OptimizerLogger.log_device = @log_device
-    File.delete './test.log' if File.exist? './test.log'
+    FileUtils.rm_f './test.log'
   end
 
   def test_logger_should_not_be_nil_for_env
-    refute OptimizerLogger.nil?
+    refute_predicate OptimizerLogger, :nil?
   end
 
   def test_logger_should_log_to_file
     log 'Unit test logging'
 
-    assert File.exist? './test.log'
+    assert_path_exists './test.log'
   end
 
   def test_should_log_only_allowed_level_message
@@ -45,7 +45,7 @@ class OptimizerLoggerTest < Minitest::Test
     OptimizerLogger.level = :fatal
     log 'Unit test logging', level: :debug
 
-    assert File.exist? './test.log'
+    assert_path_exists './test.log'
     assert_equal 1, File.readlines('./test.log').size
 
     log 'Unit test logging', level: :fatal

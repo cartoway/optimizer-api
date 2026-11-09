@@ -120,6 +120,7 @@ class Wrappers::PyVRPTest < Minitest::Test
   def test_loop_problem
     vrp = TestHelper.create(@problem)
     solution = @pyvrp.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2, solution.routes.first.stops.size
@@ -130,6 +131,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     @problem[:vehicles][0].delete(:end_point_id)
     vrp = TestHelper.create(@problem)
     solution = @pyvrp.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 1, solution.routes.first.stops.size
@@ -140,6 +142,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     @problem[:vehicles][0][:end_point_id] = 'point_4'
     vrp = TestHelper.create(@problem)
     solution = @pyvrp.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2, solution.routes.first.stops.size
@@ -153,6 +156,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
     vrp = TestHelper.create(@minimal_problem)
     solution = @pyvrp.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @minimal_problem[:services].size + 1, solution.routes.first.stops.size
@@ -168,11 +172,13 @@ class Wrappers::PyVRPTest < Minitest::Test
     problem = @minimal_problem.merge(vehicles: [vehicle])
     vrp = TestHelper.create(problem)
     payload = Wrappers::PyVRP.new.send(:pyvrp_problem, vrp)
+
     refute_empty payload[:depots]
     refute(payload[:depots].any?(&:nil?), 'PyVRP JSON depots must not contain nil slots (index collision)')
     assert(payload[:depots].any?{ |d| d[:name].to_s.include?('force_start') })
 
     solution = @pyvrp.solve(vrp)
+
     assert solution
   end
 
@@ -185,10 +191,12 @@ class Wrappers::PyVRPTest < Minitest::Test
     problem = @minimal_problem.merge(vehicles: [vehicle])
     vrp = TestHelper.create(problem)
     payload = Wrappers::PyVRP.new.send(:pyvrp_problem, vrp)
+
     refute(payload[:depots].any?(&:nil?), 'expected distinct global indices for start vs end depot rows')
     assert_equal 2, payload[:depots].size
 
     solution = @pyvrp.solve(vrp)
+
     assert solution
   end
 
@@ -210,6 +218,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     ) do
       OptimizerWrapper.wrapper_vrp('pyvrp', { services: { vrp: [:pyvrp] }}, TestHelper.create(vrp), nil)
     end
+
     assert_equal 1, pyvrp_counter
   end
 
@@ -217,6 +226,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     vrp = VRP.basic
     vrp[:matrices].first[:distance] = vrp[:matrices].first[:time]
     solutions = OptimizerWrapper.wrapper_vrp('pyvrp', { services: { vrp: [:pyvrp] }}, TestHelper.create(vrp), nil)
+
     assert solutions[0].routes.all?{ |route|
              route.stops.empty? || route.info.total_time
            }, 'At least one route total_time was not provided'
@@ -261,6 +271,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     ) do
       solution = @pyvrp.solve(TestHelper.create(problem), 'test')
       route = solution.routes.first
+
       assert_equal 100, route.stops.first.info.begin_time
       assert_equal 200, route.stops[1].info.begin_time
       assert_equal 40, route.stops[1].info.waiting_time
@@ -303,6 +314,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     ) do
       solution = @pyvrp.solve(TestHelper.create(problem), 'test')
       route = solution.routes.first
+
       assert_equal 100, route.stops.first.info.begin_time
       assert_equal 300, route.stops.last.info.begin_time
       assert_equal 300, route.stops.last.info.end_time
@@ -319,6 +331,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
     solution = @pyvrp.solve(TestHelper.create(problem), 'test')
     route = solution.routes.find{ |r| r.stops.any?(&:service_id) }
+
     assert route, 'Expected an assigned route'
     assert_operator route.stops.first.info.begin_time, :>=, 50
     refute_equal 0, route.stops.first.info.begin_time
@@ -337,9 +350,11 @@ class Wrappers::PyVRPTest < Minitest::Test
     problem[:vehicles].last[:skills] = [['s1']]
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
+
     assert_equal 2, solutions[0].routes.size
 
     skilled_route = solutions[0].routes.find{ |route| route.vehicle.id == problem[:vehicles].last[:id] }
+
     assert_equal problem[:services].size, skilled_route.stops.count(&:service_id)
   end
 
@@ -353,6 +368,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The solution is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -360,7 +376,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.value
+      assert_in_delta(1.001, activity.loads.first.quantity.value)
     }
   end
 
@@ -374,6 +390,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -381,7 +398,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.pickup
+      assert_in_delta(1.001, activity.loads.first.quantity.pickup)
     }
   end
 
@@ -395,6 +412,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:pyvrp] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -402,7 +420,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.delivery
+      assert_in_delta(1.001, activity.loads.first.quantity.delivery)
     }
   end
 
@@ -460,8 +478,10 @@ class Wrappers::PyVRPTest < Minitest::Test
       :run_pyvrp, lambda{ |payload, _timeout|
         limited = payload[:vehicle_types].find{ |vehicle| vehicle[:name] == 'vehicle_0' }
         unbounded = payload[:vehicle_types].find{ |vehicle| vehicle[:name] == 'vehicle_1' }
+
         assert_equal 2 * Wrappers::PyVRP::CUSTOM_QUANTITY_BIGNUM, limited[:capacity].first
         demand = payload[:clients].sum{ |client| client[:pickup].first }
+
         assert_equal demand, unbounded[:capacity].first
         empty_result
       }
@@ -504,6 +524,7 @@ class Wrappers::PyVRPTest < Minitest::Test
           assert_equal 20_000, client[:tw_late]
         }
         vehicle = payload[:vehicle_types].first
+
         assert_equal 20_000, vehicle[:tw_late]
         assert_equal 20_000, vehicle[:shift_duration]
         empty_result
@@ -560,6 +581,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     @pyvrp.stub(
       :run_pyvrp, lambda{ |payload, _timeout|
         vehicle = payload[:vehicle_types].first
+
         refute_equal 10_000, vehicle[:shift_duration]
         assert_operator vehicle[:shift_duration], :>, 10_000
         refute_equal Wrappers::PyVRP::MAX_INT64, vehicle[:shift_duration]
@@ -591,6 +613,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     @pyvrp.stub(
       :run_pyvrp, lambda{ |payload, _timeout|
         grouped = payload[:clients].reject{ |client| client[:group].nil? }
+
         assert_equal 2, grouped.size
         grouped.each{ |client|
           refute client[:required]
@@ -650,10 +673,11 @@ class Wrappers::PyVRPTest < Minitest::Test
 
     Wrappers::PyVRP.seed_vrp_routes_from_solution(vrp, solution)
     missions = vrp.routes.first.missions
-    assert missions.any?{ |mission| mission.is_a?(Models::ReloadDepot) },
+
+    assert missions.any?(Models::ReloadDepot),
            'Capacity overflow should insert reload depots in the seed'
-    assert_equal vrp.services.size, (missions.count { |mission| mission.is_a?(Models::Service) })
-    assert_operator (missions.count { |mission| mission.is_a?(Models::ReloadDepot) }), :>=, 2
+    assert_equal(vrp.services.size, missions.count { |mission| mission.is_a?(Models::Service) })
+    assert_operator missions.count { |mission| mission.is_a?(Models::ReloadDepot) }, :>=, 2
   end
 
   def test_multiple_matrices
@@ -663,6 +687,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     problem[:matrices].last[:time] = problem[:matrices].first[:time]
 
     vrp = TestHelper.create(problem)
+
     assert @pyvrp.solve(vrp, 'test')
   end
 
@@ -675,6 +700,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     problem[:vehicles].last[:cost_time_multiplier] = 2
     problem[:vehicles].last[:cost_distance_multiplier] = 2
     vrp = TestHelper.create(problem)
+
     assert @pyvrp.solve(vrp, 'test')
   end
 
@@ -683,6 +709,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     problem[:vehicles].first[:distance] = 0
     vrp = TestHelper.create(problem)
     solution = @pyvrp.solve(vrp, 'test')
+
     assert solution
     assert_equal problem[:services].size + 1,
                  solution.routes.find{ |r| r[:vehicle_id] == problem[:vehicles].last[:id] }.stops.size
@@ -753,6 +780,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
     vrp = TestHelper.create(problem)
     solution = pyvrp.solve(vrp, 'test')
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal problem[:services].size, solution.routes.first.stops.count(&:service_id)
@@ -828,6 +856,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
     vrp = TestHelper.create(problem)
     solution = pyvrp.solve(vrp, 'test')
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal problem[:services].size, solution.routes.first.stops.count(&:service_id)
@@ -915,6 +944,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     }
     vrp = TestHelper.create(problem)
     solution = pyvrp.solve(vrp, 'test')
+
     assert solution
     assert_equal 4, solution.routes.first.stops.size
     assert_equal 4, solution.routes[1].stops.size
@@ -949,6 +979,7 @@ class Wrappers::PyVRPTest < Minitest::Test
 
     vrp = TestHelper.create(problem)
     solution = @pyvrp.solve(vrp, 'test')
+
     assert_equal 0, solution.unassigned_stops.size
   end
 
@@ -1017,6 +1048,7 @@ class Wrappers::PyVRPTest < Minitest::Test
       reload_index = solver.instance_variable_get(:@reload_depot_hash)['reload_depot_1']
       start_depot = solver.instance_variable_get(:@vehicle_start_point_index_hash)['vehicle_0']
       end_depot = solver.instance_variable_get(:@vehicle_end_point_index_hash)['vehicle_0']
+
       assert_equal 0, start_depot, 'Regression needs depot index 0 to stay truthy when reading the solution'
 
       # 6 services of 2kg, capacity 5 → two visits between reloads; combined load exceeds capacity.
@@ -1049,7 +1081,7 @@ class Wrappers::PyVRPTest < Minitest::Test
       assert_equal vrp.services.size, solution.routes.first.stops.count(&:service_id)
       assert_equal :depot, solution.routes.first.stops.first.type
       assert_equal :depot, solution.routes.first.stops.last.type
-      assert_equal 2, (solution.routes.first.stops.count { |stop| stop.type == :reload_depot })
+      assert_equal(2, solution.routes.first.stops.count { |stop| stop.type == :reload_depot })
     end
   end
 
@@ -1079,6 +1111,7 @@ class Wrappers::PyVRPTest < Minitest::Test
           refute route.key?(:visits)
         }
         types = payload[:routes].first[:activities].map{ |activity| activity[:type] }
+
         assert_includes types, 'client'
         assert_includes types, 'depot'
         empty_result
@@ -1092,7 +1125,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     require 'open3'
 
     python = @pyvrp.send(:pyvrp_python)
-    script = <<~'PY'
+    script = <<~PY
       import sys
       sys.path.insert(0, '.')
       from wrappers.pyvrp_wrapper import build_solve_params
@@ -1121,7 +1154,8 @@ class Wrappers::PyVRPTest < Minitest::Test
     PY
 
     stdout, stderr, status = Open3.capture3(python, '-c', script, chdir: File.expand_path('../..', __dir__))
-    assert status.success?, "#{stderr}\n#{stdout}"
+
+    assert_predicate status, :success?, "#{stderr}\n#{stdout}"
     assert_includes stdout, 'ok'
   end
 
@@ -1129,7 +1163,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     require 'open3'
 
     python = @pyvrp.send(:pyvrp_python)
-    script = <<~'PY'
+    script = <<~PY
       import sys
       sys.path.insert(0, '.')
       from wrappers.pyvrp_wrapper import ProblemData
@@ -1153,7 +1187,8 @@ class Wrappers::PyVRPTest < Minitest::Test
     PY
 
     stdout, stderr, status = Open3.capture3(python, '-c', script, chdir: File.expand_path('../..', __dir__))
-    assert status.success?, "#{stderr}\n#{stdout}"
+
+    assert_predicate status, :success?, "#{stderr}\n#{stdout}"
     assert_includes stdout, 'ok'
   end
 
@@ -1161,7 +1196,7 @@ class Wrappers::PyVRPTest < Minitest::Test
     require 'open3'
 
     python = @pyvrp.send(:pyvrp_python)
-    script = <<~'PY'
+    script = <<~PY
       import sys
       sys.path.insert(0, '.')
       from wrappers.pyvrp_wrapper import (
@@ -1207,7 +1242,31 @@ class Wrappers::PyVRPTest < Minitest::Test
     PY
 
     stdout, stderr, status = Open3.capture3(python, '-c', script, chdir: File.expand_path('../..', __dir__))
-    assert status.success?, "#{stderr}\n#{stdout}"
+
+    assert_predicate status, :success?, "#{stderr}\n#{stdout}"
     assert_includes stdout, 'ok'
+  end
+
+  def test_visit_fits_capacity_between_precedence
+    # Guard against `a + b - c.between?(0, limit)` (true coerced into Integer)
+    vrp = TestHelper.create(
+      matrices: @minimal_problem[:matrices],
+      points: @minimal_problem[:points],
+      units: [{ id: 'kg' }],
+      vehicles: [{
+        id: 'vehicle_0',
+        start_point_id: 'point_0',
+        matrix_id: 'matrix_0',
+        capacities: [{ unit_id: 'kg', limit: 10 }]
+      }],
+      services: [{
+        id: 'service_0',
+        activity: { point_id: 'point_1' },
+        quantities: [{ unit_id: 'kg', value: 3 }]
+      }]
+    )
+
+    assert @pyvrp.send(:visit_fits_capacity?, vrp.vehicles.first, vrp.services.first, {})
+    refute @pyvrp.send(:visit_fits_capacity?, vrp.vehicles.first, vrp.services.first, { 'kg' => 8000 })
   end
 end

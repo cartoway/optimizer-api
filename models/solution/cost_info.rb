@@ -29,7 +29,7 @@ module Models
       field :exclusion, default: 0
 
       def vrp_result(options = {})
-        hash = super(options)
+        hash = super
         hash['total'] = total
         hash
       end

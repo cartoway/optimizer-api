@@ -33,11 +33,11 @@ module Models
     def initialize(hash)
       hash[:original_id] ||= hash[:id]
 
-      super(hash)
+      super
     end
 
     def vrp_result(options = {})
-      hash = super(options)
+      hash = super
 
       if options[:vehicle]
         hash[:duration] = duration_on(options[:vehicle])

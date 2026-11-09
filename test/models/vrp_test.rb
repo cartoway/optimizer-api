@@ -33,6 +33,7 @@ module Models
       new_vrp = TestHelper.create(vrp)
 
       expected_range = Models::Range.create({ start: 2, end: 7 })
+
       assert_equal expected_range.start, new_vrp.configuration.schedule.range_indices.start
       assert_equal expected_range.end, new_vrp.configuration.schedule.range_indices.end
 
@@ -44,30 +45,36 @@ module Models
       }
       new_vrp = TestHelper.create(vrp)
       expected_range = Models::Range.create({ start: 0, end: 7 })
+
       assert_equal expected_range.start, new_vrp.configuration.schedule.range_indices.start
       assert_equal expected_range.end, new_vrp.configuration.schedule.range_indices.end
     end
 
     def test_visits_computation
       vrp = TestHelper.create(VRP.periodic_seq_timewindows)
+
       assert_equal vrp.services.size, vrp.visits
 
       vrp = TestHelper.create(VRP.periodic_seq_timewindows)
       vrp.services.each{ |service| service.visits_number *= 2 }
+
       assert_equal 2 * vrp.services.size, vrp.visits
 
       vrp = TestHelper.create(VRP.periodic_seq_timewindows)
       vrp.services.each{ |service| service.visits_number = rand(100) }
+
       assert_equal vrp.services.sum(&:visits_number), vrp.visits
     end
 
     def test_vrp_periodic
       vrp = VRP.toy
       vrp = TestHelper.create(vrp)
+
       refute vrp.configuration.schedule&.range_indices
 
       vrp = VRP.periodic_seq_timewindows
       vrp = TestHelper.create(vrp)
+
       assert vrp.configuration.schedule&.range_indices
     end
 
@@ -85,6 +92,7 @@ module Models
       }
 
       vrp = TestHelper.create(problem)
+
       assert_equal [[4], [5]], vrp.configuration.schedule.months_indices
     end
 
@@ -94,6 +102,7 @@ module Models
       vrp[:services][0][:unavailable_visit_day_date] = [Date.new(2020, 1, 1)]
       vrp[:services][1][:unavailable_visit_day_date] = [Date.new(2020, 1, 2)]
       created_vrp = TestHelper.create(vrp)
+
       assert_equal Set[2], created_vrp.services[0].unavailable_days
       assert_equal Set[3], created_vrp.services[1].unavailable_days
     end
@@ -113,11 +122,13 @@ module Models
     def test_solver_parameter_retrocompatibility
       vrp = VRP.basic
       generated_vrp = TestHelper.create(vrp)
+
       assert generated_vrp.configuration.resolution.solver
       assert_empty generated_vrp.configuration.preprocessing.first_solution_strategy, 'first_solution_strategy'
 
       vrp[:configuration][:resolution][:solver_parameter] = -1
       generated_vrp = TestHelper.create(vrp)
+
       refute generated_vrp.configuration.resolution.solver
       assert_empty generated_vrp.configuration.preprocessing.first_solution_strategy, 'first_solution_strategy'
 
@@ -128,6 +139,7 @@ module Models
         vrp = VRP.basic
         vrp[:configuration][:resolution][:solver_parameter] = heuristic_reference
         generated_vrp = TestHelper.create(vrp)
+
         assert generated_vrp.configuration.resolution.solver
         assert_equal [heuristic], generated_vrp.configuration.preprocessing.first_solution_strategy
       }
@@ -155,6 +167,7 @@ module Models
         }]
 
         generated_vrp = TestHelper.create(vrp)
+
         assert_equal 3, generated_vrp.relations.size
         assert_equal 2, generated_vrp.relations.first.linked_service_ids.size
         assert_includes generated_vrp.relations.first.linked_service_ids, 'shipment_0_delivery'
@@ -171,6 +184,7 @@ module Models
         lapse: 3
       }]
       generated_vrp = TestHelper.create(vrp)
+
       assert_includes generated_vrp.relations.first.linked_service_ids, 'service'
       assert_includes generated_vrp.relations.first.linked_service_ids, 'shipment_1_pickup'
 
@@ -179,6 +193,7 @@ module Models
         linked_service_ids: ['service', 'shipment_0', 'shipment_1']
       }]
       generated_vrp = TestHelper.create(vrp)
+
       assert_includes generated_vrp.relations.first.linked_service_ids, 'service'
       assert_includes generated_vrp.relations.first.linked_service_ids, 'shipment_0_pickup'
       assert_includes generated_vrp.relations.first.linked_service_ids, 'shipment_1_pickup'
@@ -204,22 +219,26 @@ module Models
       problem[:configuration][:schedule] = { range_indices: { start: 0, end: 7 }}
 
       vrp = TestHelper.create(problem)
+
       assert_equal Set[5, 6], vrp.vehicles.first.unavailable_days
 
       problem[:vehicles].first[:timewindow] = { start: 0, end: 1000 }
       problem[:vehicles].first[:unavailable_work_day_indices] = [5, 6]
       vrp = TestHelper.create(problem)
+
       assert_equal Set[5, 6], vrp.vehicles.first.unavailable_days
 
       problem[:vehicles].first.delete(:timewindow)
       problem[:vehicles].first[:unavailable_work_day_indices] = [5, 6]
       problem[:vehicles].first[:sequence_timewindows] = [{ start: 0, end: 1000 }]
       vrp = TestHelper.create(problem)
+
       assert_equal Set[5, 6], vrp.vehicles.first.unavailable_days
 
       problem[:vehicles].first[:sequence_timewindows] = [{ start: 0, end: 1000, day_index: 0 }]
       problem[:vehicles].first[:unavailable_work_day_indices] = [5, 6]
       vrp = TestHelper.create(problem)
+
       assert_empty vrp.vehicles.first.unavailable_days,
                    'This vehicle is only available on mondays, we can ignore weekd-end unavailable_days'
 
@@ -228,11 +247,13 @@ module Models
       problem[:vehicles].first[:sequence_timewindows] =
         [0, 5, 6].collect{ |day_index| { start: 0, end: 1000, day_index: day_index } }
       vrp = TestHelper.create(problem)
+
       assert_equal Set[5, 6], vrp.vehicles.first.unavailable_days
     end
 
     def test_remove_unnecessary_units
       vrp = TestHelper.load_vrp(self)
+
       assert_empty vrp.units
       vrp.vehicles.all?{ |v| v.capacities.empty? }
       vrp.services.all?{ |s| s.quantities.empty? }
@@ -240,10 +261,11 @@ module Models
 
     def test_remove_unnecessary_units_one_needed
       vrp = TestHelper.load_vrp(self)
+
       assert_equal 1, vrp.units.size
-      assert_operator vrp.vehicles.collect{ |v| v.capacities.collect(&:unit_id) }.flatten!.uniq!,
-                      :==,
-                      vrp.services.collect{ |s| s.quantities.collect(&:unit_id) }.flatten!.uniq!
+      assert_equal vrp.vehicles.collect{ |v| v.capacities.collect(&:unit_id) }.flatten!.uniq!, vrp.services.collect{ |s|
+        s.quantities.collect(&:unit_id)
+      }.flatten!.uniq!
     end
 
     def test_vrp_creation_if_route_and_partitions
@@ -260,11 +282,12 @@ module Models
       }
 
       vrp = TestHelper.create(vrp)
-      assert_equal 2, (vrp.services.count{ |s| s.skills.any? })
+
+      assert_equal(2, vrp.services.count{ |s| s.skills.any? })
       assert_includes(vrp.services.find{ |s| s.id == 'service_1' }.skills,
-                      "sticky_skill_#{vrp.vehicles.first.id}".to_sym)
+                      :"sticky_skill_#{vrp.vehicles.first.id}")
       assert_includes(vrp.services.find{ |s| s.id == 'service_7' }.skills,
-                      "sticky_skill_#{vrp.vehicles.last.id}".to_sym)
+                      :"sticky_skill_#{vrp.vehicles.last.id}")
     end
 
     def test_transform_route_indice_into_index
@@ -305,6 +328,7 @@ module Models
         lapse: 2
       }]
       Models::Vrp.filter(vrp)
+
       refute_empty vrp[:relations]
 
       vrp = VRP.lat_lon_two_vehicles
@@ -313,6 +337,7 @@ module Models
         linked_vehicle_ids: vrp[:vehicles].collect{ |v| v[:id] }
       }]
       Models::Vrp.filter(vrp)
+
       refute_empty vrp[:relations] # do not reject even if no lapse, lapse is not mandatory
     end
 
@@ -322,6 +347,7 @@ module Models
       vrp[:services].first[:skills] = [:skill_to_output]
 
       created_vrp = TestHelper.create(vrp)
+
       assert_equal 1, created_vrp.services.first.skills.size
       assert_equal created_vrp.services.first.original_skills.size, created_vrp.services.first.skills.size
     end
@@ -333,11 +359,14 @@ module Models
         linked_ids: ['service_1', 'service_2']
       }]
       Models::Vrp.filter(vrp)
+
       assert_equal 1, vrp[:relations].size
 
       vrp[:relations] << vrp[:relations].first
+
       assert_equal 2, vrp[:relations].size
       Models::Vrp.filter(vrp)
+
       assert_equal 1, vrp[:relations].size
     end
 
@@ -346,12 +375,14 @@ module Models
       problem[:relations] = [{ type: :same_vehicle, linked_ids: ['service_1', 'service_2'] }]
 
       created_vrp = Models::Vrp.create(problem)
+
       assert(created_vrp.relations.none?{ |relation| relation.type == :same_vehicle })
       assert(created_vrp.relations.any?{ |relation| relation.type == :same_route })
 
       problem[:relations] = [{ type: :same_vehicle, linked_ids: ['service_1', 'service_2'] }]
       problem[:configuration][:preprocessing] = { partitions: TestHelper.vehicle_and_days_partitions }
       created_vrp = Models::Vrp.create(problem)
+
       assert(created_vrp.relations.any?{ |relation| relation.type == :same_vehicle })
       assert(created_vrp.relations.none?{ |relation| relation.type == :same_route })
     end
@@ -362,6 +393,7 @@ module Models
       problem[:relations].first[:lapse] = 2
 
       created_vrp = Models::Vrp.create(problem)
+
       assert_nil problem[:relations].first[:lapse]
       assert_equal [2], created_vrp.relations.first.lapses
 
@@ -371,6 +403,7 @@ module Models
       problem[:relations].first[:lapse] = 2
 
       created_vrp = Models::Vrp.create(problem)
+
       assert_nil problem[:relations].first[:lapse]
       assert_equal [2, 2], created_vrp.relations.first.lapses
     end
@@ -393,6 +426,7 @@ module Models
       problem[:configuration][:schedule] = { range_date: { start: Date.new(2021, 7, 20), end: Date.new(2021, 7, 29) }}
 
       created_vrp = TestHelper.create(problem)
+
       assert_equal [0], created_vrp.services[0].first_possible_days
       assert_equal [4], created_vrp.services[1].first_possible_days # July 23rd corresponds to first Friday in period
       assert_equal [1], created_vrp.services[0].last_possible_days
@@ -449,10 +483,12 @@ module Models
 
       vrp.services.pop(2)
       vrp_hash = vrp.as_json
+
       assert_equal 1, vrp_hash[:relations].first[:linked_service_ids].size
 
       vrp.services.pop(1)
       vrp_hash = vrp.as_json
+
       assert_empty vrp_hash[:relations]
     end
   end

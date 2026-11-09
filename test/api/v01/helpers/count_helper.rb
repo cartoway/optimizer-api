@@ -19,7 +19,7 @@ require './test/test_helper'
 
 module TestHelper
   def clear_optim_redis_count
-    OptimizerWrapper.config[:redis_count].keys.select{ |key| key =~ /optimizer:/ }.each do |to_remove|
+    OptimizerWrapper.config[:redis_count].keys.grep(/optimizer:/).each do |to_remove|
       OptimizerWrapper.config[:redis_count].del(to_remove)
     end
   end

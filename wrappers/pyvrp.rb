@@ -15,6 +15,7 @@ module Wrappers
     /x
     END_ITERS_LINE = /Search terminated in (?<time>[\d.]+)s after (?<iters>\d+) iterations/
     END_COST_LINE = /Best-found solution has cost (?<cost>-?[\d.eE+]+)/
+    VISIT_ACTIVITY_KINDS = %w[client pickup delivery].freeze
 
     def solver_constraints
       super + [
@@ -111,7 +112,7 @@ module Wrappers
               stops << reload_stop if reload_stop
               next
             end
-            next unless %w[client pickup delivery].include?(kind)
+            next unless VISIT_ACTIVITY_KINDS.include?(kind)
 
             visit_index = activity[:idx]
             service = @service_index_map[visit_index]
@@ -315,7 +316,7 @@ module Wrappers
     end
 
     def distance_horizon(vrp)
-      vehicle_max = vrp.vehicles.map(&:distance).compact.max
+      vehicle_max = vrp.vehicles.filter_map(&:distance).max
       matrix_bound = max_matrix_cell(vrp, :distance) || max_matrix_cell(vrp, :time)
       # n_services hops is 10^8–10^9 m on large instances. A per-vehicle hop
       # count still leaves slack for unbalanced *and* random infeasible routes
@@ -406,8 +407,8 @@ module Wrappers
       @skills_index_hash = skill_dimension_index(vrp)
       used_matrices = vrp.vehicles.map(&:matrix_id).uniq
       matrices = used_matrices.map { |id| vrp.matrices.find { |m| m.id == id } }
-      distance_matrices = matrices.map(&:distance).compact
-      duration_matrices = matrices.map { |matrix| matrix.time&.map(&:itself) }.compact
+      distance_matrices = matrices.filter_map(&:distance)
+      duration_matrices = matrices.filter_map { |matrix| matrix.time&.map(&:itself) }
       apply_setup_to_duration_matrices(vrp, duration_matrices)
 
       distance_matrices = duration_matrices if distance_matrices.empty?
@@ -494,7 +495,7 @@ module Wrappers
       all_units = vrp.units.index_by(&:id)
 
       vrp.vehicles.map { |veh|
-        capacity_hash = all_units.map{ |id, _unit| [id, unbounded_unit_capacity(id)] }.to_h
+        capacity_hash = all_units.to_h{ |id, _unit| [id, unbounded_unit_capacity(id)] }
         veh.capacities.each do |capacity|
           capacity_hash[capacity.unit_id] =
             if capacity.limit
@@ -541,8 +542,8 @@ module Wrappers
         activity = service.activity
         point = activity.point
 
-        delivery_hash = all_units.map { |id, _| [id, 0] }.to_h
-        pickup_hash = all_units.map { |id, _| [id, 0] }.to_h
+        delivery_hash = all_units.to_h { |id, _| [id, 0] }
+        pickup_hash = all_units.to_h { |id, _| [id, 0] }
 
         service.quantities.each do |quantity|
           delivery_hash[quantity.unit_id] = (quantity.delivery * CUSTOM_QUANTITY_BIGNUM).round if quantity.delivery
@@ -591,7 +592,7 @@ module Wrappers
         end
       end
 
-      service_to_client_indices.each do |_service_id, indices|
+      service_to_client_indices.each_value do |indices|
         next unless indices.size > 1
 
         service = @service_index_map[indices.first]
@@ -721,8 +722,7 @@ module Wrappers
         if delivery[unit_id].positive? && pickup[unit_id].zero?
           (route_loads["delivery_sum:#{unit_id}"] || 0) + delivery[unit_id] <= limit
         else
-          (route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id] <= limit &&
-            (route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id] >= 0
+          ((route_loads[unit_id] || 0) + pickup[unit_id] - delivery[unit_id]).between?(0, limit)
         end
       end
     end
@@ -916,15 +916,15 @@ module Wrappers
     def build_routes(vrp)
       return if vrp.routes.empty?
 
-      vrp.routes.map{ |route|
-        next if route.missions.none?{ |mission| mission.is_a?(Models::Service) }
+      vrp.routes.filter_map{ |route|
+        next if route.missions.none?(Models::Service)
 
         vehicle_type = vrp.vehicles.find_index{ |v| v.id == route.vehicle.id }
         {
           activities: build_route_activities(route),
           vehicle_type: vehicle_type
         }
-      }.compact
+      }
     end
 
     def build_route_activities(route)
@@ -942,7 +942,7 @@ module Wrappers
     end
 
     def pyvrp_python
-      env_python = ENV['PYVRP_PYTHON']
+      env_python = ENV.fetch('PYVRP_PYTHON', nil)
       return env_python if env_python && !env_python.empty?
 
       venv_python = '/opt/pyenv/bin/python3'
@@ -1014,10 +1014,10 @@ module Wrappers
       if @thread&.alive? # Need to kill the job and its children if it is still alive
         child_pids = []
         IO.popen("ps -ef | grep #{@thread.pid}") { |io|
-          child_pids = io.readlines.map do |line|
+          child_pids = io.readlines.filter_map do |line|
             parts = line.split(/\s+/)
             parts[1].to_i if parts[2] == @thread.pid.to_s
-          end.compact || []
+          end || []
         }
         child_pids << @thread.pid
         child_pids.each{ |pid| Process.kill('KILL', pid) }
