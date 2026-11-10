@@ -983,12 +983,12 @@ module Interpreters
           }
         checksum = Digest::MD5.hexdigest Marshal.dump(values)
         if !score_hash.key?(checksum)
-          log "Restart: #{restart} score: #{limit_score} ratio_metric: #{c.cut_limit} iterations: #{c.iterations}",
+          log "Restart: #{restart} score: #{limit_score} ratio_metric: #{c.cut_limit} iterations: #{c.iteration}",
               level: :debug
           log "Balance: #{values.min}   #{values.max}    #{values.min - values.max}    " \
               "#{(values.sum / values.size).to_i}    #{((values.max - values.min) * 100.0 / values.max).round(2)}%",
               level: :debug
-          score_hash[checksum] = { iterations: c.iterations, limit_score: limit_score, restart: restart,
+          score_hash[checksum] = { iterations: c.iteration, limit_score: limit_score, restart: restart,
                                    ratio_metric: c.cut_limit, min: values.min, max: values.max,
                                    sum: values.sum, size: values.size }
         end

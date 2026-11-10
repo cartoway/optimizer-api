@@ -48,8 +48,9 @@ gem 'mustermann', '~> 3.1'
 gem 'rest-client'
 
 # AI
+# Still needed for hierarchical CompleteLinkage / AverageLinkage clusterers.
 gem 'ai4r'
-gem 'balanced_vrp_clustering', github: 'cartoway/balanced_vrp_clustering', branch: 'bump'
+gem 'balanced_vrp_clustering', '~> 0.4' # 0.4+ vendors Ai4r::DataSet/Clusterer (no ai4r runtime dep)
 
 # Geo
 gem 'polylines'
