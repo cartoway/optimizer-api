@@ -40,7 +40,7 @@ gem 'i18n'
 gem 'redis', '<4'
 gem 'resque', '<2'
 # Hard fork: upstream quirkey/resque-status dead since 2015 (pinned resque ~> 1.19)
-gem 'resque-status', github: 'cartoway/resque-status'
+gem 'resque-status', github: 'cartoway/resque-status', tag: 'v0.6.0'
 # Keep mustermann 3.x: mustermann 4 pulls Sinatra 1.0 via resolver (Sinatra 2–4 pin ~> 3.0)
 gem 'mustermann', '~> 3.1'
 
