@@ -34,6 +34,11 @@ module OptimizerWrapper
       @@current_job_id = id
     end
 
+    # Keep the marshalled VRP off the status hash (listings / Hash.get); worker still receives it.
+    def self.status_options(options)
+      options.reject{ |key, _value| key.to_s == 'services_vrps' }
+    end
+
     def perform
       Job.current_job_id = self.uuid
       tick('Starting job') # Important to kill job before any code
@@ -69,16 +74,8 @@ module OptimizerWrapper
         }
       )
 
-      # The worker is about to launch the optimization, we can delete the vrp from the job
+      # Drop the blob from the worker process once loaded (never stored on the status hash).
       self.options['services_vrps'] = nil
-
-      # Re-set the job on Redis
-      value = JSON.parse(OptimizerWrapper::REDIS.get(Resque::Plugins::Status::Hash.status_key(self.uuid)))
-      value['name'] = nil
-      value['options']['services_vrps'] = nil
-      # Expire is defined resque config
-      OptimizerWrapper::REDIS.set(Resque::Plugins::Status::Hash.status_key(self.uuid),
-                                  Resque::Plugins::Status::Hash.encode(value))
 
       ask_restitution_csv = services_vrps.any?{ |s_v| s_v.vrp.configuration.restitution.csv }
       ask_restitution_geojson = services_vrps.flat_map{ |s_v| s_v.vrp.configuration.restitution.geometry }.uniq

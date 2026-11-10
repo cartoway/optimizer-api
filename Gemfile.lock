@@ -1,6 +1,7 @@
 GIT
   remote: https://github.com/cartoway/resque-status.git
-  revision: 1e6351a573c46c6a4dd60e80f5748e84e5156f27
+  revision: 1ba1a7409d958a35a3830e59efca3a5fe58592a1
+  tag: v0.6.0
   specs:
     resque-status (0.6.0)
       resque (>= 1.19)
