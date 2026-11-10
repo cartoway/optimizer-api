@@ -18,6 +18,22 @@
 require './test/test_helper'
 
 class Wrappers::OrtoolsTest < Minitest::Test
+  def test_instance_file_survives_gc
+    ortools = OptimizerWrapper.config[:services][:ortools]
+    problem = OrtoolsVrp::Problem.new(
+      vehicles: [OrtoolsVrp::Vehicle.new(id: 'v0', time_window: OrtoolsVrp::TimeWindow.new(start: 0, end: 10))],
+      services: [OrtoolsVrp::Service.new(id: 's0', matrix_index: 0, duration: 1)],
+      matrices: [OrtoolsVrp::Matrix.new(size: 1, time: [0], distance: [0])]
+    )
+
+    path = ortools.send(:write_instance_file!, problem)
+    1000.times { Object.new }
+    GC.start
+
+    assert File.exist?(path), 'Tempfile GC must not unlink the OR-Tools instance before tsp_simple reads it'
+    assert_operator File.size(path), :>, 0
+  end
+
   def test_minimal_problem
     ortools = OptimizerWrapper.config[:services][:ortools]
     problem = {

@@ -434,10 +434,12 @@ module Wrappers
     end
 
     def write_instance_file!(problem)
-      @ortools_instance_path ||= Tempfile.new(['optimize-or-tools-input', '.pb'], @tmp_dir,
-                                              binmode: true).tap(&:close).path
-      File.binwrite(@ortools_instance_path, OrtoolsVrp::Problem.encode(problem))
-      @ortools_instance_path
+      # Keep the Tempfile alive: discarding it lets GC unlink the path before tsp_simple reads it
+      # ("Failed to parse pbf"), which ActiveSupport 8 allocations make much more likely.
+      @ortools_instance_file ||= Tempfile.new(['optimize-or-tools-input', '.pb'], @tmp_dir,
+                                              binmode: true).tap(&:close)
+      File.binwrite(@ortools_instance_file.path, OrtoolsVrp::Problem.encode(problem))
+      @ortools_instance_file.path
     end
 
     def ortools_output_file
