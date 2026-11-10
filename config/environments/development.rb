@@ -58,7 +58,7 @@ module OptimizerWrapper
   OptimizerLogger.caller_location = ENV['CALLER_LOCATION']&.to_sym || :absolute
 
   @@c = {
-    product_title: 'Optimizers API',
+    product_title: 'Optimizer API',
     access_by_api_key: {
       file: './config/access.rb'
     },
