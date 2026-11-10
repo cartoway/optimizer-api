@@ -941,17 +941,11 @@ module Interpreters
         restart_data_items = restart.zero? ? data_items : dup_kmeans_plain(baseline_data_items)
         restart_related_item_indices =
           restart.zero? ? related_item_indices : dup_kmeans_plain(baseline_related_item_indices)
-        begin
-          c.build(Ai4r::Data::DataSet.new(data_items: restart_data_items),
-                  options[:cut_symbol],
-                  restart_related_item_indices,
-                  ratio,
-                  options)
-        rescue Exception => e # rubocop:disable Lint/RescueException -- Rust engine raises fatal on invalid centroids
-          raise ArgumentError.new(e.message) if e.message.to_s.include?('Incompatible centroid init')
-
-          raise
-        end
+        c.build(Ai4r::Data::DataSet.new(data_items: restart_data_items),
+                options[:cut_symbol],
+                restart_related_item_indices,
+                ratio,
+                options)
 
         c.clusters.delete([])
         values = c.clusters.collect{ |cluster| cluster.data_items.sum{ |i| i[3][options[:cut_symbol]] }.to_i }
