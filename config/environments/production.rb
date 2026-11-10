@@ -26,7 +26,6 @@ require './lib/cache_manager'
 require './util/logger'
 
 module OptimizerWrapper
-  ActiveSupport::Cache.lookup_store :redis_store
   TMP_DIR = File.join(Dir.tmpdir, 'optimizer-api', 'tmp')
   FileUtils.mkdir_p(TMP_DIR) unless File.directory?(TMP_DIR)
   @@tmp_vrp_dir = CacheManager.new(TMP_DIR)

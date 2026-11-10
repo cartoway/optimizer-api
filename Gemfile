@@ -20,12 +20,12 @@ gem 'grape-swagger', '~> 2.1', '>= 2.1.3' # 2.1.3+ allows grape < 4; 2.2 needs R
 gem 'grape-swagger-entity'
 
 # Models
-gem 'actionpack', '>= 7.2', require: 'action_dispatch'
+gem 'actionpack', '>= 8.0', require: 'action_dispatch'
 # waiting for the following PRs to get merged and "released!"
 # https://github.com/zilkey/active_hash/pull/231 and https://github.com/zilkey/active_hash/pull/233
 gem 'active_hash'
-gem 'activemodel', '>= 7.2'
-gem 'activesupport', '>= 7.2', require: 'active_support'
+gem 'activemodel', '>= 8.0'
+gem 'activesupport', '>= 8.0', require: 'active_support'
 gem 'google-protobuf', '>=3', require: 'google/protobuf'
 gem 'oj'
 # json 3 removed quirks_mode; Grape formatter still passes it
@@ -103,8 +103,4 @@ group :test do
   gem 'rack-test', require: 'rack/test'
   gem 'simplecov', require: false
   gem 'webmock', require: 'webmock/minitest'
-end
-
-group :production do
-  gem 'redis-activesupport'
 end
