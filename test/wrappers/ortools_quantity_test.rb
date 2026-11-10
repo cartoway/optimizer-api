@@ -11,6 +11,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -18,7 +19,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.value
+      assert_in_delta(1.001, activity.loads.first.quantity.value)
     }
   end
 
@@ -31,6 +32,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
+
     assert_equal 2, solutions[0].unassigned_stops.size, 'The result is expected to contain 2 unassigned'
 
     problem = VRP.basic
@@ -41,8 +43,12 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
-    assert solutions[0].routes.first.stops.index{ |act| act.service_id == problem[:services].last[:id] } <
-           solutions[0].routes.first.stops.index{ |act| act.service_id == problem[:services].first[:id] }
+
+    assert_operator(solutions[0].routes.first.stops.index{ |act|
+      act.service_id == problem[:services].last[:id]
+    }, :<, solutions[0].routes.first.stops.index{ |act|
+             act.service_id == problem[:services].first[:id]
+           })
   end
 
   def test_quantity_precision_with_pickup
@@ -55,6 +61,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -62,7 +69,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.pickup
+      assert_in_delta(1.001, activity.loads.first.quantity.pickup)
     }
   end
 
@@ -76,6 +83,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -83,7 +91,7 @@ class Wrappers::OrtoolsQuantityTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.delivery
+      assert_in_delta(1.001, activity.loads.first.quantity.delivery)
     }
   end
 end

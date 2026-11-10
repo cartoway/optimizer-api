@@ -21,7 +21,7 @@ class HelperTest < Minitest::Test
   def test_rounding_with_steps
     decimal_max = 4
 
-    floats = (0..10**decimal_max - 1).collect{ |i| Rational(i, 10**decimal_max) }
+    floats = (0..(10**decimal_max - 1)).collect{ |i| Rational(i, 10**decimal_max) }
 
     allowed_difference = {
       '1 3': { size: 250, max: 0.01 },
@@ -45,20 +45,21 @@ class HelperTest < Minitest::Test
         # https://stackoverflow.com/a/51728872/1200528 # Ruby changed the defaults for round with a backport in 2.3.5
         if Gem::Version.new('2.3.5') <= Gem::Version.new(RUBY_VERSION)
           assert_equal manual, rounded,
-                       "floats[#{rounded.find_index.with_index{ |r, i| r - manual[i] != 0 }}].to_f."\
+                       "floats[#{rounded.find_index.with_index{ |r, i| r - manual[i] != 0 }}].to_f." \
                        "round_with_steps(#{decimal}, #{step}) does not produce the correct result"
         else
           allowed_diff = allowed_difference[:"#{decimal} #{step}"]
-          if !allowed_diff.nil?
+          if allowed_diff.nil?
+            assert_equal manual, rounded,
+                         "floats[#{rounded.find_index.with_index{ |r, i| r - manual[i] != 0 }}].to_f." \
+                         "round_with_steps(#{decimal}, #{step}) does not produce the correct result"
+          else
             diff = rounded.collect.with_index{ |r, i| (r - manual[i]).round(15) if r - manual[i] != 0 }.compact
+
             assert_equal allowed_diff[:size], diff.size,
                          "There are more or less rounding errors then expected in Ruby #{RUBY_VERSION}"
             assert_equal allowed_diff[:max], diff.max,
                          "There are more or less rounding errors then expected in Ruby #{RUBY_VERSION}"
-          else
-            assert_equal manual, rounded,
-                         "floats[#{rounded.find_index.with_index{ |r, i| r - manual[i] != 0 }}].to_f."\
-                         "round_with_steps(#{decimal}, #{step}) does not produce the correct result"
           end
         end
       }

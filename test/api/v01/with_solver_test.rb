@@ -32,8 +32,10 @@ class Api::V01::WithSolverTest < Minitest::Test
       vrp = VRP.lat_lon.deep_merge!({ configuration: { restitution: { intermediate_solutions: true }}})
       @job_id = submit_vrp api_key: 'ortools', vrp: vrp
       response = wait_avancement_match @job_id, /run optimization, iterations [0-9]+/, api_key: 'ortools'
+
       refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
       response = delete_job @job_id, api_key: 'ortools'
+
       refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
     end
     delete_completed_job @job_id, api_key: 'ortools' if @job_id
@@ -46,6 +48,7 @@ class Api::V01::WithSolverTest < Minitest::Test
 
       @job_id = submit_vrp api_key: 'ortools', vrp: vrp
       response = wait_avancement_match @job_id, /run optimization, iterations [0-9]+/, api_key: 'ortools'
+
       refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
 
       response['solutions'].to_a.each{ |solution|
@@ -54,6 +57,7 @@ class Api::V01::WithSolverTest < Minitest::Test
             refute_nil activity['point_id']
             refute_nil activity['type']
             refute_nil activity['service_id'] if activity['type'] == 'service'
+
             assert_nil activity['travel_time']
             assert_nil activity['travel_distance']
             assert_nil activity['detail']
@@ -62,6 +66,7 @@ class Api::V01::WithSolverTest < Minitest::Test
       }
 
       response = delete_job @job_id, api_key: 'ortools'
+
       refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
     end
     delete_completed_job @job_id, api_key: 'ortools' if @job_id
@@ -84,6 +89,7 @@ class Api::V01::WithSolverTest < Minitest::Test
 
       @job_id = submit_vrp api_key: 'solvers', vrp: problem
       result = wait_status @job_id, 'completed', api_key: 'solvers'
+
       assert_equal 'vroom', result['solutions'][0]['solvers'][0], "result['solutions'][0]['solvers'][0]"
       assert_equal 'ortools', result['solutions'][0]['solvers'][1], "result['solutions'][0]['solvers'][1]"
     end
@@ -97,6 +103,7 @@ class Api::V01::WithSolverTest < Minitest::Test
       vrp[:configuration][:resolution][:duration] = 20
       @job_id = submit_vrp api_key: 'ortools', vrp: vrp
       result = wait_status @job_id, 'completed', api_key: 'ortools'
+
       assert_operator result['job']['graph'].size, :>, 1,
                       'Graph seems to have been overwritten at each call to blockcall'
     end
@@ -127,6 +134,7 @@ class Api::V01::WithSolverTest < Minitest::Test
       vrp[:configuration][:restitution][:intermediate_solutions] = true
       @job_id = submit_vrp api_key: 'ortools', vrp: vrp
       result = wait_avancement_match(@job_id, /run optimization, iterations [1-9]+/, api_key: 'ortools')
+
       assert_equal 'Duplicate empty service.', result['solutions'].first['unassigned'].first['reason']
     end
     delete_job(@job_id, api_key: 'ortools') if @job_id

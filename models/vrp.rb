@@ -30,6 +30,8 @@ module Models
     include ExpandData
     include PeriodicService
 
+    SHIPMENT_KEYS_TO_DELETE = %i[pickup delivery direct maximum_inroute_duration].freeze
+
     field :name, default: nil
     field :router, default: OptimizerWrapper.router(OptimizerWrapper.config[:router][:api_key]), as_json: :none
 
@@ -87,7 +89,7 @@ module Models
     end
 
     def as_json(options = {})
-      hash = super(options)
+      hash = super
 
       service_ids = hash[:services]&.map{ |service| service[:id] } || []
       vehicle_ids = hash[:vehicles]&.map{ |vehicle| vehicle[:id] } || []
@@ -142,7 +144,7 @@ module Models
     end
 
     def unassigned_visits(unassigned_with_reason)
-      unassigned_hash = unassigned_with_reason.map{ |un| [un.id, un.reason] }.to_h
+      unassigned_hash = unassigned_with_reason.to_h{ |un| [un.id, un.reason] }
       if self.schedule?
         self.services.flat_map{ |service|
           Array.new(service.visits_number) { |visit_index|
@@ -210,11 +212,11 @@ module Models
           service = Oj.load(Oj.dump(shipment))
           service[:original_id] = shipment[:id]
           service[:id] += "_#{part}"
-          service[:id] += '_conv' while service_ids.any?{ |id| id == service[:id] } # protect against id clash
+          service[:id] += '_conv' while service_ids.any?(service[:id]) # protect against id clash
           @linked_ids[shipment[:id]] << service[:id]
           service[:type] = part.to_sym
           service[:activity] = service[part]
-          %i[pickup delivery direct maximum_inroute_duration].each{ |key| service.delete(key) }
+          SHIPMENT_KEYS_TO_DELETE.each{ |key| service.delete(key) }
 
           if part == :delivery
             service[:quantities]&.each{ |quantity|
@@ -255,13 +257,13 @@ module Models
             relation[:linked_service_ids][id_i] = pickup_service_id # which will be in same_route as delivery
           }
         when :sequence, :order
-          if relation[:linked_service_ids].any?{ |id| id == shipment_id }
-            msg = 'Relation between shipment pickup and delivery should be explicitly '\
+          if relation[:linked_service_ids].any?(shipment_id)
+            msg = 'Relation between shipment pickup and delivery should be explicitly ' \
                   'specified for `:sequence` and `:order` relations.'
             raise OptimizerWrapper::DiscordantProblemError.new(msg)
           end
         else
-          if relation[:linked_service_ids].any?{ |id| id == shipment_id }
+          if relation[:linked_service_ids].any?(shipment_id)
             msg = "Relations of type #{relation[:type]} cannot be linked using the shipment object."
             raise OptimizerWrapper::DiscordantProblemError.new(msg)
           end
@@ -475,7 +477,7 @@ module Models
 
       # TODO : remove this filter, VRP with duplicated relations should not be accepted
       uniq_relations = []
-      hash[:relations].group_by{ |r| r[:type] }.each{ |_type, relations_set|
+      hash[:relations].group_by{ |r| r[:type] }.each_value{ |relations_set|
         uniq_relations += relations_set.uniq
       }
       hash[:relations] = uniq_relations
@@ -549,9 +551,9 @@ module Models
       convert_possible_dates_into_indices(element, hash, start_index)
 
       element[:first_possible_days] =
-        element[:first_possible_day_indices].to_a.slice(0..(element[:visits_number] || 1) - 1)
+        element[:first_possible_day_indices].to_a.slice(0..((element[:visits_number] || 1) - 1))
       element[:last_possible_days] =
-        element[:last_possible_day_indices].to_a.slice(0..(element[:visits_number] || 1) - 1)
+        element[:last_possible_day_indices].to_a.slice(0..((element[:visits_number] || 1) - 1))
 
       %i[first_possible_day_indices first_possible_dates last_possible_day_indices last_possible_dates].each{ |k|
         element.delete(k)
@@ -716,7 +718,7 @@ module Models
         total_service_time = services.sum{ |service| service.activity.duration.to_i }
 
         # TODO: It assumes there is only one uniq location for all vehicle starts and ends
-        depot = vehicles.collect(&:start_point).compact[0]
+        depot = vehicles.filter_map(&:start_point)[0]
         approx_depot_time_correction =
           if depot.nil?
             0

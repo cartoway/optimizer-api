@@ -73,9 +73,10 @@ class HeuristicTest < Minitest::Test
 
       vrp.vehicles = []
       s = Wrappers::PeriodicHeuristic.new(vrp)
-      assert_equal 2, (s.instance_variable_get(:@services_assignment).count{ |_id, data|
-                         data[:unassigned_reasons].any?
-                       })
+
+      assert_equal(2, s.instance_variable_get(:@services_assignment).count{ |_id, data|
+        data[:unassigned_reasons].any?
+      })
     end
 
     def test_compute_best_common_tw_when_no_conflict_tw
@@ -95,6 +96,7 @@ class HeuristicTest < Minitest::Test
       vrp.vehicles = []
       s = Wrappers::PeriodicHeuristic.new(vrp)
       data_services = s.instance_variable_get(:@services_data)
+
       assert(data_services['service_1'][:tws_sets].first.all?{ |tw| tw[:start] == 5 && tw[:end] == 10 })
       assert(s.instance_variable_get(:@services_assignment).none?{ |_id, data| data[:unassigned_reasons].any? })
     end
@@ -116,6 +118,7 @@ class HeuristicTest < Minitest::Test
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
       data_services = s.instance_variable_get(:@services_data)
+
       assert_equal 6, data_services.size
       assert_nil data_services['service_1'][:heuristic_period]
       assert_equal 7, data_services['service_2'][:heuristic_period]
@@ -132,6 +135,7 @@ class HeuristicTest < Minitest::Test
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
       data_services = s.instance_variable_get(:@services_data)
+
       assert_equal 7, data_services['service_1'][:heuristic_period]
 
       s.instance_variable_set(
@@ -149,6 +153,7 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(:@services_assignment, s_a)
       s.instance_variable_set(:@points_assignment, p_a)
       s.send(:clean_stops, s.instance_variable_get(:@candidate_routes)['vehicle_0'][0][:stops].first[:id])
+
       assert_equal 0, s.instance_variable_get(:@candidate_routes)['vehicle_0'][0][:stops].size
       assert_equal 0, s.instance_variable_get(:@candidate_routes)['vehicle_0'][7][:stops].size
     end
@@ -188,8 +193,10 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(:@services_assignment, s_a)
       s.instance_variable_set(:@points_assignment, p_a)
       data_services = s.instance_variable_get(:@services_data)
+
       assert_equal 3, data_services['service_1'][:heuristic_period]
       s.send(:clean_stops, s.instance_variable_get(:@candidate_routes)['vehicle_0'][0][:stops].first[:id])
+
       assert(s.instance_variable_get(:@candidate_routes).all?{ |_key, data| data.all?{ |_k, d| d[:stops].empty? } })
     end
 
@@ -220,9 +227,10 @@ class HeuristicTest < Minitest::Test
 
       candidate_routes = s.instance_variable_get(:@candidate_routes)
       uninserted_number = s.instance_variable_get(:@services_assignment).sum{ |_id, data| data[:missing_visits] }
+
       assert_equal vrp.visits, candidate_routes.sum{ |_v, d| d.sum{ |_day, route| route[:stops].size } } +
                                uninserted_number
-      assert starting_with > uninserted_number
+      assert_operator starting_with, :>, uninserted_number
       assert_equal vrp.visits,
                    candidate_routes.sum{ |_v_id, v_routes| v_routes.sum{ |_day, day_route| day_route[:stops].size } } +
                    s.instance_variable_get(:@services_assignment).sum{ |_id, data| data[:missing_visits] }
@@ -245,8 +253,10 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(:@points_assignment, p_a)
       s.instance_variable_get(:@candidate_services_ids).delete('service_1')
       s.instance_variable_get(:@candidate_services_ids).delete('service_2')
+
       assert_equal vrp.services.size - 2, s.instance_variable_get(:@candidate_services_ids).size
       s.send(:clean_stops, 'service_1')
+
       assert_empty s.instance_variable_get(:@candidate_routes)['vehicle_0'][0][:stops]
       # service 2 can be assigned again :
       assert_empty(s.instance_variable_get(:@services_assignment)['service_2'][:unassigned_reasons])
@@ -399,7 +409,8 @@ class HeuristicTest < Minitest::Test
                                                           0)
           back_depot
         }
-      assert_operator times_back_to_depot[0], :!=, times_back_to_depot[1]
+
+      refute_equal times_back_to_depot[0], times_back_to_depot[1]
     end
 
     def test_positions_provided
@@ -514,7 +525,8 @@ class HeuristicTest < Minitest::Test
       service = { id: 'service_3', point_id: 'point_3', duration: 0 }
 
       set = s.send(:insertion_route_info_with_tw, timewindow, route_data, service, 0)
-      assert set.last < 10086, "#{set.last} should be the best value among all activities' value"
+
+      assert_operator set.last, :<, 10086, "#{set.last} should be the best value among all activities' value"
     end
 
     def test_remove_poorly_populated_routes
@@ -562,6 +574,7 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(:@candidate_routes, candidate_route.deep_dup)
       s.instance_variable_set(:@still_removed, {})
       s.send(:remove_poorly_populated_routes)
+
       assert_empty s.instance_variable_get(:@candidate_routes)['vehicle_0'][0][:stops]
       (1..3).each{ |day|
         refute_empty s.instance_variable_get(:@candidate_routes)['vehicle_0'][day][:stops]
@@ -578,6 +591,7 @@ class HeuristicTest < Minitest::Test
       s.instance_variable_set(:@points_assignment, p_a)
       s.instance_variable_set(:@still_removed, {})
       s.send(:remove_poorly_populated_routes)
+
       (0..3).each{ |day|
         assert_empty s.instance_variable_get(:@candidate_routes)['vehicle_0'][day][:stops]
       }
@@ -619,6 +633,7 @@ class HeuristicTest < Minitest::Test
 
       s.instance_variable_set(:@still_removed, {})
       s.send(:remove_poorly_populated_routes)
+
       (0..3).each{ |day|
         assert_empty s.instance_variable_get(:@candidate_routes)['vehicle_0'][day][:stops]
       }
@@ -652,6 +667,7 @@ class HeuristicTest < Minitest::Test
       )
 
       sequences = s.send(:deduce_sequences, 'service_2', 3, [0, 1, 2, 4, 5, 6])
+
       assert_equal [[0, 2, 4], [0, 2, 5], [1, 4, 6], [2, 4, 6], []], sequences
       s.instance_variable_set(:@still_removed, {'service_2' => 3})
       s.send(:reaffect_removed_visits)
@@ -663,9 +679,11 @@ class HeuristicTest < Minitest::Test
       }
 
       sequences = s.send(:deduce_sequences, 'service_1', 7, [0, 1, 2, 3, 4, 5, 6])
+
       assert_equal [[0, 1, 2, 3, 4, 5, 6]], sequences
       s.instance_variable_set(:@still_removed, {'service_1' => 7})
       s.send(:reaffect_removed_visits)
+
       assert((0..6).all?{ |day| new_routes['vehicle_0'][day][:stops].any?{ |stop| stop[:id]&.include?('service_1') } })
       s.send(:remove_poorly_populated_routes)
       new_routes = s.instance_variable_get(:@candidate_routes)
@@ -691,8 +709,9 @@ class HeuristicTest < Minitest::Test
 
         periodic = Interpreters::PeriodicVisits.new(vrp)
         periodic.send(:compute_possible_days, vrp)
+
         assert_equal 0, vrp.services.first.last_possible_days.first,
-                     "There are #{visits_number} working days, hence a service "\
+                     "There are #{visits_number} working days, hence a service " \
                      "with #{visits_number} visits can only start at day 0"
       }
     end
@@ -713,6 +732,7 @@ class HeuristicTest < Minitest::Test
 
       vrp = TestHelper.create(vrp)
       Interpreters::PeriodicVisits.new(vrp) # call to function compute_possible_days
+
       assert_equal 261, vrp.services.first.last_possible_days.size
       assert_equal 0, vrp.services.first.last_possible_days.first,
                    'There are 261 working days, hence a service with 261 visits can only start at day 0'
@@ -725,12 +745,14 @@ class HeuristicTest < Minitest::Test
       problem[:configuration][:schedule][:range_indices][:end] = 40
       vrp = TestHelper.create(problem)
       Interpreters::PeriodicVisits.new(vrp) # call to function compute_possible_days
+
       assert_equal [2, 4, 39, 40], vrp.services.first.last_possible_days
 
       problem[:services][0][:first_possible_day_indices] = [2, 4]
       problem[:services][0][:minimum_lapse] = 3
       vrp = TestHelper.create(problem)
       Interpreters::PeriodicVisits.new(vrp) # call to function compute_possible_days
+
       assert_equal [2, 5, 8, 11], vrp.services.first.first_possible_days
     end
 
@@ -773,7 +795,8 @@ class HeuristicTest < Minitest::Test
       vrp = TestHelper.create(raw_vrp)
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
-      assert_equal [6, 5, 2], (s.instance_variable_get(:@services_data).collect{ |_id, data| data[:heuristic_period] })
+
+      assert_equal([6, 5, 2], s.instance_variable_get(:@services_data).collect{ |_id, data| data[:heuristic_period] })
 
       raw_vrp[:vehicles].first.delete(:timewindow)
       raw_vrp[:vehicles].first[:sequence_timewindows] = [{ start: 0, end: 20, day_index: 0 }]
@@ -781,9 +804,9 @@ class HeuristicTest < Minitest::Test
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
       # only one route per week, lapse should be multiple of 7
-      assert_equal [7, 7, nil], (s.instance_variable_get(:@services_data).collect{ |_id, data|
-                                   data[:heuristic_period]
-                                 })
+      assert_equal([7, 7, nil], s.instance_variable_get(:@services_data).collect{ |_id, data|
+        data[:heuristic_period]
+      })
       assert_equal 3, s.instance_variable_get(:@services_assignment)['service_3'][:missing_visits],
                    'service_3 can no have a lapse multiple of 7, we can reject it immediatly'
 
@@ -796,16 +819,17 @@ class HeuristicTest < Minitest::Test
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
       # all days are allowed again
-      assert_equal [6, 5, 2], (s.instance_variable_get(:@services_data).collect{ |_id, data| data[:heuristic_period] })
+      assert_equal([6, 5, 2], s.instance_variable_get(:@services_data).collect{ |_id, data| data[:heuristic_period] })
 
       raw_vrp[:vehicles].last.delete(:timewindow)
       raw_vrp[:vehicles][1][:sequence_timewindows] = [{ start: 0, end: 20, day_index: 2 }]
       vrp = TestHelper.create(raw_vrp)
       vrp.vehicles = TestHelper.expand_vehicles(vrp)
       s = Wrappers::PeriodicHeuristic.new(vrp)
-      assert_equal [7, 7, nil], (s.instance_variable_get(:@services_data).collect{ |_id, data|
-                                   data[:heuristic_period]
-                                 })
+
+      assert_equal([7, 7, nil], s.instance_variable_get(:@services_data).collect{ |_id, data|
+        data[:heuristic_period]
+      })
       assert_equal 3, s.instance_variable_get(:@services_assignment)['service_3'][:missing_visits],
                    'service_3 can no have a lapse multiple of 7, we can reject it immediatly'
     end
@@ -837,21 +861,26 @@ class HeuristicTest < Minitest::Test
 
       vrp.services.first.first_possible_days = [0, 1, 2, 3]
       vrp.services.first.last_possible_days = [4, 2, 3, 8]
+
       assert s.send(:day_in_possible_interval, 'service_1', 0)
       s.instance_variable_get(:@services_assignment)['service_1'][:days] = [0]
       # only one visit can be assigned to a given day / in a given set
       refute s.send(:day_in_possible_interval, 'service_1', 0)
       s.instance_variable_get(:@services_assignment)['service_1'][:days] = [0, 1, 2]
+
       refute s.send(:day_in_possible_interval, 'service_1', 2)
       assert s.send(:day_in_possible_interval, 'service_1', 4)
       s.instance_variable_get(:@services_assignment)['service_1'][:days] = [0, 1, 2, 4]
+
       refute s.send(:day_in_possible_interval, 'service_1', 7)
 
       vrp.services.first.first_possible_days = [0, 1, 2, 5]
       vrp.services.first.last_possible_days = [4, 3, 3, 8]
       s.instance_variable_get(:@services_assignment)['service_1'][:days] = []
+
       assert s.send(:day_in_possible_interval, 'service_1', 1)
       s.instance_variable_get(:@services_assignment)['service_1'][:days] = [1]
+
       assert s.send(:day_in_possible_interval, 'service_1', 1) # this case will be avoided by compute days
       refute s.send(:compatible_days, 'service_1', 1)
     end
@@ -876,6 +905,7 @@ class HeuristicTest < Minitest::Test
         s.instance_variable_get(:@services_assignment)['service_1'][:days] = used_days
         s.instance_variable_get(:@services_assignment)['service_1'][:missing_visits] = 5 - used_days.size
         services_assignment = s.send(:compute_visits_number)
+
         assert_equal assigned, services_assignment['service_1'][:assigned_indices]
         assert_equal unassigned, services_assignment['service_1'][:unassigned_indices]
       }

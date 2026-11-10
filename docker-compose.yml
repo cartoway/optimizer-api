@@ -1,5 +1,8 @@
 x-default-service: &default-service
-  build: .
+  build:
+    context: .
+    args:
+      OPTIMIZER_ORTOOLS_VERSION: ${OPTIMIZER_ORTOOLS_VERSION:-v111.0.0}
   image: ghcr.io/cartoway/optimizer-api:${CARTOROUTE_VERSION:-dev}
   environment: &default-environment
     APP_ENV: ${APP_ENV:-development}

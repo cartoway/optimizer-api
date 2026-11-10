@@ -8,39 +8,39 @@ module Core
             raise 'Computed waiting times are invalid' if ENV['APP_ENV'] != 'production'
           end
 
-          waiting_times = solution.routes.map{ |route| route.info.total_waiting_time }.compact
+          waiting_times = solution.routes.filter_map{ |route| route.info.total_waiting_time }
           durations =
             solution.routes.map{ |route|
-              route.stops.map{ |stop|
+              route.stops.filter_map{ |stop|
                 stop.info.departure_time && (stop.info.departure_time - stop.info.begin_time)
-              }.compact
+              }
             }
           previous_point_id = nil
           setup_durations =
             solution.routes.map{ |route|
-              route.stops.map{ |stop|
+              route.stops.filter_map{ |stop|
                 next if stop.type == :rest
 
                 setup = (previous_point_id.nil? || previous_point_id != stop.activity.point_id) &&
                         stop.activity.setup_duration_on(route.vehicle) || 0
                 previous_point_id = stop.activity.point_id
                 setup
-              }.compact
+              }
             }
           total_time = solution.info.total_time || 0
           total_travel_time = solution.info.total_travel_time || 0
           if total_time != (total_travel_time || 0) +
                            waiting_times.sum +
-                           (setup_durations.flatten.reduce(&:+) || 0) +
-                           (durations.flatten.reduce(&:+) || 0)
+                           (setup_durations.flatten.sum || 0) +
+                           (durations.flatten.sum || 0)
 
             log_string = 'Computed times are invalid'
             tags = {
               total_time: total_time,
               total_travel_time: total_travel_time,
               waiting_time: waiting_times.sum,
-              setup_durations: setup_durations.flatten.reduce(&:+),
-              durations: durations.flatten.reduce(&:+)
+              setup_durations: setup_durations.flatten.sum,
+              durations: durations.flatten.sum
             }
             log log_string, tags.merge(level: :warn)
             # raise 'Computed times are invalid' if ENV['APP_ENV'] != 'production'

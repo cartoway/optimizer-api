@@ -191,8 +191,8 @@ module Filters
         unified_timewindows.each{ |s_key, s_value|
           next if key == s_key || s_value.include?(key) || value.include?(s_key)
 
-          next unless value[:start] >= s_value[:start] &&
-                      value[:start] <= s_value[:end] || value[:end] >= s_value[:start] && value[:end] <= s_value[:end]
+          next unless value[:start].between?(s_value[:start],
+                                             s_value[:end]) || value[:end].between?(s_value[:start], s_value[:end])
 
           inter[key].each{ |k_value| inter[k_value] << s_key }
           inter[s_key].each{ |k_value| inter[k_value] << key }
@@ -232,7 +232,7 @@ module Filters
     }
 
     vrp.vehicles.each{ |v|
-      v.skills = v.skills.map{ |s| s&.uniq&.sort }.compact.uniq
+      v.skills = v.skills.filter_map{ |s| s&.uniq&.sort }.uniq
     }
 
     # Remove infeasible skills

@@ -128,10 +128,11 @@ module Wrappers
     def assert_services_no_late_multiplier(vrp)
       vrp.services.none?{ |service|
         if service.activity
-          service.activity&.timewindows&.size&.positive? && service.activity&.late_multiplier&.positive?
+          activity = service.activity
+          activity.timewindows&.size&.positive? && activity.late_multiplier&.positive?
         else
           service.activities.none?{ |activity|
-            activity&.timewindows&.size&.positive? && activity&.late_multiplier&.positive?
+            activity.timewindows&.size&.positive? && activity.late_multiplier&.positive?
           }
         end
       }
@@ -155,7 +156,7 @@ module Wrappers
     def assert_correctness_matrices_vehicles_and_points_definition(vrp)
       # Either there is no matrix and all points are with a location
       # or all points and vehicles have matrix_index and matrix_id, respectively
-      (vrp.matrices.count{ |matrix| matrix[:time] || matrix[:distance] }.zero? && vrp.points.all?(&:location)) ||
+      (vrp.matrices.none?{ |matrix| matrix[:time] || matrix[:distance] } && vrp.points.all?(&:location)) ||
         (vrp.points.all?(&:matrix_index) && vrp.vehicles.all?(&:matrix_id))
     end
 
@@ -164,7 +165,7 @@ module Wrappers
         next true if r.linked_service_ids.empty? && r.linked_vehicle_ids.empty?
         next false unless r.type == :shipment && r.linked_service_ids.size == 2
 
-        quantities = Hash.new {}
+        quantities = {}
         vrp.units.each{ |unit| quantities[unit.id] = [] }
         r.linked_services.first.quantities.each{ |q| quantities[q.unit.id] << q.value }
         r.linked_services.last.quantities.each{ |q| quantities[q.unit.id] << q.value }
@@ -358,7 +359,7 @@ module Wrappers
 
     def assert_lat_lon_for_partition(vrp)
       vrp.configuration.preprocessing&.partitions.to_a.empty? ||
-        vrp.points.all?{ |pt| pt&.location&.lat && pt&.location&.lon }
+        vrp.points.all?{ |pt| pt&.location&.lat && pt&.location.lon }
     end
 
     def assert_vehicle_entity_only_before_work_day(vrp)
@@ -394,11 +395,8 @@ module Wrappers
     def assert_not_too_many_visits_in_route(vrp)
       vrp.routes.to_a.collect{ |r| r[:mission_ids] }.flatten.group_by{ |id| id }.all?{ |id, set|
         corresponding_service = vrp.services.find{ |s| s[:id] == id }
-        if corresponding_service.nil?
-          true # not to send a confusing error to user, this is detected in assert_missions_in_routes_do_exist
-        else
-          set.size <= corresponding_service.visits_number
-        end
+        # nil is accepted here; assert_missions_in_routes_do_exist reports the real error
+        corresponding_service.nil? || set.size <= corresponding_service.visits_number
       }
     end
 
@@ -594,7 +592,7 @@ module Wrappers
       return false if service.last_possible_days.any?{ |d| d < vrp.configuration.schedule.range_indices[:start] }
 
       consistency_for_each_visit =
-        (0..service.visits_number - 1).none?{ |v_i|
+        (0..(service.visits_number - 1)).none?{ |v_i|
           service.first_possible_days[v_i] &&
             service.last_possible_days[v_i] &&
             service.first_possible_days[v_i] > service.last_possible_days[v_i]
@@ -641,7 +639,7 @@ module Wrappers
           vrp, service, matrices_by_id: matrices_by_id, vehicle_ctx_by_id: vehicle_ctx_by_id
         )
           add_unassigned(unfeasible, vrp, service,
-                         'Service cannot be performed by any compatible vehicle while '\
+                         'Service cannot be performed by any compatible vehicle while ' \
                          'respecting duration, timewindow and day limits')
         end
 
@@ -813,14 +811,14 @@ module Wrappers
     def no_compatible_vehicle_with_enough_capacity(vrp, service)
       no_vehicle_with_compatible_skills(vrp, service) if service.vehicle_compatibility.nil?
 
-      s_quantities = service.quantities.map{ |quantity|
+      s_quantities = service.quantities.filter_map{ |quantity|
         next if quantity.empty # empty operation value is an upper-bound
 
         val = quantity.value
         next if val.nil? || val == 0 # zero qty cannot exceed capacity
 
         [quantity.unit_id, val.abs]
-      }.compact.to_h
+      }.to_h
 
       # No positive/absolute demand: capacity cannot eliminate any vehicle.
       return vrp.vehicles.none?{ |v| service.vehicle_compatibility[v.id] } if s_quantities.empty?
@@ -972,23 +970,21 @@ module Wrappers
               (
                 ctx[:duration].nil? ||
                 time_to_go + activity_duration + time_to_return <= ctx[:duration]
-              ) && (
-                (activity.timewindows.empty? ? implicit_timewindow : activity.timewindows).any?{ |s_tw|
-                  s_tw_end = s_tw.safe_end(activity_late)
-                  tw_bounds.any?{ |v_start, v_end, v_day|
-                    # vehicle has a tw that can serve service in time (incl. travel if it exists)
-                    (s_tw.day_index.nil? || v_day.nil? || s_tw.day_index == v_day) &&
-                      v_start + time_to_go <= s_tw_end &&
-                      [s_tw.start, v_start + time_to_go].max + activity_duration + time_to_return <= v_end &&
-                      ( # either not schedule or there should be a day in which both vehicle and service are available
-                        !schedule ||
-                          schedule_day_compatible?(
-                            range_start, range_end, s_tw.day_index, v_day, service_unav, ctx[:unavailable_days]
-                          )
-                      )
-                  }
-                }
-              )
+              ) && (activity.timewindows.empty? ? implicit_timewindow : activity.timewindows).any?{ |s_tw|
+                     s_tw_end = s_tw.safe_end(activity_late)
+                     tw_bounds.any?{ |v_start, v_end, v_day|
+                       # vehicle has a tw that can serve service in time (incl. travel if it exists)
+                       (s_tw.day_index.nil? || v_day.nil? || s_tw.day_index == v_day) &&
+                         v_start + time_to_go <= s_tw_end &&
+                         [s_tw.start, v_start + time_to_go].max + activity_duration + time_to_return <= v_end &&
+                         ( # either not schedule or there should be a day in which both vehicle and service are available
+                           !schedule ||
+                             schedule_day_compatible?(
+                               range_start, range_end, s_tw.day_index, v_day, service_unav, ctx[:unavailable_days]
+                             )
+                         )
+                     }
+                   }
           }
       }
 
@@ -1082,14 +1078,14 @@ module Wrappers
       vrp_subfields_to_check = %i[points relations rests routes services units vehicles].freeze
 
       simplifications.each{ |simplification|
-        expected_vrp_subfield_counts = vrp_subfields_to_check.map{ |subfield| [subfield, vrp.send(subfield).size] }.to_h
+        expected_vrp_subfield_counts = vrp_subfields_to_check.to_h{ |subfield| [subfield, vrp.send(subfield).size] }
 
         simplification_activated = self.send(simplification, vrp, nil, mode: :simplify)
 
         if simplification_activated
           log "#{simplification} simplification is activated"
         else
-          actual_vrp_subfield_counts = vrp_subfields_to_check.map{ |subfield| [subfield, vrp.send(subfield).size] }.to_h
+          actual_vrp_subfield_counts = vrp_subfields_to_check.to_h{ |subfield| [subfield, vrp.send(subfield).size] }
 
           next unless expected_vrp_subfield_counts != actual_vrp_subfield_counts
 

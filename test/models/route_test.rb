@@ -12,6 +12,7 @@ class RouteTest < Minitest::Test
     assert_equal %w[service_1 service_2], route.mission_ids
 
     route.mission_ids = %w[service_3]
+
     assert_equal %w[service_3], route.mission_ids
     assert_equal 1, route.missions.size
   end

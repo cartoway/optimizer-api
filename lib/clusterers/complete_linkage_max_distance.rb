@@ -57,19 +57,18 @@ module Ai4r
 
         update_compatibility_matrix(ci, cj)
 
-        distances_to_new_cluster = []
         new_clusters_compatibility = @compatibility_matrix.last
-        (0..cj - 1).each do |cx|
-          distances_to_new_cluster <<
-            (new_clusters_compatibility[cx] ? [@distance_matrix[ci - 1][cx],
-                                               @distance_matrix[cj - 1][cx]].max : @max_distance + 1)
-        end
-        (cj + 1..ci - 1).each do |cx|
+        distances_to_new_cluster =
+          (0..(cj - 1)).map do |cx|
+            new_clusters_compatibility[cx] ? [@distance_matrix[ci - 1][cx],
+                                              @distance_matrix[cj - 1][cx]].max : @max_distance + 1
+          end
+        ((cj + 1)..(ci - 1)).each do |cx|
           distances_to_new_cluster <<
             (new_clusters_compatibility[cx - 1] ? [@distance_matrix[ci - 1][cx],
                                                    @distance_matrix[cx - 1][cj]].max : @max_distance + 1)
         end
-        (ci + 1..@distance_matrix.length).each do |cx|
+        ((ci + 1)..@distance_matrix.length).each do |cx|
           distances_to_new_cluster <<
             (new_clusters_compatibility[cx - 2] ? [@distance_matrix[cx - 1][ci],
                                                    @distance_matrix[cx - 1][cj]].max : @max_distance + 1)
@@ -98,13 +97,13 @@ module Ai4r
         ci, cj = cj, ci if cj > ci
 
         compatibility_of_new_cluster = []
-        (0..cj - 1).each do |cx|
+        (0..(cj - 1)).each do |cx|
           compatibility_of_new_cluster << @compatibility_matrix[ci - 1][cx] && @compatibility_matrix[cj - 1][cx]
         end
-        (cj + 1..ci - 1).each do |cx|
+        ((cj + 1)..(ci - 1)).each do |cx|
           compatibility_of_new_cluster << @compatibility_matrix[ci - 1][cx] && @compatibility_matrix[cx - 1][cj]
         end
-        (ci + 1..@compatibility_matrix.length).each do |cx|
+        ((ci + 1)..@compatibility_matrix.length).each do |cx|
           compatibility_of_new_cluster << @compatibility_matrix[cx - 1][ci] && @compatibility_matrix[cx - 1][cj]
         end
 

@@ -7,9 +7,9 @@ module Core
 
           zone.vehicles =
             if zone.allocations.size == 1
-              zone.allocations[0].collect{ |vehicle_id| vrp.vehicles.find{ |vehicle| vehicle.id == vehicle_id } }.compact
+              zone.allocations[0].filter_map{ |vehicle_id| vrp.vehicles.find{ |vehicle| vehicle.id == vehicle_id } }
             else
-              zone.allocations.collect{ |alloc| vrp.vehicles.find{ |vehicle| vehicle.id == alloc.first } }.compact
+              zone.allocations.filter_map{ |alloc| vrp.vehicles.find{ |vehicle| vehicle.id == alloc.first } }
             end
 
           next if zone.vehicles.compact.empty?
@@ -22,14 +22,15 @@ module Core
         return unless vrp.points.all?(&:location)
 
         vrp.zones.each{ |zone|
-          related_ids = vrp.services.collect{ |service|
-            activity_loc = service.activity.point.location
+          related_ids =
+            vrp.services.filter_map{ |service|
+              activity_loc = service.activity.point.location
 
-            next unless zone.inside(activity_loc.lat, activity_loc.lon)
+              next unless zone.inside(activity_loc.lat, activity_loc.lon)
 
-            service.skills += [zone[:id].to_sym]
-            service.id
-          }.compact
+              service.skills += [zone[:id].to_sym]
+              service.id
+            }
 
           # Remove zone allocation verification if we need to assign zone without vehicle affectation together
           next unless zone.allocations.size > 1 && related_ids.size > 1

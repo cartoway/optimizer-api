@@ -123,6 +123,7 @@ class Wrappers::VroomTest < Minitest::Test
 
     vrp = TestHelper.create(@problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2, solution.routes.first.stops.size
@@ -133,6 +134,7 @@ class Wrappers::VroomTest < Minitest::Test
     @problem[:vehicles][0].delete(:end_point_id)
     vrp = TestHelper.create(@problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 1, solution.routes.first.stops.size
@@ -143,6 +145,7 @@ class Wrappers::VroomTest < Minitest::Test
     @problem[:vehicles][0][:end_point_id] = 'point_4'
     vrp = TestHelper.create(@problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2, solution.routes.first.stops.size
@@ -156,6 +159,7 @@ class Wrappers::VroomTest < Minitest::Test
     }
     vrp = TestHelper.create(@minimal_problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @minimal_problem[:services].size + 1, solution.routes.first.stops.size
@@ -179,11 +183,13 @@ class Wrappers::VroomTest < Minitest::Test
     }
     vrp = TestHelper.create(@problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2 + @problem[:vehicles][0][:rest_ids].size, solution.routes.first.stops.size
     stops = solution.routes.first.stops[1..-2].map(&:service_id)
     stops.compact!
+
     assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
     assert_equal(3, solution.routes[0][:stops].index{ |a| a[:rest_id] })
   end
@@ -206,11 +212,13 @@ class Wrappers::VroomTest < Minitest::Test
     }
     vrp = TestHelper.create(@problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2 + @problem[:vehicles][0][:rest_ids].size, solution.routes.first.stops.size
     stops = solution.routes.first.stops[1..-2].map(&:service_id)
     stops.compact!
+
     assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
     assert_equal 5, solution.routes.first.stops.index(&:rest_id)
   end
@@ -227,12 +235,14 @@ class Wrappers::VroomTest < Minitest::Test
     @problem[:vehicles][0][:rest_ids] = ['rest_a']
     vrp = TestHelper.create(@problem)
     solution = @vroom.solve(vrp)
+
     assert solution
     assert_equal 1, solution.routes.size
     assert_equal @problem[:services].size + 2 + @problem[:vehicles][0][:rest_ids].size,
                  solution.routes.first.stops.size
     stops = solution.routes.first.stops[1..-2].map(&:service_id)
     stops.compact!
+
     assert_equal @problem[:services].collect{ |s| s[:id] }.sort!, stops.sort!
     assert_equal 1, solution.routes.first.stops.index(&:rest_id)
   end
@@ -255,6 +265,7 @@ class Wrappers::VroomTest < Minitest::Test
     ) do
       OptimizerWrapper.wrapper_vrp('vroom', { services: { vrp: [:vroom] }}, TestHelper.create(vrp), nil)
     end
+
     assert_equal 1, vroom_counter
   end
 
@@ -262,6 +273,7 @@ class Wrappers::VroomTest < Minitest::Test
     vrp = VRP.basic
     vrp[:matrices].first[:distance] = vrp[:matrices].first[:time]
     solutions = OptimizerWrapper.wrapper_vrp('vroom', { services: { vrp: [:vroom] }}, TestHelper.create(vrp), nil)
+
     assert solutions[0].routes.all?{ |route|
              route.stops.empty? || route.info.total_time
            }, 'At least one route total_time was not provided'
@@ -276,11 +288,18 @@ class Wrappers::VroomTest < Minitest::Test
   def test_shipments
     vrp = TestHelper.create(VRP.pud)
     solution = @vroom.solve(vrp, 'test')
+
     assert solution
-    assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_0' } <
-           solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_0' }
-    assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_1' } <
-           solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_1' }
+    assert_operator(solution.routes.first.stops.index{ |activity|
+      activity.pickup_shipment_id == 'shipment_0'
+    }, :<, solution.routes.first.stops.index{ |activity|
+             activity.delivery_shipment_id == 'shipment_0'
+           })
+    assert_operator(solution.routes.first.stops.index{ |activity|
+      activity.pickup_shipment_id == 'shipment_1'
+    }, :<, solution.routes.first.stops.index{ |activity|
+             activity.delivery_shipment_id == 'shipment_1'
+           })
     assert_equal 0, solution.unassigned_stops.size
     assert_equal 6, solution.routes.first.stops.size
   end
@@ -295,11 +314,18 @@ class Wrappers::VroomTest < Minitest::Test
 
     vrp = TestHelper.create(problem)
     solution = @vroom.solve(vrp, 'test')
+
     assert solution
-    assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_0' } <
-           solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_0' }
-    assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_1' } <
-           solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_1' }
+    assert_operator(solution.routes.first.stops.index{ |activity|
+      activity.pickup_shipment_id == 'shipment_0'
+    }, :<, solution.routes.first.stops.index{ |activity|
+             activity.delivery_shipment_id == 'shipment_0'
+           })
+    assert_operator(solution.routes.first.stops.index{ |activity|
+      activity.pickup_shipment_id == 'shipment_1'
+    }, :<, solution.routes.first.stops.index{ |activity|
+             activity.delivery_shipment_id == 'shipment_1'
+           })
     assert_equal 0, solution.unassigned_stops.size
     assert_equal 6, solution.routes.first.stops.size
   end
@@ -385,6 +411,7 @@ class Wrappers::VroomTest < Minitest::Test
     }
     vrp = TestHelper.create(problem)
     solution = @vroom.solve(vrp, 'test')
+
     assert solution
     assert_equal(solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_0' } + 1,
                  solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_0' })
@@ -465,9 +492,13 @@ class Wrappers::VroomTest < Minitest::Test
     }
     vrp = TestHelper.create(problem)
     solution = @vroom.solve(vrp, 'test')
+
     assert solution
-    assert solution.routes.first.stops.index{ |activity| activity.pickup_shipment_id == 'shipment_1' } <
-           solution.routes.first.stops.index{ |activity| activity.delivery_shipment_id == 'shipment_1' }
+    assert_operator(solution.routes.first.stops.index{ |activity|
+      activity.pickup_shipment_id == 'shipment_1'
+    }, :<, solution.routes.first.stops.index{ |activity|
+             activity.delivery_shipment_id == 'shipment_1'
+           })
     assert_equal 0, solution.unassigned_stops.size
     assert_equal 5, solution.routes.first.stops.size
   end
@@ -480,9 +511,11 @@ class Wrappers::VroomTest < Minitest::Test
     problem[:vehicles].last[:skills] = [['s1']]
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:vroom] }}, TestHelper.create(problem), nil)
+
     assert_equal 2, solutions[0].routes.size
 
     skilled_route = solutions[0].routes.find{ |route| route.vehicle.id == problem[:vehicles].last[:id] }
+
     assert_equal problem[:services].size, skilled_route.stops.count(&:service_id)
   end
 
@@ -496,6 +529,7 @@ class Wrappers::VroomTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:vroom] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The solution is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -503,7 +537,7 @@ class Wrappers::VroomTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.value
+      assert_in_delta(1.001, activity.loads.first.quantity.value)
     }
   end
 
@@ -517,6 +551,7 @@ class Wrappers::VroomTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:vroom] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -524,7 +559,7 @@ class Wrappers::VroomTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.pickup
+      assert_in_delta(1.001, activity.loads.first.quantity.pickup)
     }
   end
 
@@ -538,6 +573,7 @@ class Wrappers::VroomTest < Minitest::Test
     }
 
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:vroom] }}, TestHelper.create(problem), nil)
+
     assert_equal 1, solutions[0].unassigned_stops.size, 'The result is expected to contain 1 unassigned'
 
     assert_operator solutions[0].routes.first.stops.count(&:service_id), :<=, 2,
@@ -545,7 +581,7 @@ class Wrappers::VroomTest < Minitest::Test
     solutions[0].routes.first.stops.each{ |activity|
       next unless activity.service_id
 
-      assert_equal 1.001, activity.loads.first.quantity.delivery
+      assert_in_delta(1.001, activity.loads.first.quantity.delivery)
     }
   end
 
@@ -576,10 +612,12 @@ class Wrappers::VroomTest < Minitest::Test
     vroom.send(:rest_equivalence, vrp)
     vroom.instance_variable_set(:@total_quantities, Hash.new(0))
     vehicles_payload = vroom.send(:collect_vehicles, vrp, [], [])
+
     assert_equal 55, vehicles_payload.first[:departure],
                  'String shift_preference must set VROOM departure (e.g. after dicho partial VRP rebuild)'
     vrp.vehicles.first[:shift_preference] = :force_start
     vehicles_payload_sym = vroom.send(:collect_vehicles, vrp, [], [])
+
     assert_equal 55, vehicles_payload_sym.first[:departure]
   end
 
@@ -660,6 +698,7 @@ class Wrappers::VroomTest < Minitest::Test
     solution = @vroom.solve(vrp, 'test')
     act_s_one = solution.routes.first.stops.find{ |act| act.service_id == 'service_1' }
     act_s_two = solution.routes.first.stops.find{ |act| act.service_id == 'service_2' }
+
     assert_equal 10, act_s_one.info.begin_time
     assert_equal 1, act_s_two.info.begin_time
   end
@@ -671,6 +710,7 @@ class Wrappers::VroomTest < Minitest::Test
     problem[:matrices].last[:time] = problem[:matrices].first[:time]
 
     vrp = TestHelper.create(problem)
+
     assert @vroom.solve(vrp, 'test')
   end
 
@@ -683,6 +723,7 @@ class Wrappers::VroomTest < Minitest::Test
     problem[:vehicles].last[:cost_time_multiplier] = 2
     problem[:vehicles].last[:cost_distance_multiplier] = 2
     vrp = TestHelper.create(problem)
+
     assert @vroom.solve(vrp, 'test')
   end
 
@@ -691,6 +732,7 @@ class Wrappers::VroomTest < Minitest::Test
     problem[:vehicles].first[:distance] = 0
     vrp = TestHelper.create(problem)
     solution = @vroom.solve(vrp, 'test')
+
     assert solution
     assert_equal problem[:services].size + 1,
                  solution.routes.find{ |r| r[:vehicle_id] == problem[:vehicles].last[:id] }.stops.size
@@ -960,10 +1002,12 @@ class Wrappers::VroomTest < Minitest::Test
 
     problem_json = @vroom.send(:vroom_problem, vrp, [:time, :distance])
     profile = problem_json[:vehicles].first[:profile]
+
     assert_operator problem_json[:matrices][profile][:durations][1][2], :>, 1000
     refute problem_json[:vehicles].first[:costs].key?(:per_km)
 
     solution = @vroom.solve(vrp)
+
     assert solution
 
     distance_matrix = vrp.matrices.first.distance
@@ -1034,10 +1078,12 @@ class Wrappers::VroomTest < Minitest::Test
                     :assert_no_ride_constraint
 
     solution = @vroom.solve(vrp)
+
     assert solution
 
     route = solution.routes.first
     service_stops = route.stops.select(&:service_id)
+
     assert_equal 2, service_stops.size
 
     previous_index = nil
@@ -1069,16 +1115,19 @@ class Wrappers::VroomTest < Minitest::Test
     }
 
     vrp = TestHelper.create(problem)
+
     refute_includes @vroom.inapplicable_solve?(vrp), :assert_no_service_duration_modifiers
     refute_includes @vroom.inapplicable_solve?(vrp), :assert_no_complex_setup_durations
 
     vroom_vrp = Wrappers::Vroom.new.send(:vroom_problem, vrp, [:time, :distance])
 
     types = vroom_vrp[:vehicles].map{ |vehicle| vehicle[:type] }
+
     assert_equal 2, types.uniq.size
-    assert(types.all?)
+    assert_predicate(types, :all?)
 
     job = vroom_vrp[:jobs].first
+
     assert_equal 100, job[:service]
     assert_equal 20, job[:setup]
 

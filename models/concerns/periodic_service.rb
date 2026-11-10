@@ -39,8 +39,8 @@ module PeriodicService
         if !v.unavailable_days.include?(current_day) &&
            (v.timewindow.nil? && v.sequence_timewindows.empty? ||
            (v.timewindow && (v.timewindow.day_index.nil? || current_day % 7 == v.timewindow.day_index)) ||
-           (v.sequence_timewindows.any?{ |tw| tw.day_index.nil? || current_day % 7 == tw.day_index }))
-          decimal_day += (service.minimum_lapse || 1)
+           v.sequence_timewindows.any?{ |tw| tw.day_index.nil? || current_day % 7 == tw.day_index })
+          decimal_day += service.minimum_lapse || 1
           current_day = decimal_day.round
           current_visit += 1
         else

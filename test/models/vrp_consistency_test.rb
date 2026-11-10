@@ -44,13 +44,14 @@ module Models
       vrp[:vehicles].last[:id] += '_dup'
       vrp[:vehicles].first[:end_point_id] = 'point_0' # for vehicle_trips
 
+      periodic_supported_relations = %i[force_end force_first never_first exclusive]
       [Models::Relation::NO_LAPSE_TYPES,
        Models::Relation::ONE_LAPSE_TYPES,
        Models::Relation::SEVERAL_LAPSE_TYPES].each_with_index{ |types, index|
         lapses = index.zero? ? [] : [1]
         types.each{ |rel_type|
           # those are supported with periodic heuristic
-          next if %i[force_end force_first never_first exclusive].include?(rel_type)
+          next if periodic_supported_relations.include?(rel_type)
 
           linked_ids = %w[service_1 service_2] if Models::Relation::ON_SERVICES_TYPES.include?(rel_type)
           linked_vehicle_ids = %w[vehicle_0 vehicle_0_dup] if Models::Relation::ON_VEHICLES_TYPES.include?(rel_type)
@@ -223,6 +224,7 @@ module Models
       end
 
       vrp[:configuration][:schedule] = { range_indices: { start: 0, end: 10 } }
+
       assert TestHelper.create(vrp) # no raise when schedule is provided
 
       vrp = VRP.pud
@@ -233,6 +235,7 @@ module Models
       end
 
       vrp[:configuration][:schedule] = { range_indices: { start: 0, end: 10 } }
+
       assert TestHelper.create(vrp) # no raise when no schedule is provided
     end
 
@@ -258,6 +261,7 @@ module Models
       vrp[:services].first[:unavailable_visit_day_indices] = [5]
       vrp[:services].first[:unavailable_index_ranges] = [{ start: 0, end: 7 }]
       vrp = TestHelper.create(vrp) # this should not raise
+
       assert_equal (4..7).to_a, vrp.services.first.unavailable_days.sort
     end
 
@@ -349,7 +353,7 @@ module Models
         assert_raises OptimizerWrapper::UnsupportedProblemError do
           check_consistency(TestHelper.coerce(vrp))
         end
-      assert_equal 'A service cannot be both a delivery and a pickup in different relations. '\
+      assert_equal 'A service cannot be both a delivery and a pickup in different relations. ' \
                    'Following services appear in multiple shipment relations both as pickup and delivery: ',
                    error.message, 'Error message does not match'
     end
@@ -376,11 +380,13 @@ module Models
       # multi-pickup single delivery
       vrp[:relations] = [{ type: 'shipment', linked_service_ids: ['service_1', 'service_3'] },
                          { type: 'shipment', linked_service_ids: ['service_2', 'service_3'] }]
+
       assert TestHelper.create(TestHelper.coerce(vrp)), 'Multi-pickup shipment should not be rejected'
 
       # single pickup multi-delivery
       vrp[:relations] = [{ type: 'shipment', linked_service_ids: ['service_1', 'service_3'] },
                          { type: 'shipment', linked_service_ids: ['service_1', 'service_2'] }]
+
       assert TestHelper.create(TestHelper.coerce(vrp)), 'Multi-delivery shipment should not be rejected'
     end
 
@@ -391,9 +397,10 @@ module Models
         assert_raises OptimizerWrapper::UnsupportedProblemError do
           check_consistency(vrp)
         end
-      expected_error_message = "There are vehicles or services with 'vehicle_partition_*', "\
-                               "'work_day_partition_*' skills. These skill patterns are reserved "\
+      expected_error_message = "There are vehicles or services with 'vehicle_partition_*', " \
+                               "'work_day_partition_*' skills. These skill patterns are reserved " \
                                'for internal use and they would lead to unexpected behaviour.'
+
       assert_equal expected_error_message, error.message
     end
 
@@ -622,6 +629,7 @@ module Models
       solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:demo] }}, vrp, nil)
 
       reasons = solutions[0].unassigned_stops.flat_map{ |u| u[:reason].split(' && ') }
+
       assert_empty reasons
       assert_empty solutions[0].unassigned_stops
       assert_equal 2, vrp.relations.size
@@ -632,6 +640,7 @@ module Models
       solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:demo] }}, vrp, nil)
 
       reasons = solutions[0].unassigned_stops.flat_map{ |u| u[:reason].split(' && ') }
+
       assert_includes reasons, 'Service belongs to a relation of type shipment which makes it infeasible'
       assert_equal 2, vrp.relations.size
     end

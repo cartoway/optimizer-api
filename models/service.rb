@@ -51,8 +51,8 @@ module Models
 
     # validates_inclusion_of :type, :in => %i(service pickup delivery)
 
-    has_many :skills, class_name: 'Symbol', type: Array[Symbol]
-    has_many :original_skills, class_name: 'Symbol', type: Array[Symbol]
+    has_many :skills, class_name: 'Symbol', type: [Symbol]
+    has_many :original_skills, class_name: 'Symbol', type: [Symbol]
 
     # vehicle_compatibility[v_id] == {true -> compatible, false -> incompatible, nil -> not checked yet}
     field :vehicle_compatibility, as_json: :none
@@ -71,7 +71,7 @@ module Models
         skill.to_s.include?('work_day_partition_')
       }
 
-      super(hash)
+      super
     end
   end
 end

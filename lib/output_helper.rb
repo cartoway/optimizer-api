@@ -85,7 +85,7 @@ module OutputHelper
 
             (activity[:detail][:quantities] || []).each{ |quantity|
               unit_ids << quantity[:unit]
-              quantities_header << I18n.t('export_file.stop.quantity', unit: (quantity[:label] || quantity[:unit]))
+              quantities_header << I18n.t('export_file.stop.quantity', unit: quantity[:label] || quantity[:unit])
             }
           }
         }
@@ -109,7 +109,7 @@ module OutputHelper
         }
       }.flatten.compact.max
 
-      timewindows_header = (0..max_timewindows_size.to_i - 1).collect{ |index|
+      timewindows_header = (0..(max_timewindows_size.to_i - 1)).collect{ |index|
         tw_index = index + (I18n.locale == :legacy ? 0 : 1)
         [I18n.t('export_file.stop.tw_start', index: tw_index), I18n.t('export_file.stop.tw_end', index: tw_index)]
       }.flatten
@@ -194,7 +194,7 @@ module OutputHelper
     def self.build_csv_timewindows(activity, max_timewindows_size)
       tws = activity[:detail][:timewindows]&.collect{ |tw| { start: tw[:start], end: tw[:end] } }.to_a.uniq
 
-      (0..max_timewindows_size - 1).collect{ |index|
+      (0..(max_timewindows_size - 1)).collect{ |index|
         if index < tws.size
           timewindow = tws.sort_by{ |tw| tw[:start] || 0 }[index]
 
@@ -287,10 +287,10 @@ module OutputHelper
         service_vrp.vrp.units.collect{ |unit|
           {
             unit_id: unit.id,
-            value: service_vrp.vrp.services.collect{ |service|
+            value: service_vrp.vrp.services.sum{ |service|
               service_quantity = service.quantities.find{ |quantity| quantity.unit_id == unit.id }
               service_quantity&.value || 0
-            }.reduce(&:+)
+            }
           }
         }
       duration =
@@ -300,11 +300,9 @@ module OutputHelper
         }
       {
         type: 'Feature',
-        properties: Hash[
-          unit_objects.collect{ |unit_object| [unit_object[:unit_id].to_sym, unit_object[:value]] } +
+        properties: (unit_objects.collect{ |unit_object| [unit_object[:unit_id].to_sym, unit_object[:value]] } +
           [[:duration, duration]] +
-          [[:vehicle, service_vrp.vrp.vehicles.size == 1 ? service_vrp.vrp.vehicles.first&.id : nil]]
-        ],
+          [[:vehicle, service_vrp.vrp.vehicles.size == 1 ? service_vrp.vrp.vehicles.first&.id : nil]]).to_h,
         geometry: {
           type: 'Polygon',
           coordinates: [hull + [hull.first]]
@@ -434,8 +432,8 @@ module OutputHelper
             color: compute_color(elements, entity, cluster_index),
             name: cluster_name.join('_'),
           }.merge(
-            Hash[quantities.collect{ |qty| [qty[:unit_id].to_sym, qty[:value]] }]
-          ).merge(Hash[:duration, duration]).merge(skills_properties),
+            quantities.to_h{ |qty| [qty[:unit_id].to_sym, qty[:value]] }
+          ).merge({duration: duration}).merge(skills_properties),
           geometry: {
             type: 'Polygon',
             coordinates: [hull + [hull.first]]
@@ -516,7 +514,7 @@ module OutputHelper
             type: 'Feature',
             properties: {
               color: color,
-              name: "#{route[:original_vehicle_id]}#{route[:day] ? '' : ", day #{route[:day]} route"}",
+              name: "#{route[:original_vehicle_id]}#{", day #{route[:day]} route" unless route[:day]}",
               vehicle: route[:original_vehicle_id],
               day: route[:day]
             }.merge(week_day),

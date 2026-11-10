@@ -30,44 +30,55 @@ module Models
       end
 
       vrp.vehicles.first.sequence_timewindows = []
+
       assert_equal 2**32, vrp.vehicles.first.work_duration
 
       vrp.vehicles.first.timewindow = { start: 10 }
+
       assert_equal 2**32, vrp.vehicles.first.work_duration
 
       vrp.vehicles.first.timewindow = { end: 10 }
+
       assert_equal 10, vrp.vehicles.first.work_duration
 
       vrp.vehicles.first.timewindow = { start: 10, end: 20 }
+
       assert_equal 10, vrp.vehicles.first.work_duration
 
       vrp.vehicles.first.duration = 5
+
       assert_equal 5, vrp.vehicles.first.work_duration
     end
 
     def test_total_work_time_in_range
       vrp = VRP.lat_lon_periodic
       vrp = TestHelper.create(vrp)
+
       assert_equal 32400 * 4, vrp.vehicles.first.total_work_time_in_range(0, 3)
 
       vrp.vehicles.first.reset_computed_data
       vrp.vehicles.first.duration = 5
+
       assert_equal 5 * 4, vrp.vehicles.first.total_work_time_in_range(0, 3)
 
       vrp.vehicles.first.reset_computed_data
       vrp.vehicles.first.timewindow = nil
+
       assert_equal 20, vrp.vehicles.first.total_work_time_in_range(0, 3) # because duration is still 5
 
       vrp.vehicles.first.reset_computed_data
       vrp.vehicles.first.duration = nil
+
       assert_equal 2**32, vrp.vehicles.first.total_work_time_in_range(0, 3)
 
       vrp.vehicles.first.reset_computed_data
       vrp.vehicles.first.sequence_timewindows = [Models::Timewindow.create({ start: 1, end: 4 })]
+
       assert_equal 12, vrp.vehicles.first.total_work_time_in_range(0, 3)
 
       vrp.vehicles.first.reset_computed_data
       vrp.vehicles.first.sequence_timewindows << Models::Timewindow.create({ start: 5, end: 6, day_index: 0 })
+
       assert_equal 13, vrp.vehicles.first.total_work_time_in_range(0, 3)
     end
 
@@ -78,18 +89,18 @@ module Models
       v1 = Models::Vehicle.create(vehicle1)
       v2 = Models::Vehicle.create(vehicle2)
 
-      refute_equal v1.skills.object_id, v2.skills.object_id
-      refute_equal v1.skills.first.object_id, v2.skills.first.object_id
+      refute_same v1.skills, v2.skills
+      refute_same v1.skills.first, v2.skills.first
 
       problem = { vehicles: [vehicle1, vehicle2] }
 
       vrp = Models::Vrp.create(problem)
 
-      refute_equal vrp.vehicles.first.skills.object_id,
-                   vrp.vehicles.last.skills.object_id
+      refute_same vrp.vehicles.first.skills,
+                  vrp.vehicles.last.skills
 
-      refute_equal vrp.vehicles.first.skills.first.object_id,
-                   vrp.vehicles.last.skills.first.object_id
+      refute_same vrp.vehicles.first.skills.first,
+                  vrp.vehicles.last.skills.first
 
       Models.delete_all
       vehicle1[:skills] = nil
@@ -98,18 +109,18 @@ module Models
       v1 = Models::Vehicle.create(vehicle1)
       v2 = Models::Vehicle.create(vehicle2)
 
-      refute_equal v1.skills.object_id, v2.skills.object_id
-      refute_equal v1.skills.first.object_id, v2.skills.first.object_id
+      refute_same v1.skills, v2.skills
+      refute_same v1.skills.first, v2.skills.first
 
       problem = { vehicles: [vehicle1, vehicle2] }
 
       vrp = Models::Vrp.create(problem)
 
-      refute_equal vrp.vehicles.first.skills.object_id,
-                   vrp.vehicles.last.skills.object_id
+      refute_same vrp.vehicles.first.skills,
+                  vrp.vehicles.last.skills
 
-      refute_equal vrp.vehicles.first.skills.first.object_id,
-                   vrp.vehicles.last.skills.first.object_id
+      refute_same vrp.vehicles.first.skills.first,
+                  vrp.vehicles.last.skills.first
     end
 
     def test_symbol_skills
@@ -117,8 +128,8 @@ module Models
 
       v1 = Models::Vehicle.create(vehicle1)
 
-      assert v1.skills.first.first.is_a?(Symbol)
-      assert v1.as_json[:skills].first.first.is_a?(Symbol)
+      assert_kind_of Symbol, v1.skills.first.first
+      assert_kind_of Symbol, v1.as_json[:skills].first.first
     end
 
     def test_router_options_matches_router_api_matrix_params

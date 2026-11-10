@@ -123,6 +123,7 @@ class InstanceValidityTest < Minitest::Test
         vehicle_id: 'vehicle_0',
         mission_ids: ['service_1', 'service_3']
       }]
+
       assert_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(TestHelper.create(problem)),
                       :assert_route_date_or_indice_if_periodic
 
@@ -131,6 +132,7 @@ class InstanceValidityTest < Minitest::Test
         indice: 0,
         mission_ids: ['service_1', 'service_3']
       }]
+
       refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(TestHelper.create(problem)),
                       :assert_route_date_or_indice_if_periodic
     end
@@ -142,6 +144,7 @@ class InstanceValidityTest < Minitest::Test
         indice: 0,
         mission_ids: ['service_1']
       }]
+
       refute_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(TestHelper.create(problem)),
                       :assert_not_too_many_visits_in_route
 
@@ -150,6 +153,7 @@ class InstanceValidityTest < Minitest::Test
         indice: 0,
         mission_ids: ['service_1', 'service_1']
       }]
+
       assert_includes OptimizerWrapper.config[:services][:ortools].inapplicable_solve?(TestHelper.create(problem)),
                       :assert_not_too_many_visits_in_route
     end

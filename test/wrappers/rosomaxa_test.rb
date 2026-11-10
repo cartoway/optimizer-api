@@ -193,6 +193,7 @@ class Wrappers::RosomaxaTest < Minitest::Test
     assert solution
     assert_includes solution.solvers, :rosomaxa
     assigned = solution.routes.flat_map{ |route| route.stops.filter_map(&:service_id) }
+
     assert_equal 1, assigned.size
     assert_equal 1, solution.unassigned_stops.count(&:service_id)
   end
@@ -247,10 +248,12 @@ class Wrappers::RosomaxaTest < Minitest::Test
       configuration: { resolution: { duration: 1000 } }
     }
     vrp = TestHelper.create(problem)
+
     assert_empty @rosomaxa.inapplicable_solve?(vrp)
 
     solution = @rosomaxa.solve(vrp)
     ids = solution.routes.first.stops.filter_map(&:service_id)
+
     assert_equal %w[pickup_1 delivery_1], ids
   end
 
@@ -292,6 +295,7 @@ class Wrappers::RosomaxaTest < Minitest::Test
     solution = @rosomaxa.solve(vrp)
 
     assigned = solution.routes.flat_map{ |route| route.stops.filter_map(&:service_id) }
+
     assert_equal %w[service_1 service_2], assigned.sort
     assert(solution.routes.first.stops.any?{ |stop| stop.type == :reload_depot })
   end
@@ -311,9 +315,11 @@ class Wrappers::RosomaxaTest < Minitest::Test
       timewindow: { start: 0, end: 3600 }
     }]
     vrp = TestHelper.create(problem)
+
     assert_empty @rosomaxa.inapplicable_solve?(vrp)
 
     solution = @rosomaxa.solve(vrp)
+
     assert(solution.routes.first.stops.any?{ |stop| stop.type == :rest && stop.rest_id == 'lunch' })
   end
 
@@ -347,14 +353,17 @@ class Wrappers::RosomaxaTest < Minitest::Test
       coef_setup: 2
     }]
     vrp = TestHelper.create(problem)
+
     assert_empty @rosomaxa.inapplicable_solve?(vrp)
 
     _problem, matrices = @rosomaxa.send(:pragmatic_problem, vrp)
+
     assert_equal [0, 15, 1, 0], matrices.first[:travelTimes]
 
     solution = @rosomaxa.solve(vrp)
     visit = solution.routes.first.stops.find{ |stop| stop.service_id == 'service_1' }
-    assert visit.info.begin_time >= 15
+
+    assert_operator visit.info.begin_time, :>=, 15
   end
 
   def test_different_setup_durations_on_one_point_are_inapplicable
@@ -497,6 +506,7 @@ class Wrappers::RosomaxaTest < Minitest::Test
         wrapper.send(:run_rosomaxa, {}, [], 1) { |*args|
           calls << args
         }
+
       assert_equal 7246, iterations
     end
 
@@ -521,6 +531,7 @@ class Wrappers::RosomaxaTest < Minitest::Test
 
     assert_equal [0, 1], @rosomaxa.instance_variable_get(:@matrix_indices)
     matrices = @rosomaxa.send(:build_matrices, vrp)
+
     assert_equal 4, matrices.first[:travelTimes].size # 2×2, not 3×3
   end
 end

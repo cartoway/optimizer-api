@@ -58,6 +58,7 @@ class FiltersTest < Minitest::Test
       ],
     }
     vrp = TestHelper.create(problem)
+
     assert ortools.solve(vrp, 'test')
   end
 

@@ -40,7 +40,7 @@ module Models
     # We need to implement a check inside Api::V01::Vrp and fix the ActivityTest::test_timewindows accordingly
 
     def vrp_result(options = {})
-      hash = super(options)
+      hash = super
 
       if options[:vehicle]
         hash[:duration] = duration_on(options[:vehicle])

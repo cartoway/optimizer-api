@@ -6,7 +6,7 @@ class PeriodicMatrixIndexTest < Minitest::Test
     vrp = TestHelper.create(VRP.periodic)
     vrp.vehicles = TestHelper.expand_vehicles(vrp)
     heuristic = Wrappers::PeriodicHeuristic.new(vrp)
-    return skip('no matrices') if vrp.matrices.empty?
+    skip if vrp.matrices.empty?
 
     route_data = {
       matrix_id: vrp.matrices.first.id,
@@ -104,6 +104,6 @@ class PeriodicMatrixIndexTest < Minitest::Test
     solver_stops = [stop_class.new(ids[1], info), stop_class.new(ids[0], info)]
     heuristic.send(:compute_route_from, new_route, solver_stops)
 
-    assert_equal [ids[1], ids[0]], (new_route[:stops].map{ |stop| stop[:id] })
+    assert_equal([ids[1], ids[0]], new_route[:stops].map{ |stop| stop[:id] })
   end
 end

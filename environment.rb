@@ -48,7 +48,7 @@ require 'tempfile'
 require 'tmpdir'
 require 'zlib'
 
-require_rel 'config/environments/' + ENV['APP_ENV']
+require_rel 'config/environments/' + ENV.fetch('APP_ENV', nil)
 require_all 'config/initializers'
 
 require './optimizer_wrapper'

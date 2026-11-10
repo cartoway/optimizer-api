@@ -110,9 +110,9 @@ module PeriodicEndPhase
   end
 
   def find_insertion_best_vehicle_day(id)
-    @services_assignment[id][:vehicles].map{ |vehicle_id|
+    @services_assignment[id][:vehicles].filter_map{ |vehicle_id|
       compute_earliest_insertion_candidate(@candidate_routes[vehicle_id], id)
-    }.compact.min_by{ |candidate_data|
+    }.min_by{ |candidate_data|
       candidate_data[:additional_route_time] # TODO : find fair comparison between empty and non empty routes
     }
   end
@@ -383,8 +383,8 @@ module PeriodicEndPhase
     # allow any day to assign visits
     @unavailable_for_routes.clear
     all_available = @services_data.transform_values{ true }
-    @candidate_routes.each{ |_vehicle_id, all_routes|
-      all_routes.each{ |_day, route_data| route_data[:available_ids] = all_available.dup }
+    @candidate_routes.each_value{ |all_routes|
+      all_routes.each_value{ |route_data| route_data[:available_ids] = all_available.dup }
     }
 
     banned = []
@@ -412,12 +412,12 @@ module PeriodicEndPhase
       most_prio_and_frequent.collect.with_index{ |service_data, s_i|
         id, visits_number = service_data
         potential_insertions[s_i].each{ |vehicle_id, data|
-          available_days = data.reject{ |_key, cost| cost.nil? }.keys
+          available_days = data.compact.keys
           these_sequences = deduce_sequences(id, visits_number, available_days)
 
           available_sequences +=
             these_sequences.collect{ |seq|
-              cost = seq.collect{ |d| potential_insertions[s_i][vehicle_id][d][:additional_route_time] }.sum
+              cost = seq.sum{ |d| potential_insertions[s_i][vehicle_id][d][:additional_route_time] }
               { vehicle: vehicle_id, service: id, s_i: s_i, seq: seq, cost: cost }
             }
         }
@@ -485,13 +485,13 @@ module PeriodicEndPhase
   def deduce_sequences(id, visits_number, days)
     sequences = []
 
-    return days.collect{ |day| [day] } if visits_number == 1
+    return days.zip if visits_number == 1
 
     days.sort.each_with_index{ |first_day, day_index|
       available_days = days.slice(days.find_index(first_day)..-1)
       break if available_days.size < visits_number
 
-      sequences += find_sequences_from(days.slice(day_index + 1..-1), visits_number - 1,
+      sequences += find_sequences_from(days.slice((day_index + 1)..-1), visits_number - 1,
                                        @services_data[id][:raw].minimum_lapse,
                                        @services_data[id][:raw].maximum_lapse, [first_day])
     }
@@ -508,7 +508,7 @@ module PeriodicEndPhase
 
     collected =
       next_days.collect{ |day|
-        c = find_sequences_from(days.slice(days.find_index(day) + 1..-1),
+        c = find_sequences_from(days.slice((days.find_index(day) + 1)..-1),
                                 visits_left - 1, min_lapse, max_lapse, current_sequence + [day])
         c
       }
@@ -519,9 +519,6 @@ module PeriodicEndPhase
   end
 
   def collect_next_days(all_days, last_day, min_lapse, max_lapse)
-    all_days.select{ |day|
-      day >= last_day + min_lapse &&
-        day <= last_day + max_lapse
-    }
+    all_days.grep((last_day + min_lapse)..(last_day + max_lapse))
   end
 end

@@ -88,12 +88,12 @@ module Models
 
     def initialize(hash)
       hash[:random_seed] = Random.new_seed if hash[:random_seed].nil?
-      super(hash)
+      super
     end
   end
 
   class Restitution < Base
-    field :geometry, default: [], type: Array[Symbol]
+    field :geometry, default: [], type: [Symbol]
     field :intermediate_solutions, default: true
     field :csv, default: false
     field :use_deprecated_csv_headers, default: false

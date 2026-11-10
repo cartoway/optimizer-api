@@ -30,7 +30,7 @@ module Parsers
       compute_route_waiting_times unless options[:preserve_solver_waiting_times]
       compute_route_total_dimensions(matrix)
       route.stops.each{ |stop| stop.info.set_schedule(vrp, route.vehicle) }
-      return unless ([:polylines, :encoded_polylines] & vrp.configuration.restitution.geometry).any? &&
+      return unless [:polylines, :encoded_polylines].intersect?(vrp.configuration.restitution.geometry) &&
                     @route.stops.any?(&:service_id)
 
       route_data ||= route_info(vrp)
@@ -60,10 +60,10 @@ module Parsers
         matrix_index = stop.activity.point&.matrix_index
         dimensions.each{ |dimension|
           if previous_index && matrix_index
-            unless stop.info.send("travel_#{dimension}".to_sym)
+            unless stop.info.send(:"travel_#{dimension}")
               stop.info.send("travel_#{dimension}=", matrix.send(dimension)[previous_index][matrix_index])
             end
-            total[dimension] += stop.info.send("travel_#{dimension}".to_sym).round
+            total[dimension] += stop.info.send(:"travel_#{dimension}").round
             stop.info.current_distance = total[dimension].round if dimension == :distance
           else
             stop.info.send("travel_#{dimension}=", 0)
