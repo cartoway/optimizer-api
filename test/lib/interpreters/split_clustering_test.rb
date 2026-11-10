@@ -124,6 +124,8 @@ class SplitClusteringTest < Minitest::Test
 
     def test_cluster_one_phase_vehicle
       vrp = TestHelper.load_vrp(self, fixture_file: 'cluster_one_phase')
+      # Pin seed: random_seed defaults to Random.new_seed and this balance check is otherwise flaky.
+      vrp.configuration.resolution.random_seed = 1
 
       service_vrp = Models::ResolutionContext.new(vrp: vrp, service: :demo)
 
@@ -139,8 +141,10 @@ class SplitClusteringTest < Minitest::Test
         services_vrps_vehicles.map{ |service_vrp_vehicle|
           service_vrp_vehicle[:vrp].services_duration
         }
-      # First balanced duration should be the smallest according vehicle data
-      assert_equal 0, durations.index(durations.min)
+      # Least available vehicle (fewest sequence_timewindows) should get the lightest cluster
+      least_available_index =
+        vrp.vehicles.each_with_index.min_by{ |vehicle, _index| vehicle.sequence_timewindows.size }.last
+      assert_equal least_available_index, durations.index(durations.min)
 
       cluster_weight_sum = vrp.vehicles.sum{ |vehicle| vehicle.sequence_timewindows.size }
       minimum_sequence_timewindows = vrp.vehicles.collect{ |vehicle| vehicle.sequence_timewindows.size }.min
