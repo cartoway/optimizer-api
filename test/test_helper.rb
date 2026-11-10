@@ -48,7 +48,6 @@ Minitest::Retry.use!(
     DichotomousTest#test_dichotomous_approach
     RealCasesTest#test_ortools_open_timewindows
     SplitClusteringTest#test_avoid_capacities_overlap
-    SplitClusteringTest#test_cluster_one_phase_vehicle
     SplitClusteringTest#test_instance_same_point_day
     SplitClusteringTest#test_no_doubles_3000
     Wrappers::OrtoolsTest#test_ortools_performance_when_duration_limit
