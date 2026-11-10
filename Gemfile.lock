@@ -57,7 +57,7 @@ GEM
     ansi (1.6.0)
     ast (2.4.3)
     backport (1.2.0)
-    balanced_vrp_clustering (0.4.0)
+    balanced_vrp_clustering (0.4.1)
       activesupport
       rake
       rb_sys (~> 0.9.128)

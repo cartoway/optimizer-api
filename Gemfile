@@ -50,7 +50,7 @@ gem 'rest-client'
 # AI
 # Still needed for hierarchical CompleteLinkage / AverageLinkage clusterers.
 gem 'ai4r'
-gem 'balanced_vrp_clustering', '~> 0.4' # 0.4+ vendors Ai4r::DataSet/Clusterer (no ai4r runtime dep)
+gem 'balanced_vrp_clustering', '~> 0.4'
 
 # Geo
 gem 'polylines'
