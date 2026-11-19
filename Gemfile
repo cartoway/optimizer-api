@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-ruby '>= 3.2'
+ruby '>= 3.3'
 
 gem 'require_all'
 
@@ -12,7 +12,6 @@ gem 'rake'
 
 # API
 # ~> 3.2: ParamScopeTracker (thread-safe validation); keeps mustermann 3.x (sinatra/resque)
-# grape >= 3.2 needs Ruby >= 3.2 (matches Docker/CI)
 gem 'grape', '~> 3.2.0'
 gem 'grape-entity'
 gem 'grape_logging', '>= 3.0'
@@ -26,7 +25,7 @@ gem 'actionpack', '>= 7.2', require: 'action_dispatch'
 gem 'active_hash'
 gem 'activemodel', '>= 7.2'
 gem 'activesupport', '>= 7.2', require: 'active_support'
-gem 'google-protobuf', '>=3', require: 'google/protobuf'
+gem 'google-protobuf', '~> 3.25', require: 'google/protobuf'
 gem 'oj'
 
 # Text
