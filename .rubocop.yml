@@ -14,6 +14,10 @@ AllCops:
     - 'wrappers/ortools_result_pb.rb' # auto-genereated file
     - 'wrappers/ortools_vrp_pb.rb'    # auto-genereated file
 
+# Ruby 3.1+ shorthand ({ key: }) is optional; don't rewrite the whole tree on TargetRubyVersion bump.
+Style/HashSyntax:
+  EnforcedShorthandSyntax: either
+
 Style/FrozenStringLiteralComment:
   Exclude:
     - 'config.ru'
