@@ -1,5 +1,5 @@
 source 'https://rubygems.org'
-ruby '>= 3'
+ruby '>= 3.3'
 
 gem 'require_all'
 
@@ -25,7 +25,7 @@ gem 'actionpack', require: 'action_dispatch'
 gem 'active_hash'
 gem 'activemodel'
 gem 'activesupport', require: 'active_support'
-gem 'google-protobuf', '>=3', require: 'google/protobuf'
+gem 'google-protobuf', '~> 3.25', require: 'google/protobuf'
 gem 'oj'
 
 # Text

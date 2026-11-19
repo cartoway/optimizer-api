@@ -5,7 +5,7 @@ inherit_gem:
     - rubocop-default.yml
 
 AllCops:
-  TargetRubyVersion: 3.0
+  TargetRubyVersion: 3.3
   Exclude:
     - 'tmp/**/*'
     - 'vendor/bundle/**/*'
