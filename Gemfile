@@ -12,7 +12,6 @@ gem 'rake'
 
 # API
 # ~> 3.2: ParamScopeTracker (thread-safe validation); keeps mustermann 3.x (sinatra/resque)
-# grape >= 3.2 needs Ruby >= 3.2 (matches Docker/CI)
 gem 'grape', '~> 3.2.0'
 gem 'grape-entity'
 gem 'grape_logging', '>= 3.0'
