@@ -32,6 +32,8 @@ gem 'json', '~> 2.0'
 
 # Text
 gem 'charlock_holmes'
+# Ruby 3.4+ no longer ships csv as a default gem; ai4r DataSet requires it.
+gem 'csv'
 gem 'http_accept_language'
 gem 'i18n'
 
