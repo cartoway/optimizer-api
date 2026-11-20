@@ -78,6 +78,7 @@ GEM
       bigdecimal
       rexml
     crass (1.0.8)
+    csv (3.3.7)
     date (3.6.0)
     diff-lcs (1.6.2)
     domain_name (0.5.20190701)
@@ -106,7 +107,7 @@ GEM
       zeitwerk (~> 2.6)
     erb (6.0.7)
     erubi (1.13.1)
-    google-protobuf (3.25.8-x86_64-linux)
+    google-protobuf (3.25.8)
     grape (3.2.1)
       activesupport (>= 7.2)
       dry-configurable
@@ -371,6 +372,7 @@ DEPENDENCIES
   benchmark-ips
   byebug
   charlock_holmes
+  csv
   dotenv
   google-protobuf (~> 3.25)
   grape (~> 3.2.0)
