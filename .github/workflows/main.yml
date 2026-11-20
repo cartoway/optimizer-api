@@ -70,7 +70,6 @@ jobs:
           file: Dockerfile
           build-args: |
             BUNDLE_WITHOUT=production
-            OPTIMIZER_ORTOOLS_VERSION=${{ secrets.OPTIMIZER_ORTOOLS_VERSION }}
             VROOM_VERSION=${{ secrets.VROOM_VERSION }}
           tags: optimizer-api:latest
           outputs: type=docker,dest=/tmp/optimizer-api.tar
