@@ -1,4 +1,6 @@
-FROM ghcr.io/cartoway/optimizer-ortools:master
+# Global (before first FROM) so --build-arg can select the optimizer-ortools base tag.
+ARG OPTIMIZER_ORTOOLS_VERSION=v2.4.1
+FROM ghcr.io/cartoway/optimizer-ortools:${OPTIMIZER_ORTOOLS_VERSION}
 
 ARG BUNDLE_WITHOUT="test development"
 # Install Vroom
