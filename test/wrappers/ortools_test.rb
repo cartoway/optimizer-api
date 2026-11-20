@@ -5242,6 +5242,8 @@ class Wrappers::OrtoolsTest < Minitest::Test
     # forces it to be processed after 20 because of its second TW (i.e., {start:20})
     # even though the vehicle arrives there at 15.
     problem = VRP.basic
+    # VRP.basic defaults to 100ms — too tight on CI: solver may return service_3 unassigned.
+    problem[:configuration][:resolution][:duration] = 1000
     problem[:matrices][0][:time] = [
       [0, 5, 5, 5],
       [5, 0, 5, 5],
