@@ -6,7 +6,7 @@ ARG ROSOMAXA_GIT_URL=https://github.com/reinterpretcat/vrp.git
 # Pin: reinterpretcat/vrp master @ 2026-09-21 (Fix clippy warnings)
 ARG ROSOMAXA_GIT_REF=e49bee0eccb9d732d0e020d7f9bbbb378e2de2bc
 # Global (before first FROM) so --build-arg can select the optimizer-ortools base tag.
-ARG OPTIMIZER_ORTOOLS_VERSION=v2.4.1
+ARG OPTIMIZER_ORTOOLS_VERSION=v2.4.2
 
 FROM ghcr.io/reinterpretcat/vrp/vrp-cli:${ROSOMAXA_VERSION} AS rosomaxa-release
 
