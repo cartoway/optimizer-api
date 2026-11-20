@@ -26,7 +26,6 @@ require './lib/cache_manager'
 require './util/logger'
 
 module OptimizerWrapper
-  ActiveSupport::Cache.lookup_store :redis_store
   TMP_DIR = File.join(Dir.tmpdir, 'optimizer-api', 'tmp')
   FileUtils.mkdir_p(TMP_DIR) unless File.directory?(TMP_DIR)
   @@tmp_vrp_dir = CacheManager.new(TMP_DIR)
@@ -48,7 +47,7 @@ module OptimizerWrapper
 
   PARAMS_LIMIT = { points: 100000, vehicles: 1000 }.freeze
   QUOTAS = [{ daily: 100000, monthly: 1000000 }].freeze # Only taken into account if REDIS_COUNT
-  REDIS_COUNT = ENV['REDIS_COUNT_HOST'] && Redis.new(host: ENV['REDIS_COUNT_HOST'])
+  REDIS_COUNT = ENV.fetch('REDIS_COUNT_HOST', nil) && Redis.new(host: ENV.fetch('REDIS_COUNT_HOST', nil))
 
   DUMP_DIR = File.join(Dir.tmpdir, 'optimizer-api', 'dump')
   FileUtils.mkdir_p(DUMP_DIR) unless File.directory?(DUMP_DIR)
@@ -59,7 +58,7 @@ module OptimizerWrapper
   # OptimizerLogger.caller_location = nil => nil is default
 
   @@c = {
-    product_title: 'Optimizers API',
+    product_title: 'Optimizer API',
     access_by_api_key: {
       file: './config/access.rb'
     },

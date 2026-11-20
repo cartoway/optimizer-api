@@ -48,7 +48,7 @@ module Models
 
     def initialize(options = {})
       options = { info: {}, configuration: {} }.merge(options)
-      super(options)
+      super
       self.class.vrp_result_fields << 'cost'
       self.class.vrp_result_fields << 'cost_info'
     end
@@ -64,7 +64,7 @@ module Models
     end
 
     def vrp_result(options = {})
-      hash = super(options)
+      hash = super
       hash['cost'] = cost_info.total
       hash['cost_details'] = hash.delete('cost_info')
       hash['unassigned'] = hash.delete('unassigned_stops')

@@ -4,9 +4,10 @@ module Core
       def compute_independent_skills_sets(vrp, mission_skills, vehicle_skills)
         independent_skills = Array.new(mission_skills.size) { |i| [i] }
 
-        correspondance_hash = vrp.vehicles.map{ |vehicle|
-          [vehicle.id, vehicle_skills.index{ |skills| skills == vehicle.skills.flatten }]
-        }.to_h
+        correspondance_hash =
+          vrp.vehicles.to_h{ |vehicle|
+            [vehicle.id, vehicle_skills.index{ |skills| skills == vehicle.skills.flatten }]
+          }
 
         # Build the compatibility table between service and vehicle skills
         # As reminder vehicle skills are defined as an OR condition
@@ -43,10 +44,10 @@ module Core
         }
 
         mission_skills.size.times.each{ |a_line|
-          ((a_line + 1)..mission_skills.size - 1).each{ |b_line|
-            next if (compatibility_table[a_line].select.with_index{ |state, index|
+          ((a_line + 1)..(mission_skills.size - 1)).each{ |b_line|
+            next if compatibility_table[a_line].select.with_index{ |state, index|
               state & compatibility_table[b_line][index]
-            }).empty?
+            }.empty?
 
             b_set = independent_skills.find{ |set| set.include?(b_line) && set.exclude?(a_line) }
             next if b_set.nil?

@@ -38,7 +38,7 @@ module Api
       expose :speed_multiplier, documentation: { type: String, desc: 'Speed multiplier applied to the current means of transport, it may vary within a route if subtours are defined' }
       expose :lat, documentation: { type: Float, desc: '' }
       expose :lon, documentation: { type: Float, desc: '' }
-      expose :skills, documentation: { type: Array[String], desc: '' }
+      expose :skills, documentation: { type: [String], desc: '' }
       expose :setup_duration, documentation: { type: Integer, desc: '' }
       expose :duration, documentation: { type: Integer, desc: '' }
       expose :additional_value, documentation: { type: Integer, desc: '' }
@@ -110,7 +110,7 @@ module Api
 
     class VrpResultSolutionSkippedSolver < Grape::Entity
       expose :service, as: :solver, documentation: { type: String, desc: 'Solver name' }
-      expose :reasons, documentation: { type: Array[String], desc: 'Reasons why the solver was not able to solve the problem or sub problem' }
+      expose :reasons, documentation: { type: [String], desc: 'Reasons why the solver was not able to solve the problem or sub problem' }
     end
 
     class VrpResultSolution < Grape::Entity

@@ -22,7 +22,7 @@ module Wrappers
     CUSTOM_QUANTITY_BIGNUM = 1e3
 
     def initialize(hash = {})
-      super(hash)
+      super
       @exec_vroom = hash[:exec_vroom] || '../vroom/bin/vroom'
       @exec_vroom += " -t #{hash[:threads]}" if hash[:threads]
     end
@@ -100,15 +100,16 @@ module Wrappers
 
       return if !result
 
-      cost = (result['summary']['cost'])
+      cost = result['summary']['cost']
       routes =
         result['routes'].map{ |route|
           @previous = nil
           vehicle = vrp.vehicles[route['vehicle']]
           cost += vehicle.cost_fixed if route['steps'].any?
-          stops = route['steps'].map{ |step|
-            read_step(vrp, vehicle, step)
-          }.compact
+          stops =
+            route['steps'].filter_map{ |step|
+              read_step(vrp, vehicle, step)
+            }
           complete_vroom_route_times!(stops, vehicle)
           initial_loads =
             route['steps'].first['load']&.map&.with_index{ |load, l_index|
@@ -343,8 +344,8 @@ module Wrappers
         index = @object_id_map.size
         @object_id_map[index] = service
 
-        delivery_hash = vrp_units.map { |unit| [unit.id, 0] }.to_h
-        pickup_hash = vrp_units.map { |unit| [unit.id, 0] }.to_h
+        delivery_hash = vrp_units.to_h { |unit| [unit.id, 0] }
+        pickup_hash = vrp_units.to_h { |unit| [unit.id, 0] }
 
         service.quantities.each { |quantity|
           next unless delivery_hash.key?(quantity.unit_id)
@@ -414,7 +415,7 @@ module Wrappers
              (tw.end || 2**30) - pickup_service.activity.setup_duration]
           }
         }.merge(activity_durations(pickup_service.activity))
-          .delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? },
+         .delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? },
         delivery: {
           id: delivery_index,
           location_index: delivery_service.activity.point.matrix_index,
@@ -423,7 +424,7 @@ module Wrappers
              (tw.end || 2**30) - delivery_service.activity.setup_duration]
           }
         }.merge(activity_durations(delivery_service.activity))
-          .delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
+         .delete_if{ |_k, v| v.nil? || v.is_a?(Array) && v.empty? }
       }.delete_if{ |_k, v|
         v.nil? || v.is_a?(Array) && v.empty?
       }
@@ -485,11 +486,11 @@ module Wrappers
       vrp_skills = vrp.vehicles.flat_map{ |vehicle| vehicle.skills.first }.uniq
       vrp_units =
         vrp.units.select{ |unit|
-          vrp.vehicles.map{ |vehicle|
+          vrp.vehicles.filter_map{ |vehicle|
             vehicle.capacities.find{ |capacity|
               capacity.unit.id == unit.id
             }&.limit
-          }&.compact&.max&.positive?
+          }&.max&.positive?
         }
       problem[:jobs] = collect_jobs(vrp, vrp_skills, vrp_units)
       problem[:shipments] = collect_shipments(vrp, vrp_skills, vrp_units)
@@ -627,7 +628,7 @@ module Wrappers
       output.close
 
       # TODO : find best value for x https://github.com/Mapotempo/optimizer-api/pull/203
-      cmd = "#{@exec_vroom} -i '#{input.path}' -o '#{output.path}' -x #{level} #{timeout ? "-l #{timeout / 1000}" : ''}"
+      cmd = "#{@exec_vroom} -i '#{input.path}' -o '#{output.path}' -x #{level} #{"-l #{timeout / 1000}" if timeout}"
       log cmd
       _stdout, stderr, status = Open3.capture3(cmd)
 

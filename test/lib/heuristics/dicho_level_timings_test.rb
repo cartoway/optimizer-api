@@ -24,6 +24,7 @@ module Interpreters
       assert_equal 50, level1[:ortools_wall_ms]
 
       line = DichoLevelTimings.send(:level_line, 'L', 1, level1)
+
       assert line.start_with?('dicho level timings:')
       refute_empty line
     end

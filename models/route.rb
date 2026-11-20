@@ -29,14 +29,14 @@ module Models
       hash[:missions] ||= []
       if hash[:mission_ids].present?
         hash[:missions] +=
-          hash[:mission_ids]&.map{ |mission_id|
+          hash[:mission_ids]&.filter_map{ |mission_id|
             Models::Service.find_by_id(mission_id) ||
               Models::ReloadDepot.find_by_id(mission_id) ||
               Models::Rest.find_by_id(mission_id)
-          }&.compact
+          }
         hash.delete(:mission_ids)
       end
-      super(hash)
+      super
     end
 
     # original_id first: periodic_heuristic initialize_routes keys @services_data by original id

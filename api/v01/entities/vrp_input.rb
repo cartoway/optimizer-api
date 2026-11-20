@@ -30,17 +30,29 @@ module VrpInput
   # Input as expected in JSON
   params :request_object do
     optional(:name, type: String, desc: 'Name of the problem, used as tag for all element in order to name plan when importing returned .csv file')
-    optional(:matrices, type: Array, documentation: { desc: 'Define all the distances between each point of problem' }) do use :vrp_request_matrices end
+    optional(:matrices, type: Array, documentation: { desc: 'Define all the distances between each point of problem' }) do
+      use :vrp_request_matrices
+    end
 
-    optional(:points, type: Array, documentation: { desc: 'Particular place in the map' }) do use :vrp_request_point end
+    optional(:points, type: Array, documentation: { desc: 'Particular place in the map' }) do
+      use :vrp_request_point
+    end
 
-    optional(:reload_depots, type: Array, documentation: { desc: 'Depots available for reload' }) do use :vrp_request_reload_depot end
+    optional(:reload_depots, type: Array, documentation: { desc: 'Depots available for reload' }) do
+      use :vrp_request_reload_depot
+    end
 
-    optional(:units, type: Array, documentation: { desc: 'The name of a Capacity/Quantity' }) do use :vrp_request_unit end
+    optional(:units, type: Array, documentation: { desc: 'The name of a Capacity/Quantity' }) do
+      use :vrp_request_unit
+    end
 
-    optional(:rests, type: Array, documentation: { desc: 'Break within a vehicle tour' }) do use :vrp_request_rest end
+    optional(:rests, type: Array, documentation: { desc: 'Break within a vehicle tour' }) do
+      use :vrp_request_rest
+    end
 
-    optional(:zones, type: Array, desc: '') do use :vrp_request_zone end
+    optional(:zones, type: Array, desc: '') do
+      use :vrp_request_zone
+    end
 
     requires(:vehicles, type: Array, allow_blank: false, documentation: { desc: 'Set of available vehicles' }) do
       use :vrp_request_vehicle
@@ -54,11 +66,17 @@ module VrpInput
     end
     at_least_one_of :services, :shipments
 
-    optional(:relations, type: Array, desc: 'Not available with periodic heuristic') do use :vrp_request_relation end
+    optional(:relations, type: Array, desc: 'Not available with periodic heuristic') do
+      use :vrp_request_relation
+    end
 
-    optional(:subtours, type: Array, desc: 'Not available with periodic heuristic') do use :vrp_request_subtour end
+    optional(:subtours, type: Array, desc: 'Not available with periodic heuristic') do
+      use :vrp_request_subtour
+    end
 
-    optional(:routes, type: Array, desc: '') do use :vrp_request_route end
+    optional(:routes, type: Array, desc: '') do
+      use :vrp_request_route
+    end
 
     optional(:configuration, type: Hash, documentation: { desc: 'Describe the limitations of the solve in term of computation' }) do
       use :vrp_request_configuration
@@ -70,49 +88,49 @@ module VrpInput
     # We expect here to keep the definition of the high level model in a single place
     optional :points, type: Array,
                       documentation: { hidden: true, desc: 'Warning : CSV Format expected here ! Particular place in the map.' },
-                      coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                      coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_point
     end
 
     optional :units, type: Array,
                      documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! The name of a Capacity/Quantity.' },
-                     coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                     coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_unit
     end
 
     optional :timewindows, type: Array,
                            documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! Time slot while the activity may be performed.' },
-                           coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                           coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_timewindow
     end
 
     optional :capacities, type: Array,
                           documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! Define the limit of entities the vehicle could carry.' },
-                          coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                          coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_capacity
     end
 
     optional :quantities, type: Array,
                           documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! Define the entities which are taken or dropped.' },
-                          coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                          coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_quantity
     end
 
     optional :services, type: Array,
                         documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! Independent activity, which does not require a context.' },
-                        coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                        coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_service
     end
 
     optional :shipments, type: Array,
                          documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! Link directly one activity of collection to another of drop off.' },
-                         coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                         coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_shipment
     end
 
     optional :vehicles, type: Array,
                         documentation: { hidden: true, format: 'CSV', desc: 'Warning : CSV Format expected here ! Set of available vehicles.' },
-                        coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8').read, nil) } do
+                        coerce_with: ->(path) { path.is_a?(Array) ? path : Api::V01::CSVParser.call(File.open(path[:tempfile], 'r:bom|utf-8', &:read), nil) } do
       use :vrp_request_vehicle
     end
 
@@ -151,15 +169,15 @@ module VrpConfiguration
     exactly_one_of :method, :technique
 
     optional(:metric, type: Symbol, desc: 'Defines partition reference metric. Values should be either duration, visits or any unit you defined in units.')
-    requires(:entity, type: Symbol, values: [:vehicle, :work_day], desc: 'Describes what the partition corresponds to. Available only if method in [balanced_kmeans hierarchical_tree].', coerce_with: ->(value) { value.to_sym })
-    optional(:centroids, type: Array[Integer], desc: 'Forces centroid indices used to generate clusters with kmeans partition_method. Only available through balanced_kmeans and entity vehicle as first partition.')
+    requires(:entity, type: Symbol, values: [:vehicle, :work_day], desc: 'Describes what the partition corresponds to. Available only if method in [balanced_kmeans hierarchical_tree].', coerce_with: lambda(&:to_sym))
+    optional(:centroids, type: [Integer], desc: 'Forces centroid indices used to generate clusters with kmeans partition_method. Only available through balanced_kmeans and entity vehicle as first partition.')
   end
 
   params :vrp_request_preprocessing do
     optional(:max_split_size, type: Integer, desc: 'Divide the problem into clusters beyond this threshold')
     optional(:partition_method, type: String, documentation: { hidden: true }, desc: '[ DEPRECATED : use partitions structure instead ]')
     optional(:partition_metric, type: Symbol, documentation: { hidden: true }, desc: '[ DEPRECATED : use partitions structure instead ]')
-    optional(:kmeans_centroids, type: Array[Integer], documentation: { hidden: true }, desc: '[ DEPRECATED : use partitions structure instead ]')
+    optional(:kmeans_centroids, type: [Integer], documentation: { hidden: true }, desc: '[ DEPRECATED : use partitions structure instead ]')
     optional(:cluster_threshold, type: Float, desc: 'Regroup close points which constitute a cluster into a single geo-located point')
     optional(:force_cluster, type: Boolean, documentation: { hidden: true }, desc: '[ DEPRECATED ] Has no purpose anymore, was used to force to zip cluster (through parameter cluster_threshold) visits even if containing timewindows and quantities')
     optional(:prefer_short_segment, type: Boolean, desc: 'Could allow to pass multiple time in the same street but deliver in a single row')
@@ -167,7 +185,7 @@ module VrpConfiguration
     optional(:partitions, type: Array, desc: 'Describes partition process to perform before solving. Partitions will be performed in provided order') do
       use :vrp_request_partition
     end
-    optional(:first_solution_strategy, type: Array[String], desc: 'Forces first solution strategy. Either one value to force specific behavior, or a list in order to test several ones and select the best. If string is \'internal\', we will choose among pre-selected behaviors. There can not be more than three behaviors (ORtools only).', coerce_with: ->(value) { FirstSolType.new.type_cast(value) })
+    optional(:first_solution_strategy, type: [String], desc: 'Forces first solution strategy. Either one value to force specific behavior, or a list in order to test several ones and select the best. If string is \'internal\', we will choose among pre-selected behaviors. There can not be more than three behaviors (ORtools only).', coerce_with: ->(value) { FirstSolType.new.type_cast(value) })
     mutually_exclusive :partitions, :partition_method
     mutually_exclusive :partitions, :partition_metric
     mutually_exclusive :partitions, :kmeans_centroids
@@ -178,7 +196,7 @@ module VrpConfiguration
     optional(:batch_heuristic, type: Boolean, default: OptimizerWrapper.config[:debug][:batch_heuristic], desc: 'Compute each heuristic solution')
     optional(:dicho_algorithm_service_limit, type: Integer, documentation: { hidden: true }, desc: 'Minimum number of services required to allow a call to heuristic dichotomous_approach -- 0: disabled')
     optional(:dicho_inclusion_rate, type: Float, values: ->(v) { v > 0 }, documentation: { hidden: true }, desc: 'Approximate minimum load rate for the solver to consider using a vehicle during an optimization via heuristic dichotomous_approach')
-    optional(:duration, type: Integer, values: ->(v) { v.positive? }, allow_blank: false, desc: 'Maximum duration of resolution')
+    optional(:duration, type: Integer, values: lambda(&:positive?), allow_blank: false, desc: 'Maximum duration of resolution')
     optional(:evaluate_only, type: Boolean, desc: 'Takes the solution provided through relations of type order and computes solution cost and time/distance associated values (Ortools only). Not available for periodic yet.')
     optional(:initial_time_out, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: '[ DEPRECATED : use minimum_duration instead]')
     optional(:iterations, type: Integer, allow_blank: false, documentation: { hidden: true }, desc: 'DEPRECATED : Jsprit solver and related parameters are not supported anymore')
@@ -186,13 +204,13 @@ module VrpConfiguration
     optional(:minimize_days_worked, type: Boolean, default: false, desc: '(Periodic heuristic only) Starts filling earlier days of the period first and minimizes the total number of days worked. Available only if first_solution_strategy is \'periodic\'. Not available with ORtools.')
     optional(:minimum_duration, type: Integer, allow_blank: false, desc: 'Minimum solve duration before the solve could stop (x10 in order to find the first solution) (ORtools only)')
     # :random_seed number is used to set the Random.srand globally for the worker but a more elegant way would be to generate random streams (stream1 = Random.new(seed1)) and use these streams inside the algorithms to generate random number when needed without affecting the default stream
-    optional(:random_seed, type: Integer, default: Random.new_seed, values: ->(v) { v.positive? }, allow_blank: false, desc: 'The random seed used within clustering based methods (max_split_size and dicho_algorithm) and partitioning')
+    optional(:random_seed, type: Integer, default: Random.new_seed, values: lambda(&:positive?), allow_blank: false, desc: 'The random seed used within clustering based methods (max_split_size and dicho_algorithm) and partitioning')
     optional(:repetition, type: Integer, documentation: { hidden: true }, desc: 'Number of times the optimization process is going to be repeated. Only the best solution is returned.')
     optional(:same_point_day, type: Boolean, desc: '(Periodic heuristic only) Forces all services with the same point_id to take place on the same days. Available only if first_solution_strategy is \'periodic\'. Not available ORtools.')
     optional(:several_solutions, type: Integer, allow_blank: false, default: 1, desc: 'Return several solution computed with different matrices')
     optional(:solver, type: Boolean, desc: 'Defines if solver should be called')
     optional(:solver_parameter, type: Integer, documentation: { hidden: true }, desc: '[ DEPRECATED : use configuration.preprocessing.first_solution_strategy instead ]')
-    optional(:solver_priority, type: Array[Symbol],
+    optional(:solver_priority, type: [Symbol],
                                desc: "Prioritize the solver to use. If the first solver is compatible with the problem, it will be used. If not, the second solver will be used, etc. The solver available might depend on your api keyAvailable solvers: #{SolverType.possible_solvers.join(', ')}",
                                default: [],
                                coerce_with: ->(value) { SolverType.type_cast(value) })
@@ -209,7 +227,7 @@ module VrpConfiguration
   end
 
   params :vrp_request_restitution do
-    optional(:geometry, type: Array[Symbol], default: [],
+    optional(:geometry, type: [Symbol], default: [],
                         coerce_with: ->(value) { GeometryType.type_cast(value) },
                         desc: OptimizerWrapper.config[:restitution][:allow_polylines] ?
                         'Specifies the geometry structures to be returned. Can be a subset of `[polylines encoded_polylines partitions]` or a boolean value to output all or no geometry. Polylines and encoded_polylines are not compatible together.' :
@@ -230,8 +248,8 @@ module VrpConfiguration
     end
 
     mutually_exclusive :range_indices, :range_date
-    optional(:unavailable_indices, type: Array[Integer], desc: '(Schedule only) Exclude some days indices from the resolution')
-    optional(:unavailable_date, type: Array[Date], desc: '(Schedule only) Exclude some days from the resolution')
+    optional(:unavailable_indices, type: [Integer], desc: '(Schedule only) Exclude some days indices from the resolution')
+    optional(:unavailable_date, type: [Date], desc: '(Schedule only) Exclude some days from the resolution')
     mutually_exclusive :unavailable_indices, :unavailable_date
 
     optional(:unavailable_index_ranges, type: Array, desc:
@@ -261,9 +279,9 @@ module VrpMisc
 
   params :vrp_request_matrices do
     requires(:id, type: String, allow_blank: false)
-    optional(:time, type: Array[Array[Float]], allow_blank: false, desc: 'Matrix of time, travel duration between each pair of point in the problem. It must be send as an Array[Array[Float]] as it could potentially be non squared matrix.')
-    optional(:distance, type: Array[Array[Float]], allow_blank: false, desc: 'Matrix of distance, travel distance between each pair of point in the problem. It must be send as an Array[Array[Float]] as it could potentially be non squared matrix.')
-    optional(:value, type: Array[Array[Float]], allow_blank: false, desc: 'Matrix of values, travel value between each pair of point in the problem if not distance or time related. It must be send as an Array[Array[Float]] as it could potentially be non squared matrix.')
+    optional(:time, type: [[Float]], allow_blank: false, desc: 'Matrix of time, travel duration between each pair of point in the problem. It must be send as an Array[Array[Float]] as it could potentially be non squared matrix.')
+    optional(:distance, type: [[Float]], allow_blank: false, desc: 'Matrix of distance, travel distance between each pair of point in the problem. It must be send as an Array[Array[Float]] as it could potentially be non squared matrix.')
+    optional(:value, type: [[Float]], allow_blank: false, desc: 'Matrix of values, travel value between each pair of point in the problem if not distance or time related. It must be send as an Array[Array[Float]] as it could potentially be non squared matrix.')
   end
 
   params :vrp_request_relation do
@@ -282,12 +300,12 @@ module VrpMisc
              type: Integer, values: ->(v) { v >= 0 },
              desc: '[ DEPRECATED ]')
     optional(:lapses,
-             type: Array[Integer], values: ->(v) { v >= 0 },
+             type: [Integer], values: ->(v) { v >= 0 },
              desc: 'For some relation types, specifies duration or number constraint. Lapse expressed in days for minimum/maximum day lapse, in seconds for minimum/maximum_duration_lapse and vehicle_trips. For consistent relation types, lapse can be specified for every consecutive elements.')
     mutually_exclusive :lapse, :lapses
-    optional(:linked_ids, type: Array[String], documentation: { hidden: true }, allow_blank: false, desc: '[ DEPRECATED : use linked_service_ids ]', coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/) : val })
-    optional(:linked_service_ids, type: Array[String], documentation: { hidden: true }, allow_blank: false, desc: 'List of activities involved in the relation', coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/) : val })
-    optional(:linked_vehicle_ids, type: Array[String], allow_blank: false, desc: 'List of vehicles involved in the relation', coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/) : val })
+    optional(:linked_ids, type: [String], documentation: { hidden: true }, allow_blank: false, desc: '[ DEPRECATED : use linked_service_ids ]', coerce_with: ->(val) { val.is_a?(String) ? val.split(',') : val })
+    optional(:linked_service_ids, type: [String], documentation: { hidden: true }, allow_blank: false, desc: 'List of activities involved in the relation', coerce_with: ->(val) { val.is_a?(String) ? val.split(',') : val })
+    optional(:linked_vehicle_ids, type: [String], allow_blank: false, desc: 'List of vehicles involved in the relation', coerce_with: ->(val) { val.is_a?(String) ? val.split(',') : val })
     optional(:periodicity, type: Integer, documentation: { hidden: true }, desc: 'In the case of planning optimization, number of weeks/months to consider at the same time/in each relation : vehicle group duration on weeks/months')
     at_least_one_of :linked_ids, :linked_vehicle_ids
   end
@@ -297,7 +315,7 @@ module VrpMisc
     optional(:indice, type: Integer, documentation: { hidden: true }, desc: '[ DEPRECATED : use day_index instead ]')
     optional(:day_index, type: Integer, desc: 'Index of the route. Must be provided if first_solution_strategy is \'periodic\'.')
     optional(:date, type: Date, desc: 'Date of the route. Must be provided if first_solution_strategy is \'periodic\'.')
-    requires(:mission_ids, type: Array[String], desc: 'Initial state or partial state of the current vehicle route', coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/) : val })
+    requires(:mission_ids, type: [String], desc: 'Initial state or partial state of the current vehicle route', coerce_with: ->(val) { val.is_a?(String) ? val.split(',') : val })
     mutually_exclusive :indice, :day_index, :date
   end
 
@@ -308,8 +326,8 @@ module VrpMisc
     optional(:router_mode, type: String, desc: '`car`, `truck`, `bicycle`, etc... See the Router Wrapper API doc')
     optional(:router_dimension, type: String, values: ['time', 'distance'], desc: 'time or dimension, choose between a matrix based on minimal route duration or on minimal route distance')
     optional(:speed_multiplier, type: Float, default: 1.0, desc: 'multiply the current modality speed, default : 1.0')
-    optional(:skills, type: Array[Symbol],
-                      coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/).map!(&:strip).map!(&:to_sym) : val&.map(&:to_sym) },
+    optional(:skills, type: [Symbol],
+                      coerce_with: ->(val) { val.is_a?(String) ? val.split(',').map!(&:strip).map!(&:to_sym) : val&.map(&:to_sym) },
                       desc: 'Particular abilities required by a vehicle to perform this subtour')
     optional(:duration, type: Integer, values: ->(v) { !v.negative? }, desc: 'Maximum subtour duration')
     optional(:transmodal_stops, type: Array, desc: 'Point where the vehicles can park and start the subtours') do
@@ -324,7 +342,7 @@ module VrpMisc
   params :vrp_request_zone do
     requires(:id, type: Symbol, allow_blank: false, desc: '')
     requires(:polygon, type: Hash, desc: 'Geometry which describes the area')
-    optional(:allocations, type: Array[Array[String]], desc: 'Define by which vehicle or vehicles combination the zone could be served')
+    optional(:allocations, type: [[String]], desc: 'Define by which vehicle or vehicles combination the zone could be served')
   end
 end
 
@@ -347,7 +365,7 @@ module VrpMissions
     optional(:timewindows, type: Array, desc: 'Time slot while the rest may begin. At most one timewindow per rest is supported.') do
       use :vrp_request_timewindow
     end
-    optional(:lapse, type: Integer, values: ->(v) { v.positive? }, desc: 'Repeating rest after this many seconds of work (travel + service). Exclusive with timewindows. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
+    optional(:lapse, type: Integer, values: lambda(&:positive?), desc: 'Repeating rest after this many seconds of work (travel + service). Exclusive with timewindows. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:initial_offset, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Work already performed before the tour starts (seconds of travel + service + setup). Shifts the first regulatory (lapse) pause earlier. Only used with lapse.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:late_multiplier, type: Float, desc: 'Late multiplier applied for this rest')
     optional(:exclusion_cost, type: Float, desc: 'Cost induced by non affectation of this rest')
@@ -361,28 +379,28 @@ module VrpMissions
 
     optional(:visits_number, type: Integer, coerce_with: ->(val) { val.to_i.positive? && val.to_i }, default: 1, allow_blank: false, desc: '(Schedule only) Total number of visits over the complete schedule (including the unavailable visit indices)')
 
-    optional(:first_possible_day_indices, type: Array[Integer], coerce_with: ->(val) { val.is_a?(Integer) ? [val] : val },
+    optional(:first_possible_day_indices, type: [Integer], coerce_with: ->(val) { val.is_a?(Integer) ? [val] : val },
                                           desc: '(Schedule only) For each visit, first possible day index')
-    optional(:first_possible_dates, type: Array[Date],
+    optional(:first_possible_dates, type: [Date],
                                     desc: '(Schedule only) For each visit, first possible date')
     mutually_exclusive :first_possible_day_indices, :first_possible_dates
-    optional(:last_possible_day_indices, type: Array[Integer], coerce_with: ->(val) { val.is_a?(Integer) ? [val] : val },
+    optional(:last_possible_day_indices, type: [Integer], coerce_with: ->(val) { val.is_a?(Integer) ? [val] : val },
                                          desc: '(Schedule only) For each visit, last possible day index')
-    optional(:last_possible_dates, type: Array[Date],
+    optional(:last_possible_dates, type: [Date],
                                    desc: '(Schedule only) For each visit, last possible date')
     mutually_exclusive :last_possible_day_indices, :last_possible_dates
 
-    optional(:unavailable_visit_indices, type: Array[Integer], desc: '(Schedule only) unavailable indices of visit')
+    optional(:unavailable_visit_indices, type: [Integer], desc: '(Schedule only) unavailable indices of visit')
 
-    optional(:unavailable_visit_day_indices, type: Array[Integer], desc: '(Schedule only) Express the exceptional days indices of unavailability')
+    optional(:unavailable_visit_day_indices, type: [Integer], desc: '(Schedule only) Express the exceptional days indices of unavailability')
     optional(:unavailable_visit_day_date, type: Array, desc: '(Schedule only) Express the exceptional days of unavailability')
     mutually_exclusive :unavailable_visit_day_indices, :unavailable_visit_day_date
 
     optional(:minimum_lapse, type: Float, desc: '(Schedule only) Minimum day lapse between two visits')
     optional(:maximum_lapse, type: Float, desc: '(Schedule only) Maximum day lapse between two visits')
-    optional(:sticky_vehicle_ids, type: Array[String], desc: 'Defined to which vehicle the service is assigned', coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/) : val })
-    optional(:skills, type: Array[Symbol],
-                      coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/).map!(&:strip).map!(&:to_sym) : val&.map(&:to_sym) },
+    optional(:sticky_vehicle_ids, type: [String], desc: 'Defined to which vehicle the service is assigned', coerce_with: ->(val) { val.is_a?(String) ? val.split(',') : val })
+    optional(:skills, type: [Symbol],
+                      coerce_with: ->(val) { val.is_a?(String) ? val.split(',').map!(&:strip).map!(&:to_sym) : val&.map(&:to_sym) },
                       desc: 'Particular abilities required by a vehicle to perform this service. Not available with periodic heuristic.')
 
     optional(:activity, type: Hash, allow_blank: false, desc: 'Details of the activity performed to accomplish the current service') do
@@ -416,19 +434,19 @@ module VrpMissions
 
     optional(:visits_number, type: Integer, coerce_with: ->(val) { val.to_i.positive? && val.to_i }, default: 1, allow_blank: false, desc: 'Total number of visits over the complete schedule (including the unavailable visit indices)')
 
-    optional(:unavailable_visit_indices, type: Array[Integer], desc: '(Schedule only) unavailable indices of visit')
+    optional(:unavailable_visit_indices, type: [Integer], desc: '(Schedule only) unavailable indices of visit')
 
-    optional(:unavailable_visit_day_indices, type: Array[Integer], desc: '(Schedule only) Express the exceptional days indices of unavailability')
+    optional(:unavailable_visit_day_indices, type: [Integer], desc: '(Schedule only) Express the exceptional days indices of unavailability')
     optional(:unavailable_visit_day_date, type: Array, desc: '(Schedule only) Express the exceptional days of unavailability')
     mutually_exclusive :unavailable_visit_day_indices, :unavailable_visit_day_date
 
     optional(:minimum_lapse, type: Float, desc: 'Minimum day lapse between two visits')
     optional(:maximum_lapse, type: Float, desc: 'Maximum day lapse between two visits')
 
-    optional(:maximum_inroute_duration, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum in route duration of this particular shipment (Must be a positive integer)')
-    optional(:sticky_vehicle_ids, type: Array[String], desc: 'Defined to which vehicle the shipment is assigned', coerce_with: ->(val) { val.is_a?(String) ? val&.split(/,/) : val })
-    optional(:skills, type: Array[Symbol],
-                      coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/).map!(&:strip).map!(&:to_sym) : val.map(&:to_sym) },
+    optional(:maximum_inroute_duration, type: Integer, values: lambda(&:positive?), desc: 'Maximum in route duration of this particular shipment (Must be a positive integer)')
+    optional(:sticky_vehicle_ids, type: [String], desc: 'Defined to which vehicle the shipment is assigned', coerce_with: ->(val) { val.is_a?(String) ? val&.split(',') : val })
+    optional(:skills, type: [Symbol],
+                      coerce_with: ->(val) { val.is_a?(String) ? val.split(',').map!(&:strip).map!(&:to_sym) : val.map(&:to_sym) },
                       desc: 'Particular abilities required by a vehicle to perform this shipment')
     requires(:pickup, type: Hash, allow_blank: false, desc: 'Activity of collection') do
       use :vrp_request_activity
@@ -459,7 +477,7 @@ module VrpShared
   extend Grape::API::Helpers
 
   params :vrp_request_activity do
-    optional(:position, type: Symbol, default: :neutral, values: [:neutral, :always_first, :always_middle, :always_last, :never_first, :never_middle, :never_last, :exclusive], desc: 'Provides an indication on when to do this service among whole route', coerce_with: ->(value) { value.to_sym })
+    optional(:position, type: Symbol, default: :neutral, values: [:neutral, :always_first, :always_middle, :always_last, :never_first, :never_middle, :never_last, :exclusive], desc: 'Provides an indication on when to do this service among whole route', coerce_with: lambda(&:to_sym))
     optional(:duration, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Time (in seconds) while the current activity stands until it\'s over', coerce_with: ->(value) { ScheduleType.type_cast(value) })
     optional(:additional_value, type: Integer, desc: 'Additional value associated to the visit')
     optional(:setup_duration, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Time (in seconds) at destination before the proper activity is effectively performed', coerce_with: ->(value) { ScheduleType.type_cast(value) })
@@ -552,21 +570,21 @@ module VrpVehicles
     optional :matrix_id, allow_blank: false, type: String, desc: 'Related matrix, if already defined'
     optional :value_matrix_id, type: String, desc: 'If any value matrix defined, related matrix index'
 
-    optional(:duration, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum tour duration', coerce_with: ->(value) { ScheduleType.type_cast(value) })
-    optional(:overall_duration, type: Integer, values: ->(v) { v.positive? }, documentation: { hidden: true }, desc: '(Schedule only) If schedule covers several days, maximum work duration over whole period. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
-    optional(:distance, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum tour distance. Not available with periodic heuristic.')
+    optional(:duration, type: Integer, values: lambda(&:positive?), desc: 'Maximum tour duration', coerce_with: ->(value) { ScheduleType.type_cast(value) })
+    optional(:overall_duration, type: Integer, values: lambda(&:positive?), documentation: { hidden: true }, desc: '(Schedule only) If schedule covers several days, maximum work duration over whole period. Not available with periodic heuristic.', coerce_with: ->(value) { ScheduleType.type_cast(value) })
+    optional(:distance, type: Integer, values: lambda(&:positive?), desc: 'Maximum tour distance. Not available with periodic heuristic.')
     optional(:maximum_reloads, type: Integer, values: ->(v) { !v.negative? }, default: 0, desc: 'Maximum number of reloads within the tour')
-    optional(:maximum_ride_time, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum ride duration between two route activities')
-    optional(:maximum_ride_distance, type: Integer, values: ->(v) { v.positive? }, desc: 'Maximum ride distance between two route activities')
-    optional :skills, type: Array[Array[Symbol]],
+    optional(:maximum_ride_time, type: Integer, values: lambda(&:positive?), desc: 'Maximum ride duration between two route activities')
+    optional(:maximum_ride_distance, type: Integer, values: lambda(&:positive?), desc: 'Maximum ride distance between two route activities')
+    optional :skills, type: [[Symbol]],
                       coerce_with: lambda { |val|
                         val.is_a?(String) ?
-                        [val.split(/,/).map!(&:strip).map!(&:to_sym)] :
+                        [val.split(',').map!(&:strip).map!(&:to_sym)] :
                         val&.map{ |set| set.map(&:to_sym) }
                       }, # TODO : Create custom coerce to consider multiple alternatives
                       desc: 'Particular abilities which could be handle by the vehicle. This parameter is a set of alternative skills, and must be defined as an Array[Array[String]]. Not available with periodic heuristic.'
 
-    optional(:unavailable_work_day_indices, type: Array[Integer], desc: '(Schedule only) Express the exceptional indices of unavailability')
+    optional(:unavailable_work_day_indices, type: [Integer], desc: '(Schedule only) Express the exceptional indices of unavailability')
     optional(:unavailable_work_date, type: Array, desc: '(Schedule only) Express the exceptional days of unavailability')
     mutually_exclusive :unavailable_work_day_indices, :unavailable_work_date
 
@@ -598,15 +616,15 @@ module VrpVehicles
   params :vehicle_model_related do
     optional(:start_point_id, type: String, desc: 'Begin of the tour')
     optional(:end_point_id, type: String, desc: 'End of the tour')
-    optional(:reload_depot_ids, type: Array[String], desc: 'Reload depots within the tour')
+    optional(:reload_depot_ids, type: [String], desc: 'Reload depots within the tour')
     optional(:capacity_ids, type: String, documentation: { hidden: true }, desc: 'Capacities to consider, CSV front only')
     optional(:capacities, type: Array, desc: 'Define the limit of entities the vehicle could carry. The maximum precision supported is 1e-3.') do
       use :vrp_request_capacity
     end
     mutually_exclusive :capacity_ids, :capacities
 
-    optional(:sequence_timewindow_ids, type: Array[String], documentation: { hidden: true }, desc: 'Sequence timewindows to consider, CSV front only',
-                                       coerce_with: ->(val) { val.is_a?(String) ? val.split(/,/).map(&:strip) : val })
+    optional(:sequence_timewindow_ids, type: [String], documentation: { hidden: true }, desc: 'Sequence timewindows to consider, CSV front only',
+                                       coerce_with: ->(val) { val.is_a?(String) ? val.split(',').map(&:strip) : val })
     optional(:sequence_timewindows, type: Array, desc: '(Schedule only) Define the vehicle work schedule over a period') do
       use :vrp_request_timewindow
     end
@@ -616,7 +634,7 @@ module VrpVehicles
     end
     mutually_exclusive :sequence_timewindows, :sequence_timewindow_ids, :timewindow
 
-    optional(:rest_ids, type: Array[String], desc: 'Rests within the route. Not available with periodic heuristic.')
+    optional(:rest_ids, type: [String], desc: 'Rests within the route. Not available with periodic heuristic.')
   end
 
   params :router_options do
@@ -625,7 +643,7 @@ module VrpVehicles
     optional :router_dimension, type: String, values: ['time', 'distance'], desc: 'time or dimension, choose between a matrix based on minimal route duration or on minimal route distance'
     optional :speed_multiplier, type: Float, default: 1.0, desc: 'Multiplies the vehicle speed, default : 1.0. Specifies if this vehicle is faster or slower than average speed.'
     optional :area, type: Array, coerce_with: ->(c) { c.is_a?(String) ? c.split(/;|\|/).collect{ |b| b.split(',').collect{ |f| Float(f) } } : c }, desc: 'List of latitudes and longitudes separated with commas. Areas separated with pipes (available only for truck mode at this time).'
-    optional :speed_multiplier_area, type: Array[Float], coerce_with: ->(c) { c.is_a?(String) ? c.split(/;|\|/).collect{ |f| Float(f) } : c.map(&:to_f) }, desc: 'Speed multiplier per area, 0 to avoid area. Areas separated with pipes (available only for truck mode at this time).'
+    optional :speed_multiplier_area, type: [Float], coerce_with: ->(c) { c.is_a?(String) ? c.split(/;|\|/).collect{ |f| Float(f) } : c.map(&:to_f) }, desc: 'Speed multiplier per area, 0 to avoid area. Areas separated with pipes (available only for truck mode at this time).'
     optional :traffic, type: Boolean, desc: 'Take into account traffic or not'
     optional :departure, type: DateTime, desc: 'Departure date time (only used if router supports traffic)'
     optional :track, type: Boolean, default: true, desc: 'Use track or not'

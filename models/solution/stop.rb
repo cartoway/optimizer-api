@@ -70,7 +70,7 @@ module Models
           options[:apply] << [:setup]
         end
         filter_fake_timewindow
-        hash = super(options)
+        hash = super
         hash['original_service_id'] = id
         hash.merge!(info.vrp_result(options))
         hash['point_id'] = self.activity.point_id
@@ -122,12 +122,12 @@ module Models
 
         active_tw =
           activity.timewindows.find{ |tw|
-            tw.start <= info.begin_time && info.begin_time <= tw.safe_end
+            info.begin_time.between?(tw.start, tw.safe_end)
           }
         return active_tw if active_tw
 
         activity.timewindows.find{ |tw|
-          tw.start <= info.begin_time && info.begin_time <= tw.safe_end(activity.lateness_allowed?)
+          info.begin_time.between?(tw.start, tw.safe_end(activity.lateness_allowed?))
         }
       end
     end

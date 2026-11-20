@@ -30,7 +30,7 @@ module Interpreters
     end
 
     def self.empty_bucket
-      hash = SUM_KEYS.each_with_object({}) { |key, memo| memo[key] = 0.0 }
+      hash = SUM_KEYS.to_h { |key| [key, 0.0] }
       COUNTER_KEYS.each { |key| hash[key] = 0 }
       hash[:services] = nil
       hash[:vehicles] = nil

@@ -41,7 +41,7 @@ class OptimizerLogger
     proc do |severity, datetime, progname, msg|
       datetime = OptimizerLogger.with_datetime ? datetime.strftime('[%FT%T.%N%:z]') : nil # iso8601 time with 9 decimals
       job_id = OptimizerWrapper::Job.current_job_id ? "#{OptimizerWrapper::Job.current_job_id} -" : nil
-      progname = progname&.empty? ? nil : "- #{progname}"
+      progname = progname && progname.empty? ? nil : "- #{progname}"
 
       [datetime, job_id, severity, progname].compact.join(' ') + ": #{msg}\n"
     end
@@ -61,7 +61,7 @@ class OptimizerLogger
           ".#{call_obj.path.scan(/optimizer-api(.*\.rb)/)[0][0]}"
         else
           raise NotImplementedError.new(
-            "Unknown option (#{@@caller_location}) OptimizerLogger.caller_location parameter -- "\
+            "Unknown option (#{@@caller_location}) OptimizerLogger.caller_location parameter -- " \
             ':absolute || :relative || :filename || nil'
           )
         end

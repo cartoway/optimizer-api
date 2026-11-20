@@ -27,6 +27,7 @@ module Models
       assert tw1.compatible_with?(tw1, false)
 
       tw2 = Models::Timewindow.new(start: 10, end: 20, day_index: 1, maximum_lateness: 1)
+
       assert tw1.compatible_with?(tw2, false)
       refute tw1.compatible_with?(tw2)
       refute tw1.compatible_with?(tw2, true) # lateness has no impact on days incompatibility
@@ -34,10 +35,13 @@ module Models
       # ignore days :
       tw2.start = 21
       tw2.end = 25
+
       refute tw1.compatible_with?(tw2, false)
       tw2.start = 5
+
       assert tw1.compatible_with?(tw2, false)
       tw2.end = 8
+
       refute tw1.compatible_with?(tw2, false)
     end
   end

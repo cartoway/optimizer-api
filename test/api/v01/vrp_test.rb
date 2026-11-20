@@ -39,8 +39,10 @@ class Api::V01::VrpTest < Minitest::Test
     vrp[:name] = 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c'
 
     post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
+
     assert_equal 200, last_response.status, last_response.body
     solution = JSON.parse(last_response.body)['solutions'][0]
+
     assert_equal 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c', solution['name']
     assert_includes solution['solvers'], 'demo'
     assert_kind_of Array, solution['interpreters']
@@ -54,6 +56,7 @@ class Api::V01::VrpTest < Minitest::Test
     vrp[:name] = 'c352 Lundi (Pierre)'
 
     post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
+
     assert_equal 200, last_response.status, last_response.body
     assert_equal 'c352_lundi_pierre', JSON.parse(last_response.body).dig('solutions', 0, 'name')
   end
@@ -95,6 +98,7 @@ class Api::V01::VrpTest < Minitest::Test
       :define_main_process,
       lambda { |services_vrps, _job|
         vrp = services_vrps[0][:vrp]
+
         [[[]], [[]], [[]],
          [[:skill1]], [[:skill1]],
          [[:skill1, :skill2]], [[:skill1, :skill2]]].each_with_index{ |expected_skills, v_i|
@@ -111,6 +115,7 @@ class Api::V01::VrpTest < Minitest::Test
     vrp = VRP.toy
     vrp[:points] *= 151
     post '/0.1/vrp/submit', api_key: 'quota', vrp: vrp
+
     assert_equal 413, last_response.status, last_response.body
     assert_includes JSON.parse(last_response.body)['message'], 'Exceeded points limit authorized'
   end
@@ -128,9 +133,10 @@ class Api::V01::VrpTest < Minitest::Test
     vrp[:configuration][:resolution][:solver] = true
     vrp[:configuration][:resolution][:solver_parameter] = 0
     post '/0.1/vrp/submit', api_key: 'demo', vrp: vrp
+
     assert_equal 400, last_response.status, last_response.body
     assert_includes JSON.parse(last_response.body)['message'],
-                    'vrp[configuration][resolution][solver], '\
+                    'vrp[configuration][resolution][solver], ' \
                     'vrp[configuration][resolution][solver_parameter] are mutually exclusive'
   end
 
@@ -180,6 +186,7 @@ class Api::V01::VrpTest < Minitest::Test
     vrp[:matrices].first[:value] = nil
 
     post '/0.1/vrp/submit', api_key: 'demo', vrp: vrp
+
     assert_equal 400, last_response.status, last_response.body
     assert_includes JSON.parse(last_response.body)['message'], 'is empty'
   end
@@ -206,9 +213,11 @@ class Api::V01::VrpTest < Minitest::Test
     end
 
     get '/0.1/vrp/jobs', api_key: 'demo'
+
     assert_equal 200, last_response.status, last_response.body
     listed = JSON.parse(last_response.body).find{ |a| a['uuid'] == @job_id }
-    assert listed, last_response.body
+
+    assert(listed) { last_response.body }
     assert_equal 'cart_c352_lundipierre_c98e06a2a5b2ee0f80ddf521f32cef2c', listed['name']
   ensure
     delete_job @job_id, api_key: 'demo'
@@ -229,13 +238,16 @@ class Api::V01::VrpTest < Minitest::Test
 
     get '/0.1/vrp/jobs', api_key: 'demo'
     listed = JSON.parse(last_response.body).find{ |a| a['uuid'] == @job_id }
-    assert listed['vrp_dump'], last_response.body
+
+    assert(listed['vrp_dump']) { last_response.body }
 
     get "/0.1/vrp/jobs/#{@job_id}/vrp", api_key: 'demo'
+
     assert_equal 200, last_response.status, last_response.body
     assert_match(/attachment; filename="cart_c352_demo.json"/, last_response.headers['Content-Disposition'])
     body = JSON.parse(last_response.body)
-    assert body['vrp'], last_response.body
+
+    assert(body['vrp']) { last_response.body }
     assert_equal 'cart_c352_demo', body['vrp']['name']
   ensure
     OptimizerWrapper.config[:dump][:vrp] = old_dump
@@ -250,6 +262,7 @@ class Api::V01::VrpTest < Minitest::Test
     end
 
     get '/0.1/vrp/jobs', api_key: 'vroom'
+
     assert_equal 200, last_response.status, last_response.body
     refute_includes JSON.parse(last_response.body).map{ |a| a['uuid'] }, @job_id
   ensure
@@ -262,6 +275,7 @@ class Api::V01::VrpTest < Minitest::Test
     end
 
     get "/0.1/vrp/jobs/#{@job_id}", api_key: 'vroom'
+
     assert_equal 404, last_response.status, last_response.body
     assert_includes JSON.parse(last_response.body)['message'], 'not found'
   ensure
@@ -274,8 +288,10 @@ class Api::V01::VrpTest < Minitest::Test
     end
 
     delete_job @job_id, api_key: 'demo'
+
     assert_equal 202, last_response.status, last_response.body
     get "0.1/vrp/jobs/#{@job_id}.json", api_key: 'demo'
+
     assert_equal 404, last_response.status, last_response.body
   end
 
@@ -285,6 +301,7 @@ class Api::V01::VrpTest < Minitest::Test
     end
 
     delete "0.1/vrp/jobs/#{@job_id}.json", api_key: 'vroom'
+
     assert_equal 404, last_response.status, last_response.body
     assert_includes JSON.parse(last_response.body)['message'], 'not found'
   ensure
@@ -300,6 +317,7 @@ class Api::V01::VrpTest < Minitest::Test
     end
 
     get "/0.1/vrp/jobs/#{@job_id}", api_key: 'demo'
+
     assert_equal 200, last_response.status, last_response.body
     assert_equal 'completed', JSON.parse(last_response.body)['job']['status'], last_response.body
   ensure
@@ -316,10 +334,12 @@ class Api::V01::VrpTest < Minitest::Test
     })
 
     get "/0.1/vrp/jobs/#{uuid}.json", api_key: 'demo'
+
     assert_equal 200, last_response.status, last_response.body
     assert Resque::Plugins::Status::Hash.get(uuid), 'Completed job should stay after retrieval'
 
     get '/0.1/vrp/jobs', api_key: 'demo'
+
     assert_includes JSON.parse(last_response.body).map{ |a| a['uuid'] }, uuid
 
     Resque::Plugins::Status::Hash.set(uuid, {
@@ -329,9 +349,11 @@ class Api::V01::VrpTest < Minitest::Test
     })
 
     get "/0.1/vrp/jobs/#{uuid}.json", api_key: 'demo'
+
     assert_nil Resque::Plugins::Status::Hash.get(uuid), 'Completed job should be removed after retention'
 
     get '/0.1/vrp/jobs', api_key: 'demo'
+
     refute_includes JSON.parse(last_response.body).map{ |a| a['uuid'] }, uuid
   ensure
     Resque::Plugins::Status::Hash.remove(uuid) if uuid
@@ -357,6 +379,7 @@ class Api::V01::VrpTest < Minitest::Test
       [vrp1, vrp2].each{ |vrp|
         @job_id = submit_vrp(api_key: 'demo', vrp: vrp)
         response = wait_status @job_id, 'completed', api_key: 'demo'
+
         refute_empty response['solutions'].to_a, "Solution is missing from the response body: #{response}"
         delete_job @job_id, api_key: 'demo'
       }
@@ -369,7 +392,7 @@ class Api::V01::VrpTest < Minitest::Test
     lines_with_avancement = ''
     Dir.mktmpdir('temp_', 'test/') { |tmpdir|
       begin
-        previous = { log_level: ENV['LOG_LEVEL'], log_device: ENV['LOG_DEVICE'],
+        previous = { log_level: ENV.fetch('LOG_LEVEL', nil), log_device: ENV.fetch('LOG_DEVICE', nil),
                      repetition: OptimizerWrapper.config[:solve][:repetition] }
         output = Tempfile.new('avencement-output', tmpdir)
         output.sync = true
@@ -413,10 +436,12 @@ class Api::V01::VrpTest < Minitest::Test
 
       refute_nil Regexp.last_match, assert_msg
       matched_date = Regexp.last_match(:date)&.to_date
+
       refute_nil matched_date, assert_msg
       assert_includes todays, matched_date, assert_msg
 
       matched_time = Regexp.last_match(:time_with_ms_and_zone)&.to_time
+
       refute_nil matched_time, assert_msg
       assert_operator matched_time, :>=, times.first, assert_msg
       assert_operator matched_time, :<=, times.last, assert_msg
@@ -435,6 +460,7 @@ class Api::V01::VrpTest < Minitest::Test
     vrp_no_sched_start = VRP.periodic
     vrp_no_sched_start[:configuration][:schedule] = { range_indices: { start: 0 } }
     post '/0.1/vrp/submit', {api_key: 'demo', vrp: vrp_no_sched_start}.to_json, 'CONTENT_TYPE' => 'application/json'
+
     assert_equal 400, last_response.status
     assert_includes(JSON.parse(last_response.body)['message'],
                     'vrp[configuration][schedule][range_indices][end] is missing')
@@ -446,19 +472,25 @@ class Api::V01::VrpTest < Minitest::Test
       ['polylines'], [:polylines], [:polylines, 'partitions'], ['unexistant'], # array of string or symbol
       'partitions', 'polylines,partitions', 'polylines, encoded_polylines' # string to be converted into an array
     ].each_with_index{ |geometry_field, case_index|
+      geometry_error_cases = [6, 9]
       OptimizerWrapper.stub(
         :define_main_process,
         lambda { |services_vrps, _job|
           case case_index
           when 0
+
             assert_empty services_vrps.first[:vrp].configuration.restitution.geometry
           when 1 || 5 || 8
+
             assert_equal %i[partitions polylines], services_vrps.first[:vrp].configuration.restitution.geometry
           when 2
+
             assert_equal %i[encoded_polylines partitions], services_vrps.first[:vrp].configuration.restitution.geometry
           when 3 || 4
+
             assert_equal %i[polylines], services_vrps.first[:vrp].configuration.restitution.geometry
           when 7
+
             assert_equal %i[partitions], services_vrps.first[:vrp].configuration.restitution.geometry
           end
           []
@@ -467,8 +499,9 @@ class Api::V01::VrpTest < Minitest::Test
         vrp = VRP.toy
         vrp[:configuration][:restitution] = { geometry: geometry_field }
         vrp[:configuration][:restitution][:geometry_polyline] = true if case_index == 2
-        if [6, 9].include?(case_index)
+        if geometry_error_cases.include?(case_index)
           post '/0.1/vrp/submit', { api_key: 'demo', vrp: vrp }.to_json, 'CONTENT_TYPE' => 'application/json'
+
           assert_includes [400], last_response.status
         else
           submit_vrp api_key: 'demo', vrp: vrp

@@ -28,6 +28,7 @@ module TestHelper
 
       assert_equal 200, last_response.status, 'Response status code should be 200'
       last_response_body = JSON.parse(last_response.body)
+
       assert_includes ['queued', 'working', 'completed'], last_response_body['job']['status']
 
       puts "Empty response body: #{last_response_body}" if last_response_body.nil? || last_response_body['job'].nil?
@@ -36,7 +37,7 @@ module TestHelper
 
       sleep 0.1
     end
-    puts "#{job_id} #{Time.now} got avancement '#{last_response_body['job']['avancement']}' "\
+    puts "#{job_id} #{Time.now} got avancement '#{last_response_body['job']['avancement']}' " \
          "to match #{avancement_regexp}"
     last_response_body
   end
@@ -90,16 +91,19 @@ module TestHelper
     hex = Digest::MD5.hexdigest params.to_s
     puts "#{hex} #{Time.now} submiting #{hex}"
     post '/0.1/vrp/submit', params.to_json, 'CONTENT_TYPE' => 'application/json'
+
     assert last_response.body
     case last_response.status
     when 201
       job_id = JSON.parse(last_response.body)['job']['id']
+
       assert job_id
       puts "#{job_id} #{Time.now} submitted #{hex}"
       job_id
     when 200
       response = JSON.parse(last_response.body)
       puts "#{job_id} #{Time.now} submitted #{hex} and it returned a result synchronously"
+
       assert response['job']['status']['completed'] || response['job']['status']['queued']
       response
     else
@@ -115,11 +119,13 @@ module TestHelper
     hex = Digest::MD5.hexdigest params.to_s
     puts "#{hex} #{Time.now} submiting_csv #{hex}"
     post '/0.1/vrp/submit', params.to_json, 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT_LANGUAGE' => language
+
     assert_includes [200, 201], last_response.status
     assert last_response.body
     case last_response.status
     when 201
       job_id = JSON.parse(last_response.body)['job']['id']
+
       assert job_id
       puts "#{job_id} #{Time.now} submitted_csv #{hex}"
       job_id
@@ -137,6 +143,7 @@ module TestHelper
   def delete_job(job_id, params)
     puts "#{job_id} #{Time.now} sending delete"
     delete "0.1/vrp/jobs/#{job_id}.json", params
+
     assert_equal 202, last_response.status, last_response.body
     puts "#{job_id} #{Time.now} delete done"
     JSON.parse(last_response.body)
@@ -146,6 +153,7 @@ module TestHelper
     # Completed jobs stay listable for a few hours after retrieval; cleanup may return 202 or 404.
     puts "#{job_id} #{Time.now} sending delete_completed"
     delete "0.1/vrp/jobs/#{job_id}.json", params
+
     assert_includes [202, 404], last_response.status, last_response.body
     puts "#{job_id} #{Time.now} delete_completed done"
     begin
@@ -164,7 +172,7 @@ module TestHelper
       pid_worker = Process.spawn({ 'COUNT' => '1', 'QUEUE' => 'DEFAULT' },
                                  'bundle exec rake resque:workers --trace', pgroup: true) # don't create another shell
       pgid_worker = Process.getpgid(pid_worker)
-      while `ps -o pgid | grep #{pgid_worker}`.split(/\n/).size < 2
+      while `ps -o pgid | grep #{pgid_worker}`.split("\n").size < 2
         puts "#{Time.now} Waiting for the worker to launch"
         sleep 0.1
       end
@@ -177,8 +185,8 @@ module TestHelper
     OptimizerWrapper.config[:solve][:synchronously] = old_config_solve_synchronously
     if options[:start_worker] && !ENV['DOCKER'] && pgid_worker
       # Kill all grandchildren
-      worker_pids = `ps -o pgid,pid | grep #{pgid_worker}`.split(/\n/)
-      worker_pids.collect!{ |i| i.split(' ')[-1].to_i }
+      worker_pids = `ps -o pgid,pid | grep #{pgid_worker}`.split("\n")
+      worker_pids.collect!{ |i| i.split[-1].to_i }
       worker_pids.sort!
       worker_pids.reverse_each{ |pid|
         next if pid == pgid_worker
@@ -188,7 +196,7 @@ module TestHelper
       }
       Process.kill('SIGTERM', -pgid_worker) # Kill the process group (this doesn't kill grandchildren)
       Process.waitpid(-pgid_worker, 0)
-      while `ps -o pgid,pid | grep "#{worker_pids.join('\|')}"`.split(/\n/).any?
+      while `ps -o pgid,pid | grep "#{worker_pids.join('\|')}"`.split("\n").any?
         puts "#{Time.now} Waiting the worker process group #{pgid_worker} to die\n"
         sleep 0.1
       end
