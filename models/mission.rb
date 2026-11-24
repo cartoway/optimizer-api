@@ -29,7 +29,7 @@ module Models
     def initialize(hash)
       hash[:original_id] ||= hash[:id]
 
-      super(hash)
+      super
     end
   end
 end

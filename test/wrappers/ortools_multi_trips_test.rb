@@ -22,6 +22,7 @@ class MultiTripsTest < Minitest::Test
   def test_solve_vehicles_trips_capacity
     vrp = VRP.lat_lon_capacitated
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert_equal 1, solutions[0].routes.size
     assert_equal 4, solutions[0].unassigned_stops.size
 
@@ -34,20 +35,24 @@ class MultiTripsTest < Minitest::Test
       linked_vehicle_ids: [vrp[:vehicles].first[:id], vrp[:vehicles].last[:id]]
     }]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert_equal 2, solutions[0].routes.size
     assert_equal 2, solutions[0].unassigned_stops.size
     routes_start = solutions[0].routes.collect{ |route| route.stops.first.info.begin_time }
     routes_end = solutions[0].routes.collect{ |route| route.stops.last.info.begin_time }
+
     assert_operator routes_end[0], :<=, routes_start[1]
 
     vrp[:vehicles] << vrp[:vehicles].first.dup
     vrp[:vehicles].last[:id] += '_third_trip'
     vrp[:relations].first[:linked_vehicle_ids] << vrp[:vehicles].last[:id]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert_equal 3, solutions[0].routes.size
     assert_empty solutions[0].unassigned_stops
     routes_start = solutions[0].routes.collect{ |route| route.stops.first.info.begin_time }
     routes_end = solutions[0].routes.collect{ |route| route.stops.last.info.begin_time }
+
     [1, 2].each{ |next_one|
       assert_operator routes_end[next_one - 1], :<=, routes_start[next_one]
     }
@@ -59,6 +64,7 @@ class MultiTripsTest < Minitest::Test
     vrp[:vehicles].first[:end_point_id] = vrp[:vehicles].first[:start_point_id]
     vrp[:vehicles].first[:duration] = 10
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert_equal 1, solutions[0].routes.size
     assert_equal 2, solutions[0].unassigned_stops.size
 
@@ -71,20 +77,24 @@ class MultiTripsTest < Minitest::Test
       linked_vehicle_ids: [vrp[:vehicles].first[:id], vrp[:vehicles].last[:id]]
     }]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert_equal 2, solutions[0].routes.size
     assert_equal 1, solutions[0].unassigned_stops.size
     routes_start = solutions[0].routes.collect{ |route| route.stops.first.info.begin_time }
     routes_end = solutions[0].routes.collect{ |route| route.stops.last.info.begin_time }
+
     assert_operator routes_end[0], :<=, routes_start[1]
 
     vrp[:vehicles] << vrp[:vehicles].first.dup
     vrp[:vehicles].last[:id] += '_third_trip'
     vrp[:relations].first[:linked_vehicle_ids] << vrp[:vehicles].last[:id]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert_equal 3, solutions[0].routes.size
     assert_empty solutions[0].unassigned_stops
     routes_start = solutions[0].routes.collect{ |route| route.stops.first.info.begin_time }
     routes_end = solutions[0].routes.collect{ |route| route.stops.last.info.begin_time }
+
     [1, 2].each{ |next_one|
       assert_operator routes_end[next_one - 1], :<=, routes_start[next_one]
     }
@@ -101,6 +111,7 @@ class MultiTripsTest < Minitest::Test
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(problem), nil)
     first_route = solutions[0].routes.find{ |r| r.vehicle.id == 'vehicle_0' }
     second_route = solutions[0].routes.find{ |r| r.vehicle.id == 'vehicle_1' }
+
     assert_operator first_route.info.end_time, :<=, second_route.info.start_time
   end
 
@@ -112,9 +123,11 @@ class MultiTripsTest < Minitest::Test
 
     vrp[:relations].first[:lapses] = [3600]
     solutions = OptimizerWrapper.wrapper_vrp('demo', { services: { vrp: [:ortools] }}, TestHelper.create(vrp), nil)
+
     assert(solutions[0].routes.all?{ |route| route.stops.size > 2 })
     first_route_end = solutions[0].routes[0].stops.last.info.begin_time
     last_route_start = solutions[0].routes[1].stops.first.info.begin_time
+
     assert_operator first_route_end + 3600, :<=, last_route_start
   end
 
@@ -149,7 +162,7 @@ class MultiTripsTest < Minitest::Test
       # check vehicle trips are not split
       vrp.relations.each{ |relation|
         assert (relation.linked_vehicle_ids - sub_vrp_vehicle_ids).empty? ||
-                 (relation.linked_vehicle_ids & sub_vrp_vehicle_ids).empty?,
+                 !relation.linked_vehicle_ids.intersect?(sub_vrp_vehicle_ids),
                'All trips of a vehicle should be in the same subproblem'
       }
 

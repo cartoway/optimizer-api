@@ -22,11 +22,11 @@ module Parsers
     def self.parse(service, options)
       alternative_index = options[:index] || (service.activity ? 0 : (service.activities.size - 1))
       activity = service.activity || service.activities[alternative_index]
-      activity_hash = Models::Activity.field_names.map{ |key|
+      activity_hash = Models::Activity.field_names.filter_map{ |key|
         next if key == :point_id
 
         [key, activity.send(key)]
-      }.compact.to_h
+      }.to_h
 
       dup_activity = Models::Activity.new(activity_hash)
       if activity[:simplified_setup_duration]
@@ -53,14 +53,14 @@ module Parsers
     end
 
     def self.build_loads(service, options = {})
-      quantity_hash = service.quantities.map{ |quantity| [quantity.unit.id, quantity] }.to_h
+      quantity_hash = service.quantities.to_h{ |quantity| [quantity.unit.id, quantity] }
       if options[:loads]
-        options[:loads]&.map{ |ld|
+        options[:loads]&.filter_map{ |ld|
           next unless quantity_hash.key? ld.quantity.unit.id
 
           ld.quantity = quantity_hash[ld.quantity.unit.id]
           ld
-        }&.compact
+        }
       else
         service.quantities.map{ |quantity|
           Models::Solution::Load.new(quantity: quantity)

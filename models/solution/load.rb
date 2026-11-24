@@ -25,7 +25,7 @@ module Models
       belongs_to :quantity, class_name: 'Models::Quantity', vrp_result: :hide
 
       def vrp_result(options = {})
-        hash = super(options)
+        hash = super
         hash['unit'] = quantity.unit_id
         hash['label'] = quantity.unit.label
         hash['value'] = quantity.value&.round(3)

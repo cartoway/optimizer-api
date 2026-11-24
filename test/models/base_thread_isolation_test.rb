@@ -15,6 +15,7 @@ module Models
           Thread.new{
             Models.delete_all
             point = Models::Point.create(id: "thread_#{i}_point", matrix_index: i)
+
             assert_equal 1, Models::Point.all.size
             assert_equal point.id, Models::Point.find("thread_#{i}_point").id
 
@@ -23,10 +24,12 @@ module Models
 
             if i.zero?
               Models.delete_all
+
               assert_empty Models::Point.all
               deleted << true
             else
               deleted.pop
+
               assert_equal 1, Models::Point.all.size
               assert_equal "thread_#{i}_point", Models::Point.first.id
             end
@@ -39,6 +42,7 @@ module Models
       threads.each(&:join)
 
       by_thread = Array.new(2){ results.pop }.to_h
+
       assert_empty by_thread[0]
       assert_equal ['thread_1_point'], by_thread[1]
     ensure

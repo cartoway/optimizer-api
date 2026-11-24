@@ -26,14 +26,14 @@ module Models
       s1 = Models::Service.create(service1)
       s2 = Models::Service.create(service2)
 
-      refute_equal s1.skills.object_id, s2.skills.object_id
+      refute_same s1.skills, s2.skills
 
       problem = { services: [service1, service2] }
 
       vrp = Models::Vrp.create(problem)
 
-      refute_equal vrp.services.first.skills.object_id,
-                   vrp.services.last.skills.object_id
+      refute_same vrp.services.first.skills,
+                  vrp.services.last.skills
 
       Models.delete_all
       service1[:skills] = nil
@@ -42,14 +42,14 @@ module Models
       s1 = Models::Service.create(service1)
       s2 = Models::Service.create(service2)
 
-      refute_equal s1.skills.object_id, s2.skills.object_id
+      refute_same s1.skills, s2.skills
 
       problem = { services: [service1, service2] }
 
       vrp = Models::Vrp.create(problem)
 
-      refute_equal vrp.services.first.skills.object_id,
-                   vrp.services.last.skills.object_id
+      refute_same vrp.services.first.skills,
+                  vrp.services.last.skills
     end
   end
 end

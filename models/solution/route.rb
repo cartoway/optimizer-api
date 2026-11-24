@@ -32,12 +32,12 @@ module Models
 
       def initialize(options = {})
         options = { info: {}, cost_info: {} }.merge(options)
-        super(options)
+        super
       end
 
       def vrp_result(options = {})
         options[:vehicle] = vehicle
-        hash = super(options)
+        hash = super
         hash['activities'] = hash.delete('stops')
         compute_setup_times(hash)
         hash['cost_details'] = hash.delete('cost_info')

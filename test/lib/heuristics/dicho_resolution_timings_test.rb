@@ -26,9 +26,11 @@ module Interpreters
       DichoResolutionTimings.increment!(service_vrp.dicho_data, :end_stage_insert_attempts)
       after = DichoResolutionTimings.end_stage_counter_snapshot(service_vrp.dicho_data)
       delta = DichoResolutionTimings.end_stage_counter_delta(before, after)
+
       assert_equal 1, delta[:end_stage_insert_attempts]
 
       stored = DichoResolutionTimings.for_dicho_data(service_vrp.dicho_data)
+
       assert_equal 100, stored[:compute_matrix_ms]
       assert_equal 1, stored[:compute_matrix_calls]
       assert_equal 6, stored[:end_stage_insert_attempts]

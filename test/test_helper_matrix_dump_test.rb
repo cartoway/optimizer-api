@@ -31,7 +31,7 @@ class TestHelperMatrixDumpTest < Minitest::Test
   end
 
   def test_matrices_required_finds_legacy_dump_entry
-    return unless File.file?('test/fixtures/geometry_polyline.dump')
+    skip unless File.file?('test/fixtures/geometry_polyline.dump')
 
     dumped_data = Oj.load(Zlib.inflate(File.read('test/fixtures/geometry_polyline.dump')))
     legacy_options = dumped_data.first[:options]

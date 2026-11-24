@@ -61,7 +61,7 @@ module Core
             matrix[aa.activity.point.matrix_index][bb.activity.point.matrix_index] : Float::INFINITY
           end
 
-        data_set = Ai4r::Data::DataSet.new(data_items: (0..(vrp.services.length - 1)).collect{ |i| [i] })
+        data_set = Ai4r::Data::DataSet.new(data_items: (0..(vrp.services.length - 1)).zip)
 
         clusterer = c.build(data_set, cluster_threshold)
 
@@ -92,7 +92,7 @@ module Core
           end
 
           new_services[i].activity.duration =
-            cluster.data_items.map{ |di| vrp.services[di[0]].activity.duration }.reduce(&:+)
+            cluster.data_items.sum{ |di| vrp.services[di[0]].activity.duration }
           new_services[i].priority = cluster.data_items.map{ |di| vrp.services[di[0]].priority }.min
         end
 
@@ -116,7 +116,7 @@ module Core
                   if cluster_index && clusters[cluster_index].data_items.size > 1
                     cluster_data_indices = clusters[cluster_index].data_items.collect{ |i| i[0] }
                     cluster_services = cluster_data_indices.map{ |index| original_vrp.services[index] }
-                    next_stop = route.stops[act_index + 1..route.stops.size].find{ |act| act.activity.point }
+                    next_stop = route.stops[(act_index + 1)..route.stops.size].find{ |act| act.activity.point }
                     tsp = TSPHelper.create_tsp(original_vrp,
                                                vehicle: route.vehicle,
                                                services: cluster_services,
@@ -138,7 +138,7 @@ module Core
                     stop
                   end
                 else
-                  previous_stop = stop.activity.point ? stop : previous_stop
+                  previous_stop = stop if stop.activity.point
                   stop
                 end
               }

@@ -87,7 +87,7 @@ module PeriodicDataInitialization
                                                   @services_assignment[id][:days].size
       next unless @services_assignment[id][:missing_visits].positive?
 
-      @services_assignment[id][:unassigned_reasons] |= ['Routes provided do not allow to assign this visit because '\
+      @services_assignment[id][:unassigned_reasons] |= ['Routes provided do not allow to assign this visit because ' \
                                                         'previous visit could not be planned in specified route']
     }
   end
@@ -227,7 +227,7 @@ module PeriodicDataInitialization
   end
 
   def compute_latest_authorized
-    @services_data.group_by{ |_id, data| [data[:raw].visits_number, data[:heuristic_period]] }.each{ |_parameters, set|
+    @services_data.group_by{ |_id, data| [data[:raw].visits_number, data[:heuristic_period]] }.each_value{ |set|
       latest_day = set.max_by{ |_service, data|
         data[:raw].last_possible_days.first
       }.last[:raw].last_possible_days.first # first is for first visit
@@ -237,6 +237,7 @@ module PeriodicDataInitialization
           next if day > latest_day
 
           avail = @candidate_routes[vehicle_id][day][:available_ids]
+          # set is an Array of [id, data] pairs from Hash#group_by
           set.each{ |id, _data| avail[id] = true }
         }
       }
@@ -261,6 +262,7 @@ module PeriodicDataInitialization
       group_tw.delete_if{ |tw| tw[:day_index].nil? }
 
       # finding minimal common timewindow
+      # set is an Array of [id, data] pairs (Hash#select then Enumerable#sort_by)
       set.each{ |_id, data|
         next if data[:tws_sets].first.empty?
 
